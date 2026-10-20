@@ -2,7 +2,10 @@ package api
 
 import (
 	"io/fs"
+	"log/slog"
 	"net/http"
+	"net/http/httputil"
+	"net/url"
 	"path"
 	"strings"
 )
@@ -58,4 +61,23 @@ func uiHandler(fsys fs.FS) http.Handler {
 func isFile(fsys fs.FS, name string) bool {
 	info, err := fs.Stat(fsys, name)
 	return err == nil && info.Mode().IsRegular()
+}
+
+// devUIProxy proxies the web UI to the Vite dev server at target, for `make
+// dev`. The browser stays on Roost's tailnet address, so requests reach the API
+// the same way they do in production, and Vite's hot reloading works through
+// the proxy.
+func devUIProxy(target *url.URL, log *slog.Logger) http.Handler {
+	return &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			// SetURL also sets the Host header to Vite's, which Vite checks.
+			pr.SetURL(target)
+		},
+		ErrorLog: slog.NewLogLogger(log.Handler(), slog.LevelDebug),
+		ErrorHandler: func(w http.ResponseWriter, _ *http.Request, err error) {
+			log.Warn("proxy to the Vite dev server", "url", target.String(), "error", err)
+			http.Error(w, "Can't reach the Vite dev server at "+target.String()+". Is `make dev` running it?",
+				http.StatusBadGateway)
+		},
+	}
 }

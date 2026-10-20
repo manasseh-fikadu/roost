@@ -1,8 +1,10 @@
 package api_test
 
 import (
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 	"testing/fstest"
@@ -94,5 +96,60 @@ func TestUI_notBuilt(t *testing.T) {
 	}
 	if body := rec.Body.String(); !strings.Contains(body, "make build") {
 		t.Errorf("body = %q, want it to explain how to build the UI", body)
+	}
+}
+
+func TestUI_devProxy(t *testing.T) {
+	t.Parallel()
+	// The proxy dials Vite itself, so this needs a real loopback server.
+	vite := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		//nolint:gosec // G705: the test reads what it sent back.
+		_, _ = io.WriteString(w, r.Host+" "+r.URL.RequestURI())
+	}))
+	t.Cleanup(vite.Close)
+	viteURL, err := url.Parse(vite.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := api.New(api.Options{DevUI: viteURL})
+
+	t.Run("UI routes go to Vite", func(t *testing.T) {
+		t.Parallel()
+		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/src/routes/+page.svelte?t=1", nil)
+		req.Host = "roost.example.ts.net"
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+
+		// Vite checks the Host header, so it must be Vite's own.
+		if want := viteURL.Host + " /src/routes/+page.svelte?t=1"; rec.Body.String() != want {
+			t.Errorf("Vite got %q, want %q", rec.Body, want)
+		}
+	})
+
+	t.Run("API routes don't", func(t *testing.T) {
+		t.Parallel()
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/health", nil))
+		if !strings.Contains(rec.Body.String(), `"status":"ok"`) {
+			t.Errorf("GET /api/health = %q, want the hub's health", rec.Body)
+		}
+	})
+}
+
+func TestUI_devProxyDown(t *testing.T) {
+	t.Parallel()
+	vite := httptest.NewServer(http.NotFoundHandler())
+	viteURL, err := url.Parse(vite.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	vite.Close()
+	h := api.New(api.Options{DevUI: viteURL})
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
+
+	if rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), "make dev") {
+		t.Errorf("status %d, body %q; want 502 and a hint to run make dev", rec.Code, rec.Body)
 	}
 }

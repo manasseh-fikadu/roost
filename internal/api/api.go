@@ -6,6 +6,10 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"time"
+
+	"github.com/manasseh-fikadu/roost/internal/tailnet"
 )
 
 // Options configures the handler returned by New.
@@ -14,6 +18,12 @@ type Options struct {
 	Version string
 	// UI holds the built web app. If it's nil, UI routes explain how to build it.
 	UI fs.FS
+	// DevUI, if set, is a Vite dev server that UI routes are proxied to
+	// instead of serving UI.
+	DevUI *url.URL
+	// Tailnet is reported by GET /api/debug/tailnet. If it's nil, that route
+	// is left out.
+	Tailnet *tailnet.Poller
 	// Logger receives errors that can't be reported to the client. Nil discards them.
 	Logger *slog.Logger
 }
@@ -27,10 +37,17 @@ func New(opts Options) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", h.health)
+	if opts.Tailnet != nil {
+		mux.HandleFunc("GET /api/debug/tailnet", h.debugTailnet)
+	}
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		h.writeJSON(w, http.StatusNotFound, ErrorBody{Error: "not found"})
 	})
-	mux.Handle("/", uiHandler(opts.UI))
+	if opts.DevUI != nil {
+		mux.Handle("/", devUIProxy(opts.DevUI, h.log))
+	} else {
+		mux.Handle("/", uiHandler(opts.UI))
+	}
 	return mux
 }
 
@@ -41,6 +58,10 @@ type handler struct {
 
 func (h *handler) health(w http.ResponseWriter, _ *http.Request) {
 	h.writeJSON(w, http.StatusOK, Health{Status: "ok", Version: h.opts.Version})
+}
+
+func (h *handler) debugTailnet(w http.ResponseWriter, _ *http.Request) {
+	h.writeJSON(w, http.StatusOK, newDebugTailnet(h.opts.Tailnet.Snapshot(), time.Now()))
 }
 
 func (h *handler) writeJSON(w http.ResponseWriter, status int, v any) {
