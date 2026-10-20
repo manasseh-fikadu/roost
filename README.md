@@ -14,6 +14,8 @@ make build      # builds ./roost with the web UI inside
 ./roost serve   # serves it on http://127.0.0.1:4700
 ```
 
+Roost keeps its data in `~/.config/roost` (`~/Library/Application Support/roost` on macOS). To put it somewhere else, use `--data-dir` or set `ROOST_DATA_DIR`.
+
 ## Develop
 
 ```sh

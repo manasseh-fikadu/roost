@@ -9,22 +9,31 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/config"
+	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/web"
 )
 
 // shutdownTimeout is how long in-flight requests get to finish after a stop signal.
 const shutdownTimeout = 10 * time.Second
 
-func serve(ctx context.Context, args []string, stderr io.Writer) error {
+func serve(ctx context.Context, args []string, stderr io.Writer) (err error) {
 	cfg, err := config.Parse(args, os.Getenv, stderr)
 	if err != nil {
 		return err
 	}
 	logger := slog.New(slog.NewTextHandler(stderr, nil))
+
+	dbPath := filepath.Join(cfg.DataDir, "roost.db")
+	st, err := store.Open(ctx, dbPath, store.Options{Logger: logger})
+	if err != nil {
+		return fmt.Errorf("open %s: %w", dbPath, err)
+	}
+	defer func() { err = errors.Join(err, st.Close()) }()
 
 	ui := web.FS()
 	if ui == nil {
@@ -43,7 +52,7 @@ func serve(ctx context.Context, args []string, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", cfg.Listen, err)
 	}
-	logger.Info("roost is running", "version", buildVersion(), "url", "http://"+ln.Addr().String())
+	logger.Info("roost is running", "version", buildVersion(), "url", "http://"+ln.Addr().String(), "data_dir", cfg.DataDir)
 
 	serveErr := make(chan error, 1)
 	go func() { serveErr <- srv.Serve(ln) }()
