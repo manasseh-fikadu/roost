@@ -19,6 +19,7 @@ make build      # builds ./roost with the web UI inside
 ```sh
 make dev     # runs the Go server on :4700 and Vite, which proxies /api to it
 make test    # Go tests, then svelte-check
+make lint    # golangci-lint, shellcheck and prettier
 make types   # regenerates the web app's API types after you change internal/api/types.go
 ```
 
