@@ -7,25 +7,27 @@ A simple, self-hosted control plane for every machine on your tailnet: devices, 
 
 ## Build from source
 
-You need Go 1.27 or newer, Node 22.17 or newer, and [Bun](https://bun.sh).
+You need Go 1.27.3 or newer, Node 22.17 or newer, and [Bun](https://bun.sh).
 
 ```sh
 make build      # builds ./roost with the web UI inside
-./roost serve   # serves it on http://127.0.0.1:4700
+./roost serve   # joins your tailnet as a new machine named roost
 ```
+
+The first time, open <http://127.0.0.1:4700> on the same machine to log Roost in to Tailscale. After that, Roost is at `https://roost.<your-tailnet>.ts.net`. To use the machine's own Tailscale instead, run `./roost serve --tailscale host`. [docs/tailscale.md](docs/tailscale.md) explains both modes and the tailnet policy Roost needs.
 
 Roost keeps its data in `~/.config/roost` (`~/Library/Application Support/roost` on macOS). To put it somewhere else, use `--data-dir` or set `ROOST_DATA_DIR`.
 
 ## Develop
 
 ```sh
-make dev     # runs the Go server on :4700 and Vite, which proxies /api to it
+make dev     # runs Vite, and the Go server, which proxies the web UI to it
 make test    # Go tests, then svelte-check
 make lint    # golangci-lint, shellcheck and prettier
 make types   # regenerates the web app's API types after you change internal/api/types.go
 ```
 
-The Go server doesn't reload on changes yet, so restart `make dev` after editing Go code.
+Open the URL that the Go server logs (`roost is running url=...`), which is on your tailnet, not Vite's. The Go server doesn't reload on changes yet, so restart `make dev` after editing Go code.
 
 | Path | What's in it |
 | --- | --- |

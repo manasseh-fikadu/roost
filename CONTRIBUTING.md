@@ -9,7 +9,7 @@ Thanks for helping. Roost is early, and the [roadmap to v0.1](https://github.com
 
 ## Set up
 
-You need Go 1.27 or newer, Node 22.17 or newer, and [Bun](https://bun.sh). To run `make lint`, you also need [golangci-lint](https://golangci-lint.run/) v2 and [ShellCheck](https://www.shellcheck.net/).
+You need Go 1.27.3 or newer, Node 22.17 or newer, and [Bun](https://bun.sh). To run `make lint`, you also need [golangci-lint](https://golangci-lint.run/) v2 and [ShellCheck](https://www.shellcheck.net/).
 
 ```sh
 git clone https://github.com/manasseh-fikadu/roost
@@ -17,7 +17,9 @@ cd roost
 make dev
 ```
 
-`make dev` runs the Go server on 127.0.0.1:4700 and the Vite dev server, which proxies `/api` to it. Open the URL Vite prints. The Go server doesn't reload on changes, so restart `make dev` after editing Go code.
+`make dev` runs the Vite dev server and the Go server, which serves Roost on your tailnet and proxies the web UI to Vite. Open the URL the Go server logs (`roost is running url=...`), not Vite's, so the API sees requests come over the tailnet the way it does in production. The first time, Roost joins your tailnet as a new machine: open <http://127.0.0.1:4700> to log it in. If the machine you work on has Tailscale, `ROOST_TAILSCALE=host make dev` uses it instead and skips that step. See [docs/tailscale.md](docs/tailscale.md) for both modes.
+
+The Go server doesn't reload on changes, so restart `make dev` after editing Go code.
 
 | Command | What it does |
 | --- | --- |
