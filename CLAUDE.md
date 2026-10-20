@@ -10,6 +10,10 @@ The order of work is the checklist in issue #1. Issue #2 has the stack and layou
 - `make types` regenerates `web/src/lib/api/types.ts` from `internal/api/types.go` with tygo. Never edit the generated file by hand.
 - The web app uses Bun as its package manager (`cd web && bun add ...`).
 
+## Commits
+
+Roost uses DCO sign-off (see CONTRIBUTING.md). Commit through the `commit-conventional` skill as usual, but with `git commit -s`. In this repo, the `Signed-off-by` trailer is the one exception to that skill's subject-only rule.
+
 ## Front end: Svelte 5 and SvelteKit 3
 
 `web/` uses **Svelte 5** (runes) and **SvelteKit 3**. SvelteKit 3 came out on 2026-10-01 and has many breaking changes, and most examples online (and most of what you remember) are SvelteKit 2. Don't write SvelteKit APIs from memory: look them up with the Svelte MCP server (`list-sections`, then `get-documentation`), and run `svelte-autofixer` on components you write. Never use Svelte 4 syntax (`export let`, `$:`, `on:click`, `<slot>`, stores for component state).
