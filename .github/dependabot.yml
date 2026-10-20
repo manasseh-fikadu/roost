@@ -1,0 +1,41 @@
+version: 2
+
+# Minor and patch updates come in one pull request per ecosystem; major updates
+# get their own. A new release waits a week before Dependabot proposes it, which
+# gives the ecosystem time to catch a compromised one. Security updates don't wait.
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+    groups:
+      go:
+        update-types: [minor, patch]
+
+  - package-ecosystem: bun
+    directory: /web
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+    groups:
+      web:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
+    groups:
+      actions:
+        patterns: ["*"]
