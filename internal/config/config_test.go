@@ -12,11 +12,12 @@ import (
 func TestParse(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
-		name    string
-		args    []string
-		env     map[string]string
-		want    config.Config
-		wantErr error // matched with errors.Is; errAny matches any error
+		name      string
+		args      []string
+		env       map[string]string
+		want      config.Config
+		wantErr   bool
+		wantErrIs error // if set, the error must match it with errors.Is
 	}{
 		{
 			name: "defaults",
@@ -39,19 +40,20 @@ func TestParse(t *testing.T) {
 			want: config.Config{Listen: "127.0.0.1:1"},
 		},
 		{
-			name:    "help",
-			args:    []string{"-h"},
-			wantErr: flag.ErrHelp,
+			name:      "help",
+			args:      []string{"-h"},
+			wantErr:   true,
+			wantErrIs: flag.ErrHelp,
 		},
 		{
 			name:    "unknown flag",
 			args:    []string{"--nope"},
-			wantErr: errAny,
+			wantErr: true,
 		},
 		{
 			name:    "stray argument",
 			args:    []string{"extra"},
-			wantErr: errAny,
+			wantErr: true,
 		},
 	}
 	for _, tt := range tests {
@@ -62,12 +64,12 @@ func TestParse(t *testing.T) {
 			got, err := config.Parse(tt.args, getenv, io.Discard)
 
 			switch {
-			case tt.wantErr == nil && err != nil:
+			case !tt.wantErr && err != nil:
 				t.Fatalf("Parse(%q) error = %v, want none", tt.args, err)
-			case tt.wantErr != nil && err == nil:
+			case tt.wantErr && err == nil:
 				t.Fatalf("Parse(%q) = %+v, want an error", tt.args, got)
-			case tt.wantErr != nil && tt.wantErr != errAny && !errors.Is(err, tt.wantErr):
-				t.Fatalf("Parse(%q) error = %v, want %v", tt.args, err, tt.wantErr)
+			case tt.wantErrIs != nil && !errors.Is(err, tt.wantErrIs):
+				t.Fatalf("Parse(%q) error = %v, want %v", tt.args, err, tt.wantErrIs)
 			}
 			if got != tt.want {
 				t.Errorf("Parse(%q) = %+v, want %+v", tt.args, got, tt.want)
@@ -75,5 +77,3 @@ func TestParse(t *testing.T) {
 		})
 	}
 }
-
-var errAny = errors.New("any error")

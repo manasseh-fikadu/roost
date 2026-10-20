@@ -248,6 +248,7 @@ $( [ -n "$iface" ] && sed 's/:/ /' /proc/net/dev | awk -v ifc="$iface" '$1 == if
 EOF
 
   os_name="linux"
+  # shellcheck source=/dev/null
   os_version=$(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-Linux}")
   model=$(cat /sys/devices/virtual/dmi/id/product_name 2>/dev/null)
   host=$(hostname)

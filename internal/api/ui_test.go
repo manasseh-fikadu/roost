@@ -46,7 +46,7 @@ func TestUI(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, httptest.NewRequest(tt.method, tt.target, nil))
+			h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), tt.method, tt.target, nil))
 
 			if rec.Code != tt.wantCode {
 				t.Fatalf("status = %d, want %d", rec.Code, tt.wantCode)
@@ -63,7 +63,7 @@ func TestUI(t *testing.T) {
 	t.Run("the app is HTML", func(t *testing.T) {
 		t.Parallel()
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/devices", nil))
+		h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/devices", nil))
 		if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 			t.Errorf("Content-Type = %q, want text/html", ct)
 		}
@@ -72,7 +72,7 @@ func TestUI(t *testing.T) {
 	t.Run("other methods aren't allowed", func(t *testing.T) {
 		t.Parallel()
 		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/devices", nil))
+		h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/devices", nil))
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
 		}
@@ -87,7 +87,7 @@ func TestUI_notBuilt(t *testing.T) {
 	h := api.New(api.Options{})
 
 	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/", nil))
+	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)

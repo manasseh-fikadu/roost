@@ -38,6 +38,7 @@ func uiHandler(fsys fs.FS) http.Handler {
 			} else {
 				w.Header().Set("Cache-Control", "no-cache")
 			}
+			//nolint:gosec // G703: an fs.FS only opens valid paths inside its root, so name can't escape it.
 			http.ServeFileFS(w, r, fsys, name)
 			return
 		}

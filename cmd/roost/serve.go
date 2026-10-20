@@ -38,7 +38,8 @@ func serve(ctx context.Context, args []string, stderr io.Writer) error {
 		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
 	}
 
-	ln, err := net.Listen("tcp", cfg.Listen)
+	var lc net.ListenConfig
+	ln, err := lc.Listen(ctx, "tcp", cfg.Listen)
 	if err != nil {
 		return fmt.Errorf("listen on %s: %w", cfg.Listen, err)
 	}

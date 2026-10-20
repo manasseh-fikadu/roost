@@ -6,9 +6,16 @@ The order of work is the checklist in issue #1. Issue #2 has the stack and layou
 
 - `make dev` runs the Go server on 127.0.0.1:4700 and Vite, which proxies `/api` to it. The Go side doesn't reload, so restart after Go changes.
 - `make build` builds `./roost` with the UI embedded, using the `ui` build tag. Plain `go build`, `go test` and `go vet` leave the UI out, so they work without a web build.
-- `make test` runs `go test -race ./...` and `svelte-check`.
+- `make test` runs `go test -race -shuffle=on ./...` and `svelte-check`.
+- `make lint` runs golangci-lint (configured in `.golangci.yml`), shellcheck and prettier. Run it before committing Go, shell or web changes.
 - `make types` regenerates `web/src/lib/api/types.ts` from `internal/api/types.go` with tygo. Never edit the generated file by hand.
 - The web app uses Bun as its package manager (`cd web && bun add ...`).
+
+## Tests and CI
+
+Follow the test conventions in CONTRIBUTING.md: table tests next to the code, `testing/synctest` instead of a clock interface, and fakes for Tailscale and SSH in `…test` packages (such as `internal/tailnet/tailnettest`), so unit tests never need a tailnet.
+
+CI is `.github/workflows/ci.yml`. Its `CI passed` job fails if any other job fails, so branch protection needs to require only that one check, and jobs can be added without touching the rule. Actions are pinned to commit SHAs with a version comment, and Dependabot updates them. When you bump the `go` directive in `go.mod`, bump `GO_VERSION` in the workflow too. `GOLANGCI_LINT_VERSION` is pinned there and updated by hand.
 
 ## Commits
 
