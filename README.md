@@ -30,3 +30,11 @@ The Go server doesn't reload on changes yet, so restart `make dev` after editing
 | `internal/` | The hub's packages |
 | `web/` | The SvelteKit app, which `make build` embeds in the binary |
 | `agent/` | The bash agent that devices run to report their metrics |
+
+## Contribute
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Please report security problems privately, as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+Roost is licensed under the [GNU Affero General Public License v3.0](LICENSE). The agent in `agent/` is under the [MIT License](agent/LICENSE), so you can reuse it anywhere.

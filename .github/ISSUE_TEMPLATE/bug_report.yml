@@ -1,0 +1,39 @@
+name: Bug report
+description: Something in Roost doesn't work the way it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Found a security problem? Please report it privately, as the [security policy](https://github.com/manasseh-fikadu/roost/security/policy) explains, not here.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the Devices page
+        2. ...
+  - type: input
+    id: version
+    attributes:
+      label: Roost version
+      description: The output of `roost version`.
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Setup
+      description: The OS and architecture of the hub (and of the device, if the bug involves one), how you installed Roost, and whether it runs its own Tailscale node or uses the host's.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Relevant output from `roost serve` or the agent. Remove anything private first, such as hostnames, IP addresses and tokens.
+      render: text

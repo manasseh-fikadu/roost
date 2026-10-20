@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 # Roost agent: sends a metrics heartbeat to the hub every INTERVAL seconds.
 # Works on macOS (bash 3.2) and Linux. Needs only curl and standard system tools.
 set -u
