@@ -1,0 +1,3 @@
+# Roost is a private dashboard; keep it out of search engines.
+User-agent: *
+Disallow: /
