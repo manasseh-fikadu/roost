@@ -32,6 +32,7 @@ make dev
 - **Go:** format with `gofmt` and prefer the standard library; a new dependency needs a reason. `.golangci.yml` sets the linters. If you have to silence one, say which and why: `//nolint:gosec // reason`.
 - **Web:** use Svelte 5 runes and SvelteKit 3 only. SvelteKit 3 changed a lot, and most examples online are for version 2, so check [CLAUDE.md](CLAUDE.md) for the old patterns and their replacements. Run `bun run format` in `web/` before committing.
 - **API types:** change `internal/api/types.go` and run `make types`. Never edit `web/src/lib/api/types.ts` by hand.
+- **Database:** to change the schema, add the next numbered file to `internal/store/migrations`, such as `0002_add_device_notes.sql`. On startup, Roost copies the database to `roost.db.bak` and runs each new file in its own transaction. Never edit or renumber a migration once it's merged; add another one. A new table that keeps history also needs a line in `retention` in `internal/store/prune.go`, so its old rows get deleted.
 - **Agent:** `agent/` has to run on macOS's bash 3.2 and with any POSIX awk, using only `curl` and standard system tools.
 
 ## Tests

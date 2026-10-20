@@ -21,23 +21,28 @@ func TestParse(t *testing.T) {
 	}{
 		{
 			name: "defaults",
-			want: config.Config{Listen: config.DefaultListen},
+			want: config.Config{Listen: config.DefaultListen, DataDir: config.DefaultDataDir()},
 		},
 		{
 			name: "environment",
-			env:  map[string]string{"ROOST_LISTEN": ":9000"},
-			want: config.Config{Listen: ":9000"},
+			env:  map[string]string{"ROOST_LISTEN": ":9000", "ROOST_DATA_DIR": "/srv/roost"},
+			want: config.Config{Listen: ":9000", DataDir: "/srv/roost"},
 		},
 		{
 			name: "empty environment variable is unset",
-			env:  map[string]string{"ROOST_LISTEN": ""},
-			want: config.Config{Listen: config.DefaultListen},
+			env:  map[string]string{"ROOST_LISTEN": "", "ROOST_DATA_DIR": ""},
+			want: config.Config{Listen: config.DefaultListen, DataDir: config.DefaultDataDir()},
 		},
 		{
 			name: "flag beats environment",
-			args: []string{"--listen", "127.0.0.1:1"},
-			env:  map[string]string{"ROOST_LISTEN": ":9000"},
-			want: config.Config{Listen: "127.0.0.1:1"},
+			args: []string{"--listen", "127.0.0.1:1", "--data-dir", "data"},
+			env:  map[string]string{"ROOST_LISTEN": ":9000", "ROOST_DATA_DIR": "/srv/roost"},
+			want: config.Config{Listen: "127.0.0.1:1", DataDir: "data"},
+		},
+		{
+			name:    "empty data directory",
+			args:    []string{"--data-dir", ""},
+			wantErr: true,
 		},
 		{
 			name:      "help",
