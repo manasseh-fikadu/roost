@@ -8,7 +8,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
 .DEFAULT_GOAL := help
-.PHONY: help build web dev dev-api dev-web test types clean
+.PHONY: help build web dev dev-api dev-web test lint types clean
 
 ## build: build ./roost with the web UI embedded
 build: web
@@ -30,8 +30,14 @@ dev-web:
 
 ## test: run the Go tests and type-check the web app
 test: web/node_modules
-	$(GO) test -race ./...
+	$(GO) test -race -shuffle=on ./...
 	cd web && $(BUN) run check
+
+## lint: run golangci-lint, shellcheck and prettier
+lint: web/node_modules
+	golangci-lint run ./...
+	shellcheck agent/*.sh .github/scripts/*.sh
+	cd web && $(BUN) run lint
 
 ## types: regenerate web/src/lib/api/types.ts from internal/api/types.go
 types:
