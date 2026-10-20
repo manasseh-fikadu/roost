@@ -1,4 +1,5 @@
 #!/bin/bash
+# SPDX-License-Identifier: MIT
 # Installs (or with --uninstall, removes) the Roost agent for the current user.
 # macOS: LaunchAgent. Linux: systemd user service. No root needed.
 set -euo pipefail
