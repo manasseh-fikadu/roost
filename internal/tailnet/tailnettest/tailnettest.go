@@ -133,7 +133,8 @@ func (t *Tailnet) Ping(ctx context.Context, ip netip.Addr) (*tailnet.PingResult,
 }
 
 // WhoIs identifies remoteAddr by the device in the status that has its IP.
-// The device's Owner is the identity's LoginName and DisplayName.
+// The device's Owner is the identity's LoginName and DisplayName, unless the
+// device is tagged: like Tailscale, WhoIs names no user for a tagged device.
 func (t *Tailnet) WhoIs(_ context.Context, remoteAddr string) (*tailnet.Identity, error) {
 	ap, err := netip.ParseAddrPort(remoteAddr)
 	if err != nil {
@@ -143,13 +144,11 @@ func (t *Tailnet) WhoIs(_ context.Context, remoteAddr string) (*tailnet.Identity
 	defer t.mu.Unlock()
 	for _, d := range append([]tailnet.Device{t.status.Self}, t.status.Peers...) {
 		if slices.Contains(d.IPs, ap.Addr().Unmap()) {
-			return &tailnet.Identity{
-				NodeID:      d.ID,
-				NodeName:    d.DNSName,
-				Tags:        slices.Clone(d.Tags),
-				LoginName:   d.Owner,
-				DisplayName: d.Owner,
-			}, nil
+			id := &tailnet.Identity{NodeID: d.ID, NodeName: d.DNSName, Tags: slices.Clone(d.Tags)}
+			if len(d.Tags) == 0 {
+				id.LoginName, id.DisplayName = d.Owner, d.Owner
+			}
+			return id, nil
 		}
 	}
 	return nil, tailnet.ErrUnknownPeer

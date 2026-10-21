@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -140,6 +141,86 @@ func TestServe_login(t *testing.T) {
 
 	if code, body := get(t, local, setupURL); code != http.StatusOK || !strings.Contains(body, `href="`+tailnettest.URL+`"`) {
 		t.Errorf("setup page after login = %d, want a link to the app:\n%s", code, body)
+	}
+}
+
+func TestServe_firstAdmins(t *testing.T) {
+	t.Parallel()
+	const alice, bob, carol = "alice@example.com", "bob@example.com", "carol@example.com"
+	tests := []struct {
+		name     string
+		owner    string   // of Roost's node; "" means it's tagged
+		admins   []string // ROOST_ADMINS
+		existing []string // admins already in the database
+		want     []string
+		wantLog  string
+	}{
+		{name: "owner of Roost's node", owner: alice, want: []string{alice}, wantLog: "made Roost's first admins"},
+		{name: "owner and ROOST_ADMINS", owner: alice, admins: []string{bob}, want: []string{alice, bob}},
+		{name: "tagged node uses ROOST_ADMINS", admins: []string{bob}, want: []string{bob}},
+		{name: "tagged node and no ROOST_ADMINS", wantLog: "Roost has no admins"},
+		{name: "already has admins", owner: alice, admins: []string{bob}, existing: []string{carol}, want: []string{carol}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			cfg := testConfig(t, config.Host)
+			cfg.Admins = tt.admins
+			if len(tt.existing) > 0 {
+				var out bytes.Buffer
+				for _, login := range tt.existing {
+					if err := run(t.Context(), []string{"admin", "add", "--data-dir", cfg.DataDir, login}, &out, &out); err != nil {
+						t.Fatalf("roost admin add: %v\n%s", err, &out)
+					}
+				}
+			}
+			tn := fakeTailnet(tailnet.StateRunning)
+			st, _ := tn.Status(t.Context())
+			if tt.owner != "" {
+				st.Self.Owner = tt.owner
+			} else {
+				st.Self.Tags = []string{"tag:roost"}
+			}
+			tn.SetStatus(*st)
+
+			log := startServe(t, cfg, tn)
+			log.waitFor(t, "roost is running")
+
+			var out bytes.Buffer
+			if err := run(t.Context(), []string{"admin", "list", "--data-dir", cfg.DataDir}, &out, io.Discard); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Fields(out.String()); !slices.Equal(got, tt.want) {
+				t.Errorf("admins = %q, want %q", got, tt.want)
+			}
+			if !strings.Contains(log.String(), tt.wantLog) {
+				t.Errorf("log doesn't say %q:\n%s", tt.wantLog, log)
+			}
+		})
+	}
+}
+
+// The owner of Roost's node signs in from their own devices, and the node
+// itself is anonymous.
+func TestServe_signIn(t *testing.T) {
+	t.Parallel()
+	tn := fakeTailnet(tailnet.StateRunning)
+	st, _ := tn.Status(t.Context())
+	st.Self.Owner = "alice@example.com"
+	tn.SetStatus(*st)
+	log := startServe(t, testConfig(t, config.Host), tn)
+	log.waitFor(t, "roost is running")
+
+	code, body := get(t, tn.Client(laptopIP), tailnettest.URL+"/api/me")
+	if code != http.StatusOK || !strings.Contains(body, `"login":"alice@example.com"`) || !strings.Contains(body, `"admin":true`) {
+		t.Errorf("GET /api/me from alice's laptop = %d %s, want alice as an admin", code, body)
+	}
+	if code, _ := get(t, tn.Client(laptopIP), tailnettest.URL+"/api/debug/tailnet"); code != http.StatusOK {
+		t.Errorf("GET /api/debug/tailnet from alice's laptop = %d, want 200", code)
+	}
+	self := netip.MustParseAddr("100.64.0.1")
+	if code, body := get(t, tn.Client(self), tailnettest.URL+"/api/me"); !strings.Contains(body, `"reason":"roost-machine"`) {
+		t.Errorf("GET /api/me from Roost's own node = %d %s, want anonymous", code, body)
 	}
 }
 

@@ -2,6 +2,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"io/fs"
 	"log/slog"
@@ -21,15 +22,25 @@ type Options struct {
 	// DevUI, if set, is a Vite dev server that UI routes are proxied to
 	// instead of serving UI.
 	DevUI *url.URL
-	// Tailnet is reported by GET /api/debug/tailnet. If it's nil, that route
-	// is left out.
-	Tailnet *tailnet.Poller
+	// WhoIs asks Tailscale who is at a connection's remote address. Required.
+	WhoIs func(ctx context.Context, remoteAddr string) (*tailnet.Identity, error)
+	// Snapshot returns what Roost last learned about the tailnet, including
+	// its own node. It's reported by GET /api/debug/tailnet. Required.
+	Snapshot func() tailnet.Snapshot
+	// IsAdmin reports whether a Tailscale login is one of Roost's admins.
+	// Required.
+	IsAdmin func(ctx context.Context, login string) (bool, error)
 	// Logger receives errors that can't be reported to the client. Nil discards them.
 	Logger *slog.Logger
 }
 
-// New returns the hub's HTTP handler.
+// New returns the hub's HTTP handler, which serves only the tailnet: every
+// request is checked and identified with Tailscale (see guard). It panics if
+// opts lacks a required field.
 func New(opts Options) http.Handler {
+	if opts.WhoIs == nil || opts.Snapshot == nil || opts.IsAdmin == nil {
+		panic("api.New: Options.WhoIs, Snapshot and IsAdmin are required")
+	}
 	h := &handler{opts: opts, log: opts.Logger}
 	if h.log == nil {
 		h.log = slog.New(slog.DiscardHandler)
@@ -37,18 +48,18 @@ func New(opts Options) http.Handler {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", h.health)
-	if opts.Tailnet != nil {
-		mux.HandleFunc("GET /api/debug/tailnet", h.debugTailnet)
-	}
+	mux.HandleFunc("GET /api/me", h.me)
+	mux.Handle("GET /api/debug/tailnet", h.adminOnly(http.HandlerFunc(h.debugTailnet)))
 	mux.HandleFunc("/api/", func(w http.ResponseWriter, _ *http.Request) {
 		h.writeJSON(w, http.StatusNotFound, ErrorBody{Error: "not found"})
 	})
 	if opts.DevUI != nil {
-		mux.Handle("/", devUIProxy(opts.DevUI, h.log))
+		// Vite serves files from the workspace, so only admins get them.
+		mux.Handle("/", h.adminOnly(devUIProxy(opts.DevUI, h.log)))
 	} else {
 		mux.Handle("/", uiHandler(opts.UI))
 	}
-	return mux
+	return h.guard(mux)
 }
 
 type handler struct {
@@ -60,8 +71,23 @@ func (h *handler) health(w http.ResponseWriter, _ *http.Request) {
 	h.writeJSON(w, http.StatusOK, Health{Status: "ok", Version: h.opts.Version})
 }
 
+func (h *handler) me(w http.ResponseWriter, r *http.Request) {
+	c := callerOf(r)
+	if c.who == nil {
+		h.writeJSON(w, http.StatusOK, Me{Reason: c.reason})
+		return
+	}
+	h.writeJSON(w, http.StatusOK, Me{
+		SignedIn: true,
+		Login:    c.who.LoginName,
+		Name:     c.who.DisplayName,
+		Device:   c.who.NodeName,
+		Admin:    c.admin,
+	})
+}
+
 func (h *handler) debugTailnet(w http.ResponseWriter, _ *http.Request) {
-	h.writeJSON(w, http.StatusOK, newDebugTailnet(h.opts.Tailnet.Snapshot(), time.Now()))
+	h.writeJSON(w, http.StatusOK, newDebugTailnet(h.opts.Snapshot(), time.Now()))
 }
 
 func (h *handler) writeJSON(w http.ResponseWriter, status int, v any) {

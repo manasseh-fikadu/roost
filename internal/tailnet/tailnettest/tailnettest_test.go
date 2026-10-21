@@ -28,7 +28,9 @@ func newTailnet(state string) *tailnettest.Tailnet {
 		Self:  tailnet.Device{ID: "roost", DNSName: "roost.example.ts.net", IPs: []netip.Addr{roostIP}},
 		Peers: []tailnet.Device{
 			{ID: "laptop", DNSName: "laptop.example.ts.net", IPs: []netip.Addr{laptopIP}, Owner: "alice@example.com"},
-			{ID: "ci", DNSName: "ci.example.ts.net", IPs: []netip.Addr{ciIP}, Tags: []string{"tag:ci"}},
+			{ID: "ci", DNSName: "ci.example.ts.net", IPs: []netip.Addr{ciIP}, Tags: []string{"tag:ci"},
+				// Tailscale gives tagged devices no owner, but WhoIs mustn't name one anyway.
+				Owner: "alice@example.com"},
 		},
 	})
 }

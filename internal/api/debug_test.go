@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"net/netip"
 	"testing"
 	"testing/synctest"
@@ -17,13 +16,13 @@ import (
 
 func TestNew_debugTailnet(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		laptop := netip.MustParseAddr("100.64.0.2")
+		laptop := laptopIP
 		tn := tailnettest.New(tailnet.Status{
 			State:   tailnet.StateRunning,
 			Tailnet: "example.com",
 			Self:    tailnet.Device{ID: "roost", DNSName: "roost.example.ts.net", Online: true},
 			Peers: []tailnet.Device{
-				{ID: "laptop", DNSName: "laptop.example.ts.net", OS: "macOS", IPs: []netip.Addr{laptop}, Online: true},
+				{ID: "laptop", DNSName: "laptop.example.ts.net", OS: "macOS", IPs: []netip.Addr{laptop}, Owner: alice, Online: true},
 				{ID: "phone", DNSName: "phone.example.ts.net", Relay: "fra"},
 			},
 		})
@@ -38,9 +37,8 @@ func TestNew_debugTailnet(t *testing.T) {
 		go poller.Run(ctx)
 		synctest.Wait()
 
-		rec := httptest.NewRecorder()
-		h := api.New(api.Options{Tailnet: poller})
-		h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/debug/tailnet", nil))
+		h := api.New(api.Options{WhoIs: tn.WhoIs, Snapshot: poller.Snapshot, IsAdmin: isAdmin})
+		rec := serve(h, newRequest(t, http.MethodGet, "/api/debug/tailnet", laptop))
 
 		if rec.Code != http.StatusOK {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -68,16 +66,4 @@ func TestNew_debugTailnet(t *testing.T) {
 			t.Errorf("connectivity = %+v, want UDP, the public IP and Frankfurt at 12ms", c)
 		}
 	})
-}
-
-func TestNew_debugTailnetLeftOut(t *testing.T) {
-	t.Parallel()
-	h := api.New(api.Options{})
-
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/debug/tailnet", nil))
-
-	if rec.Code != http.StatusNotFound {
-		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotFound)
-	}
 }

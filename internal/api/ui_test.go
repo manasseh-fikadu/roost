@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"net/url"
 	"strings"
 	"testing"
@@ -15,12 +16,12 @@ import (
 func TestUI(t *testing.T) {
 	t.Parallel()
 	const app = "<!doctype html><title>app</title>"
-	h := api.New(api.Options{UI: fstest.MapFS{
+	h := api.New(withTailnet(testTailnet(), api.Options{UI: fstest.MapFS{
 		"200.html":                             {Data: []byte(app)},
 		"robots.txt":                           {Data: []byte("User-agent: *")},
 		"_app/version.json":                    {Data: []byte(`{"version":"1"}`)},
 		"_app/immutable/entry/start.abc123.js": {Data: []byte("start()")},
-	}})
+	}}))
 
 	const (
 		noCache  = "no-cache"
@@ -47,8 +48,8 @@ func TestUI(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), tt.method, tt.target, nil))
+			// The app's files are no secret, so anyone on the tailnet gets them.
+			rec := serve(h, newRequest(t, tt.method, tt.target, strangerIP))
 
 			if rec.Code != tt.wantCode {
 				t.Fatalf("status = %d, want %d", rec.Code, tt.wantCode)
@@ -64,8 +65,7 @@ func TestUI(t *testing.T) {
 
 	t.Run("the app is HTML", func(t *testing.T) {
 		t.Parallel()
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/devices", nil))
+		rec := serve(h, newRequest(t, http.MethodGet, "/devices", laptopIP))
 		if ct := rec.Header().Get("Content-Type"); !strings.HasPrefix(ct, "text/html") {
 			t.Errorf("Content-Type = %q, want text/html", ct)
 		}
@@ -73,8 +73,9 @@ func TestUI(t *testing.T) {
 
 	t.Run("other methods aren't allowed", func(t *testing.T) {
 		t.Parallel()
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/devices", nil))
+		req := newRequest(t, http.MethodPost, "/devices", laptopIP)
+		req.Header.Set(api.CSRFHeader, "1")
+		rec := serve(h, req)
 		if rec.Code != http.StatusMethodNotAllowed {
 			t.Fatalf("status = %d, want %d", rec.Code, http.StatusMethodNotAllowed)
 		}
@@ -86,10 +87,9 @@ func TestUI(t *testing.T) {
 
 func TestUI_notBuilt(t *testing.T) {
 	t.Parallel()
-	h := api.New(api.Options{})
+	h := api.New(withTailnet(testTailnet(), api.Options{}))
 
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
+	rec := serve(h, newRequest(t, http.MethodGet, "/", laptopIP))
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
@@ -111,14 +111,11 @@ func TestUI_devProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := api.New(api.Options{DevUI: viteURL})
+	h := api.New(withTailnet(testTailnet(), api.Options{DevUI: viteURL}))
 
 	t.Run("UI routes go to Vite", func(t *testing.T) {
 		t.Parallel()
-		req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/src/routes/+page.svelte?t=1", nil)
-		req.Host = "roost.example.ts.net"
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, req)
+		rec := serve(h, newRequest(t, http.MethodGet, "/src/routes/+page.svelte?t=1", laptopIP))
 
 		// Vite checks the Host header, so it must be Vite's own.
 		if want := viteURL.Host + " /src/routes/+page.svelte?t=1"; rec.Body.String() != want {
@@ -126,10 +123,20 @@ func TestUI_devProxy(t *testing.T) {
 		}
 	})
 
+	// Vite serves files from the workspace, not just the app.
+	t.Run("only for admins", func(t *testing.T) {
+		t.Parallel()
+		for _, from := range []netip.Addr{phoneIP, serverIP, strangerIP} {
+			rec := serve(h, newRequest(t, http.MethodGet, "/src/lib/index.ts", from))
+			if rec.Code != http.StatusForbidden || strings.Contains(rec.Body.String(), viteURL.Host) {
+				t.Errorf("GET from %v = %d %q, want 403 without reaching Vite", from, rec.Code, rec.Body)
+			}
+		}
+	})
+
 	t.Run("API routes don't", func(t *testing.T) {
 		t.Parallel()
-		rec := httptest.NewRecorder()
-		h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/health", nil))
+		rec := serve(h, newRequest(t, http.MethodGet, "/api/health", laptopIP))
 		if !strings.Contains(rec.Body.String(), `"status":"ok"`) {
 			t.Errorf("GET /api/health = %q, want the hub's health", rec.Body)
 		}
@@ -144,10 +151,9 @@ func TestUI_devProxyDown(t *testing.T) {
 		t.Fatal(err)
 	}
 	vite.Close()
-	h := api.New(api.Options{DevUI: viteURL})
+	h := api.New(withTailnet(testTailnet(), api.Options{DevUI: viteURL}))
 
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/", nil))
+	rec := serve(h, newRequest(t, http.MethodGet, "/", laptopIP))
 
 	if rec.Code != http.StatusBadGateway || !strings.Contains(rec.Body.String(), "make dev") {
 		t.Errorf("status %d, body %q; want 502 and a hint to run make dev", rec.Code, rec.Body)

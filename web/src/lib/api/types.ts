@@ -22,3 +22,56 @@ export interface Health {
 export interface ErrorBody {
   error: string;
 }
+/**
+ * Me is the response to GET /api/me: who Roost thinks is asking.
+ */
+export interface Me {
+  /**
+   * SignedIn is false for an anonymous caller.
+   */
+  signedIn: boolean;
+  /**
+   * Login is the caller's Tailscale login, such as alice@example.com.
+   */
+  login?: string;
+  /**
+   * Name is the caller's display name in Tailscale.
+   */
+  name?: string;
+  /**
+   * Device is the MagicDNS name of the device the request came from.
+   */
+  device?: string;
+  /**
+   * Admin reports whether the caller is one of Roost's admins.
+   */
+  admin: boolean;
+  /**
+   * Reason says why an anonymous caller isn't signed in: one of the
+   * Reason constants.
+   */
+  reason?: string;
+}
+/**
+ * ReasonUnknownDevice means the request didn't come from a device that
+ * Tailscale knows.
+ */
+export const ReasonUnknownDevice = "unknown-device";
+/**
+ * ReasonTaggedDevice means the device is tagged, so it belongs to no one.
+ */
+export const ReasonTaggedDevice = "tagged-device";
+/**
+ * ReasonNoUser means Tailscale named the device but no user.
+ */
+export const ReasonNoUser = "no-user";
+/**
+ * ReasonRoostMachine means the request came from Roost's own node, which
+ * in host mode is the machine Roost runs on. Any process there could
+ * send it, so it doesn't count as the machine's owner.
+ */
+export const ReasonRoostMachine = "roost-machine";
+/**
+ * ReasonWhoIsFailed means Roost couldn't ask Tailscale.
+ */
+export const ReasonWhoIsFailed = "whois-failed";
