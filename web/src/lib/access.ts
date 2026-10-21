@@ -68,5 +68,14 @@ export function addViewerCommand(me: Me): string | undefined {
 	if (canView(me) || !me.signedIn || !me.login) {
 		return undefined;
 	}
-	return `roost admin add-viewer ${me.login}`;
+	return `roost admin add-viewer ${shellWord(me.login)}`;
+}
+
+/**
+ * Quotes s for a POSIX shell, unless it's plain. The caller chose their own
+ * login, and an admin may paste this command, so a login like
+ * `a;reboot@example.com` must stay one word.
+ */
+function shellWord(s: string): string {
+	return /^[\w@.+-]+$/.test(s) ? s : `'${s.replaceAll("'", "'\\''")}'`;
 }
