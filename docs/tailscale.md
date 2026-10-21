@@ -91,7 +91,7 @@ Roost has two roles:
 
 Anyone else, and anyone anonymous, can only see that Roost is there and why they can't view it.
 
-One setting decides who else can view Roost. By default, anyone who signs in from the tailnet is a viewer unless they have a role of their own. That includes people you share Roost's machine with, since Tailscale names them too, and it means your tailnet policy decides who can reach Roost at all. Set it to `listed` to let only Roost's admins and viewers in.
+One setting decides who else can view Roost. By default, it's `listed`: only Roost's admins and viewers can, and anyone else who signs in sees the command an admin can run to make them a viewer. Set it to `tailnet` to make anyone who signs in from the tailnet a viewer unless they have a role of their own. That includes people you share Roost's machine with, since Tailscale names them too, so with `tailnet`, sharing that machine shares the dashboard of your whole tailnet.
 
 When Roost has no admins yet, it makes the first ones as soon as it's on the tailnet: the user who owns Roost's node, which is whoever logged it in, and any logins in `ROOST_ADMINS` or `--admins`, separated by commas. A node logged in with a tagged auth key has no owner, so give it `ROOST_ADMINS`:
 
@@ -106,7 +106,7 @@ roost admin list                        # the admins and viewers, and who else c
 roost admin add alice@example.com       # make alice an admin
 roost admin add-viewer bob@example.com  # make bob a viewer
 roost admin remove bob@example.com      # take bob's role away
-roost admin who-can-view listed         # only admins and viewers; "tailnet" lets anyone on the tailnet view
+roost admin who-can-view tailnet        # let anyone on the tailnet view; "listed" (the default) undoes it
 ```
 
 Admins can make the same changes through `GET` and `PATCH /api/access` and `PUT` and `DELETE /api/access/users/<login>`, which the Settings page will use.

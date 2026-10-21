@@ -23,9 +23,9 @@ const adminUsage = `Usage:
                                                          Show or set who can view Roost
 
 Admins can do everything. Viewers see the dashboard, but can't change
-anything or see logs, files or secrets. With who-can-view set to tailnet,
-the default, anyone who signs in from the tailnet is a viewer. With listed,
-only the admins and viewers can view Roost.
+anything or see logs, files or secrets. With who-can-view set to listed,
+the default, only the admins and viewers can view Roost. With tailnet,
+anyone who signs in from the tailnet is a viewer too.
 
 Roost makes its first admins itself. Use "roost admin add" when no one can
 sign in as an admin, such as when Roost's node is tagged. Changes apply at

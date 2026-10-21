@@ -151,17 +151,23 @@ func TestStore_Role(t *testing.T) {
 		}
 	}
 
-	if who, err := s.WhoCanView(ctx); err != nil || who != store.DefaultWhoCanView {
-		t.Errorf("WhoCanView() on a new database = %q, %v; want %q", who, err, store.DefaultWhoCanView)
+	// Roost starts closed.
+	if who, err := s.WhoCanView(ctx); err != nil || who != store.Listed {
+		t.Errorf("WhoCanView() on a new database = %q, %v; want %q", who, err, store.Listed)
 	}
-	check(store.Tailnet)
-	for _, step := range []struct {
+	check(store.Listed)
+	steps := []struct {
 		who  string
 		want bool // changed
-	}{{store.Tailnet, false}, {store.Listed, true}, {store.Listed, false}} {
+	}{{store.Listed, false}, {store.Tailnet, true}, {store.Tailnet, false}}
+	for _, step := range steps {
 		if changed, err := s.SetWhoCanView(ctx, step.who); err != nil || changed != step.want {
 			t.Errorf("SetWhoCanView(%q) = %v, %v; want %v", step.who, changed, err, step.want)
 		}
+	}
+	check(store.Tailnet)
+	if changed, err := s.SetWhoCanView(ctx, store.Listed); err != nil || !changed {
+		t.Errorf("SetWhoCanView(listed) = %v, %v; want true", changed, err)
 	}
 	check(store.Listed)
 	if _, err := s.SetWhoCanView(ctx, "everyone"); err == nil {

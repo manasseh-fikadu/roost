@@ -31,19 +31,23 @@ func TestAdmin(t *testing.T) {
 		{
 			args:   []string{"list"},
 			out:    "alice@example.com  admin\nbob@github         viewer\ncarol@example.com  admin\n",
-			errOut: "Anyone who signs in from the tailnet can view Roost too",
+			errOut: "No one else can view Roost",
 		},
 		{args: []string{"remove", "carol@example.com"}, out: "carol@example.com no longer has a role\n"},
 		{args: []string{"remove", "carol@example.com"}, out: "carol@example.com had no role\n"},
 		{args: []string{"add-viewer", "alice@example.com"}, wantErr: "the last admin has to stay an admin"},
 		{args: []string{"remove", "alice@example.com"}, wantErr: "the last admin has to stay an admin"},
 		{args: []string{"add", "alice"}, wantErr: "isn't a Tailscale login"},
-		{args: []string{"who-can-view"}, out: "tailnet\n"},
-		{args: []string{"who-can-view", "listed"}, out: "Only Roost's admins and viewers can view it\n"},
 		{args: []string{"who-can-view"}, out: "listed\n"},
-		{args: []string{"list"}, out: "alice@example.com  admin\nbob@github         viewer\n", errOut: "No one else can view Roost"},
-		{args: []string{"who-can-view", "everyone"}, wantErr: `not "everyone"`},
 		{args: []string{"who-can-view", "tailnet"}, out: "Anyone who signs in from the tailnet can view Roost\n"},
+		{args: []string{"who-can-view"}, out: "tailnet\n"},
+		{
+			args:   []string{"list"},
+			out:    "alice@example.com  admin\nbob@github         viewer\n",
+			errOut: "Anyone who signs in from the tailnet can view Roost too",
+		},
+		{args: []string{"who-can-view", "everyone"}, wantErr: `not "everyone"`},
+		{args: []string{"who-can-view", "listed"}, out: "Only Roost's admins and viewers can view it\n"},
 	}
 	for _, st := range steps {
 		out, errOut, err := admin(st.args...)

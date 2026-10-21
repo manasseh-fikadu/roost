@@ -31,8 +31,11 @@ const (
 	Listed = "listed"
 )
 
-// DefaultWhoCanView is who can view Roost until an admin changes it.
-const DefaultWhoCanView = Tailnet
+// DefaultWhoCanView is who can view Roost until an admin changes it. Roost
+// starts closed: sharing Roost's machine with someone, or a tailnet policy
+// that lets every member reach every device, shouldn't show them the whole
+// tailnet. Letting more people in later is one command.
+const DefaultWhoCanView = Listed
 
 // whoCanViewKey is the kv key that holds who can view Roost.
 const whoCanViewKey = "who_can_view"
