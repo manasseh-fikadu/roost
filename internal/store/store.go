@@ -3,7 +3,7 @@
 // The schema is built by the numbered SQL files in migrations/, which are
 // embedded in the binary. To change it, add the next file, such as
 // 0002_device_settings.sql, and never edit one that has been merged. Open
-// applies the files a database hasn't had yet, each in its own transaction, and
+// applies the files a database hasn't had yet, all in one transaction, and
 // records the number of the last one in PRAGMA user_version.
 package store
 
@@ -11,8 +11,10 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/url"
@@ -188,57 +190,105 @@ func (s *Store) migrate(ctx context.Context, path string, migrations []migration
 		return nil
 	case from > 0:
 		backup := path + ".bak"
-		if err := s.backup(ctx, backup); err != nil {
+		kept, err := s.backup(ctx, backup, from)
+		if err != nil {
 			return fmt.Errorf("back up the database before migrating: %w", err)
 		}
-		s.log.Info("backed up the database before migrating", "backup", backup, "version", from)
-	}
-
-	for _, m := range migrations[from:] {
-		if err := s.apply(ctx, m); err != nil {
-			return fmt.Errorf("migration %s: %w", m.name, err)
+		if kept {
+			s.log.Info("backed up the database before migrating", "backup", backup, "version", from)
 		}
 	}
-	s.log.Info("migrated the database", "from", from, "to", to)
+
+	applied, err := s.upgrade(ctx, migrations[from:])
+	if err != nil {
+		return err
+	}
+	if applied > 0 {
+		s.log.Info("migrated the database", "from", from, "to", to)
+	}
 	return nil
 }
 
-// apply runs one migration and records its version, in a single transaction.
-func (s *Store) apply(ctx context.Context, m migration) error {
+// upgrade applies migrations in one transaction and returns how many it
+// applied, so either all of them apply or none do. The transaction takes the
+// write lock as it begins and reads the version again, so it skips migrations
+// that another process, such as roost admin, applied since migrate read it, and
+// no other process sees the database halfway through.
+func (s *Store) upgrade(ctx context.Context, migrations []migration) (int, error) {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	// After a successful Commit, Rollback does nothing.
 	defer func() { _ = tx.Rollback() }()
 
-	if _, err := tx.ExecContext(ctx, m.sql); err != nil {
-		return err
+	var version int
+	if err := tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
+		return 0, err
 	}
-	// PRAGMA can't take a bound parameter, and the version is a number.
-	if _, err := tx.ExecContext(ctx, "PRAGMA user_version = "+strconv.Itoa(m.version)); err != nil {
-		return err
+	n := 0
+	for _, m := range migrations {
+		if m.version <= version {
+			continue
+		}
+		if _, err := tx.ExecContext(ctx, m.sql); err != nil {
+			return 0, fmt.Errorf("migration %s: %w", m.name, err)
+		}
+		// PRAGMA can't take a bound parameter, and the version is a number.
+		if _, err := tx.ExecContext(ctx, "PRAGMA user_version = "+strconv.Itoa(m.version)); err != nil {
+			return 0, fmt.Errorf("migration %s: %w", m.name, err)
+		}
+		n++
 	}
-	return tx.Commit()
+	if n == 0 {
+		return 0, nil
+	}
+	return n, tx.Commit()
 }
 
-// backup writes a consistent copy of the database to dst. It writes the copy
-// next to dst first, so a failed backup leaves the previous one in place.
-func (s *Store) backup(ctx context.Context, dst string) error {
-	tmp := filepath.Clean(dst + ".tmp")
+// backup writes a consistent copy of the database, as it is at version from,
+// to dst, and reports whether it did. It writes the copy next to dst first, so
+// a failed backup leaves the previous one in place. The temporary file's name
+// is unique, so two processes can back up at once. If another process migrated
+// the database before the copy was taken, the copy is dropped, since that
+// process already backed up the database as it was.
+func (s *Store) backup(ctx context.Context, dst string, from int) (bool, error) {
 	// VACUUM INTO needs a missing or empty file, and keeps the mode of one that
-	// exists, so creating it here keeps the copy private.
-	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
+	// exists. CreateTemp makes an empty one that only this user can read.
+	f, err := os.CreateTemp(filepath.Dir(dst), filepath.Base(dst)+".*.tmp")
 	if err != nil {
-		return err
+		return false, err
 	}
+	tmp := f.Name()
 	if err := f.Close(); err != nil {
-		return err
+		return false, errors.Join(err, os.Remove(tmp))
 	}
 	if err := s.vacuumInto(ctx, tmp); err != nil {
-		return errors.Join(err, os.Remove(tmp))
+		return false, errors.Join(err, os.Remove(tmp))
 	}
-	return os.Rename(tmp, dst)
+	version, err := fileUserVersion(tmp)
+	switch {
+	case err != nil:
+		return false, errors.Join(err, os.Remove(tmp))
+	case version != from:
+		return false, os.Remove(tmp)
+	}
+	return true, os.Rename(tmp, dst)
+}
+
+// fileUserVersion reads PRAGMA user_version from the header of the SQLite
+// database at path, where it's a big-endian integer at offset 60.
+func fileUserVersion(path string) (int, error) {
+	f, err := os.Open(filepath.Clean(path))
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = f.Close() }()
+	var header [64]byte
+	if _, err := io.ReadFull(f, header[:]); err != nil {
+		return 0, fmt.Errorf("read the header of %s: %w", path, err)
+	}
+	return int(int32(binary.BigEndian.Uint32(header[60:]))), nil //nolint:gosec // G115: SQLite stores a signed 32-bit integer.
 }
 
 // vacuumInto copies the database to the empty file at path and syncs it, which
