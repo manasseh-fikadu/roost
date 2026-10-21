@@ -237,6 +237,9 @@ func (p *Poller) checkConnectivity(ctx context.Context) time.Duration {
 		p.snap.ConnectivityErr = err
 		return retryInterval
 	}
+	if p.snap.ConnectivityErr != nil {
+		p.log.Info("checked connectivity again")
+	}
 	p.snap.Connectivity, p.snap.ConnectivityAt, p.snap.ConnectivityErr = c, time.Now(), nil
 	return ConnectivityInterval
 }

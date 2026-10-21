@@ -1,11 +1,14 @@
 package tailnet_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"log/slog"
 	"net/netip"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -35,10 +38,11 @@ func testStatus(state string) tailnet.Status {
 	}
 }
 
-// runPoller runs a Poller on tn until the test ends.
-func runPoller(t *testing.T, tn tailnet.Tailnet) *tailnet.Poller {
+// runPoller runs a Poller on tn until the test ends. A nil log discards its
+// messages.
+func runPoller(t *testing.T, tn tailnet.Tailnet, log *slog.Logger) *tailnet.Poller {
 	t.Helper()
-	p := tailnet.NewPoller(tn, nil)
+	p := tailnet.NewPoller(tn, log)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan struct{})
 	go func() {
@@ -52,6 +56,31 @@ func runPoller(t *testing.T, tn tailnet.Tailnet) *tailnet.Poller {
 	return p
 }
 
+// logBuffer collects log lines from several goroutines.
+type logBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *logBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+// count returns how many lines contain msg.
+func (b *logBuffer) count(msg string) int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return strings.Count(b.buf.String(), msg)
+}
+
+func (b *logBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
 func TestPoller(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		tn := tailnettest.New(testStatus(tailnet.StateRunning))
@@ -63,7 +92,7 @@ func TestPoller(t *testing.T) {
 		tn.SetConnectivity(conn, nil)
 		start := time.Now()
 
-		p := runPoller(t, tn)
+		p := runPoller(t, tn, nil)
 		// Long enough for the silent peer's ping to time out, but before the
 		// next status poll.
 		time.Sleep(6 * time.Second)
@@ -116,7 +145,7 @@ func TestPoller_waitsForLogin(t *testing.T) {
 		tn.SetPing(directIP, &tailnet.PingResult{Endpoint: "203.0.113.2:41641"}, nil)
 		tn.SetConnectivity(&tailnet.Connectivity{UDP: true}, nil)
 
-		p := runPoller(t, tn)
+		p := runPoller(t, tn, nil)
 		time.Sleep(time.Minute)
 		synctest.Wait()
 
@@ -142,8 +171,9 @@ func TestPoller_errors(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		tn := tailnettest.New(testStatus(tailnet.StateRunning))
 		tn.SetConnectivity(nil, errors.New("no UDP"))
+		log := &logBuffer{}
 
-		p := runPoller(t, tn)
+		p := runPoller(t, tn, slog.New(slog.NewTextHandler(log, nil)))
 		synctest.Wait()
 		statusAt := p.Snapshot().StatusAt
 		tn.FailStatus(errors.New("tailscaled went away"))
@@ -170,6 +200,15 @@ func TestPoller_errors(t *testing.T) {
 		if snap.StatusErr != nil || snap.ConnectivityErr != nil || snap.Connectivity == nil {
 			t.Errorf("StatusErr = %v, Connectivity = %+v, ConnectivityErr = %v; want no errors",
 				snap.StatusErr, snap.Connectivity, snap.ConnectivityErr)
+		}
+		// Each failure and recovery is logged once, not at every poll.
+		for _, msg := range []string{
+			`msg="get the tailnet status"`, `msg="got the tailnet status again"`,
+			`msg="check connectivity"`, `msg="checked connectivity again"`,
+		} {
+			if n := log.count(msg); n != 1 {
+				t.Errorf("logged %s %d times, want once; log:\n%s", msg, n, log)
+			}
 		}
 	})
 }
