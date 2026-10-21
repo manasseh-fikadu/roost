@@ -2,8 +2,8 @@
 
 GO      ?= go
 BUN     ?= bun
-# Where `make dev` runs the Go server. Vite proxies /api to it.
-ADDR    ?= 127.0.0.1:4700
+# The port `make dev` runs Vite on. The Go server proxies the web UI to it.
+VITE_PORT ?= 5173
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
@@ -23,10 +23,10 @@ dev: web/node_modules
 	@$(MAKE) --no-print-directory -j2 dev-api dev-web
 
 dev-api:
-	$(GO) run ./cmd/roost serve --listen $(ADDR)
+	$(GO) run ./cmd/roost serve --dev-ui http://127.0.0.1:$(VITE_PORT)
 
 dev-web:
-	cd web && ROOST_API=http://$(ADDR) $(BUN) run dev
+	cd web && $(BUN) run dev --port $(VITE_PORT)
 
 ## test: run the Go tests and type-check the web app
 test: web/node_modules

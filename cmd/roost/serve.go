@@ -8,25 +8,62 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/config"
 	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/web"
 )
 
 // shutdownTimeout is how long in-flight requests get to finish after a stop signal.
 const shutdownTimeout = 10 * time.Second
 
-func serve(ctx context.Context, args []string, stderr io.Writer) (err error) {
+// openNodeFunc connects Roost to the tailnet. Tests pass a fake.
+type openNodeFunc func(ctx context.Context, cfg config.Config, logger *slog.Logger) (tailnet.Node, error)
+
+func serve(ctx context.Context, args []string, stderr io.Writer) error {
 	cfg, err := config.Parse(args, os.Getenv, stderr)
 	if err != nil {
 		return err
 	}
+	return runServe(ctx, cfg, stderr, openNode)
+}
+
+// openNode starts the embedded node, or connects to the machine's tailscaled,
+// as cfg says.
+func openNode(ctx context.Context, cfg config.Config, logger *slog.Logger) (tailnet.Node, error) {
+	if cfg.Tailscale == config.Host {
+		return tailnet.NewHost(ctx, tailnet.HostOptions{Port: cfg.Port, Logger: logger})
+	}
+	return tailnet.NewEmbedded(tailnet.EmbeddedOptions{
+		Dir:      filepath.Join(cfg.DataDir, "tailscale"),
+		Hostname: cfg.Hostname,
+		Logger:   logger,
+	})
+}
+
+// runServe runs the hub until ctx ends. The app is only served on the tailnet.
+// In embedded mode, the setup page is also served on cfg.SetupListen, so
+// someone can log the node in.
+func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open openNodeFunc) (err error) {
 	logger := slog.New(slog.NewTextHandler(stderr, nil))
+	devUI, err := devUIURL(cfg.DevUI)
+	if err != nil {
+		return err
+	}
+	ui := web.FS()
+	if ui == nil && devUI == nil {
+		logger.Warn("built without the web UI, so only /api is served; `make build` embeds it")
+	}
 
 	dbPath := filepath.Join(cfg.DataDir, "roost.db")
 	st, err := store.Open(ctx, dbPath, store.Options{Logger: logger})
@@ -35,42 +72,247 @@ func serve(ctx context.Context, args []string, stderr io.Writer) (err error) {
 	}
 	defer func() { err = errors.Join(err, st.Close()) }()
 
-	ui := web.FS()
-	if ui == nil {
-		logger.Warn("built without the web UI, so only /api is served; `make build` embeds it")
+	// Listen for the setup page before starting the node, so a bad address
+	// fails at once.
+	var setupLn net.Listener
+	if cfg.Tailscale == config.Embedded {
+		var lc net.ListenConfig
+		if setupLn, err = lc.Listen(ctx, "tcp", cfg.SetupListen); err != nil {
+			return fmt.Errorf("listen on %s: %w", cfg.SetupListen, err)
+		}
+		// Shutting the setup server down closes it too, and closing twice is harmless.
+		defer func() { _ = setupLn.Close() }()
 	}
 
-	srv := &http.Server{
-		Handler:           api.New(api.Options{Version: buildVersion(), UI: ui, Logger: logger}),
-		ReadHeaderTimeout: 10 * time.Second,
-		IdleTimeout:       2 * time.Minute,
-		ErrorLog:          slog.NewLogLogger(logger.Handler(), slog.LevelWarn),
-	}
-
-	var lc net.ListenConfig
-	ln, err := lc.Listen(ctx, "tcp", cfg.Listen)
+	node, err := open(ctx, cfg, logger)
 	if err != nil {
-		return fmt.Errorf("listen on %s: %w", cfg.Listen, err)
+		return fmt.Errorf("connect to the tailnet: %w", err)
 	}
-	logger.Info("roost is running", "version", buildVersion(), "url", "http://"+ln.Addr().String(), "data_dir", cfg.DataDir)
+	defer func() { err = errors.Join(err, node.Close()) }()
 
-	serveErr := make(chan error, 1)
-	go func() { serveErr <- srv.Serve(ln) }()
+	// Everything below stops before the node closes.
+	var wg sync.WaitGroup
+	defer wg.Wait()
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	srvs := newServers(logger)
+	var appURL atomic.Pointer[string]
+	if setupLn != nil {
+		setupURL := localURL(setupLn.Addr())
+		srvs.start(api.Setup(api.SetupOptions{
+			Tailnet: node,
+			AppURL: func() string {
+				if u := appURL.Load(); u != nil {
+					return *u
+				}
+				return ""
+			},
+			Logger: logger,
+		}), setupLn)
+		logger.Info("serving the setup page", "url", setupURL)
+		if !loopback(setupLn.Addr()) {
+			logger.Warn("other machines can reach the setup page, and until Roost is logged in, anyone who opens it "+
+				"can add Roost to their own tailnet; listen on 127.0.0.1 (in a container, publish the port on "+
+				"127.0.0.1 only), or log in with TS_AUTHKEY", "address", setupLn.Addr().String())
+		}
+		wg.Go(func() { announceLogin(ctx, node, setupURL, logger) })
+	}
+
+	type listenResult struct {
+		ln  net.Listener
+		url string
+		err error
+	}
+	listened := make(chan listenResult, 1)
+	wg.Go(func() {
+		ln, url, err := node.Listen(ctx)
+		listened <- listenResult{ln, url, err}
+	})
+	var res listenResult
+	select {
+	case res = <-listened:
+	case <-srvs.failed:
+		return srvs.stop(ctx)
+	case <-ctx.Done():
+		logger.Info("shutting down")
+		return srvs.stop(ctx)
+	}
+	if res.err != nil {
+		if ctx.Err() != nil {
+			return srvs.stop(ctx)
+		}
+		return errors.Join(fmt.Errorf("listen on the tailnet: %w", res.err), srvs.stop(ctx))
+	}
+
+	if err := addFirstAdmins(ctx, st, node, cfg.Admins, logger); err != nil {
+		return errors.Join(err, res.ln.Close(), srvs.stop(ctx))
+	}
+	poller := tailnet.NewPoller(node, logger)
+	wg.Go(func() { poller.Run(ctx) })
+	// The app checks requests against Roost's own names, from the first status.
+	select {
+	case <-poller.Polled():
+	case <-ctx.Done():
+		logger.Info("shutting down")
+		return errors.Join(res.ln.Close(), srvs.stop(ctx))
+	}
+	srvs.start(api.New(api.Options{
+		Version:  buildVersion(),
+		UI:       ui,
+		DevUI:    devUI,
+		WhoIs:    node.WhoIs,
+		Snapshot: poller.Snapshot,
+		IsAdmin:  st.IsAdmin,
+		Logger:   logger,
+	}), res.ln)
+	appURL.Store(&res.url)
+	logger.Info("roost is running", "version", buildVersion(), "url", res.url, "data_dir", cfg.DataDir)
 
 	select {
-	case err := <-serveErr:
-		return fmt.Errorf("serve: %w", err)
+	case <-srvs.failed:
 	case <-ctx.Done():
+		logger.Info("shutting down")
 	}
+	return srvs.stop(ctx)
+}
 
-	logger.Info("shutting down")
-	shutdownCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
-	defer cancel()
-	if err := srv.Shutdown(shutdownCtx); err != nil {
-		return fmt.Errorf("shut down: %w", err)
+// addFirstAdmins makes the owner of Roost's node and the logins in admins
+// Roost's admins, if it has none yet. A tagged node has no owner.
+func addFirstAdmins(ctx context.Context, st *store.Store, tn tailnet.Tailnet, admins []string, logger *slog.Logger) error {
+	status, err := tn.Status(ctx)
+	if err != nil {
+		return fmt.Errorf("get the tailnet status: %w", err)
 	}
-	if err := <-serveErr; !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("serve: %w", err)
+	logins := admins
+	if owner := status.Self.Owner; owner != "" {
+		logins = append([]string{owner}, admins...)
+	}
+	added, err := st.AddFirstAdmins(ctx, logins)
+	if err != nil {
+		return err
+	}
+	if added {
+		logger.Info("made Roost's first admins", "logins", strings.Join(logins, ","))
+		return nil
+	}
+	have, err := st.Admins(ctx)
+	if err != nil {
+		return err
+	}
+	if len(have) == 0 {
+		logger.Warn("Roost has no admins, since its node is tagged and ROOST_ADMINS is empty; " +
+			"add one with `roost admin add <login>`")
 	}
 	return nil
+}
+
+// announceLogin logs the login URL each time Tailscale makes a new one, until
+// the node is on the tailnet.
+func announceLogin(ctx context.Context, tn tailnet.Tailnet, setupURL string, logger *slog.Logger) {
+	t := time.NewTicker(time.Second)
+	defer t.Stop()
+	var last string
+	for {
+		if st, err := tn.Status(ctx); err == nil {
+			if st.State == tailnet.StateRunning {
+				return
+			}
+			if st.LoginURL != "" && st.LoginURL != last {
+				last = st.LoginURL
+				logger.Info("log Roost in to your tailnet with the setup page or the login URL",
+					"setup_page", setupURL, "login_url", st.LoginURL)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+		}
+	}
+}
+
+// localURL returns an http URL for a local listener's address, naming
+// localhost if it listens on every address.
+func localURL(addr net.Addr) string {
+	tcp, ok := addr.(*net.TCPAddr)
+	if !ok || !tcp.IP.IsUnspecified() {
+		return "http://" + addr.String()
+	}
+	return "http://" + net.JoinHostPort("localhost", strconv.Itoa(tcp.Port))
+}
+
+// loopback reports whether addr is a loopback address, which only this machine
+// can reach.
+func loopback(addr net.Addr) bool {
+	tcp, ok := addr.(*net.TCPAddr)
+	return ok && tcp.IP.IsLoopback()
+}
+
+func devUIURL(raw string) (*url.URL, error) {
+	if raw == "" {
+		return nil, nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("dev UI: %w", err)
+	}
+	return u, nil
+}
+
+// servers runs HTTP servers and stops them together.
+type servers struct {
+	logger  *slog.Logger
+	running []runningServer
+	// failed is signaled when a server stops by itself. stop returns its error.
+	failed chan struct{}
+}
+
+type runningServer struct {
+	srv  *http.Server
+	done chan error
+}
+
+func newServers(logger *slog.Logger) *servers {
+	return &servers{logger: logger, failed: make(chan struct{}, 1)}
+}
+
+func (s *servers) start(h http.Handler, ln net.Listener) {
+	srv := &http.Server{
+		Handler:           h,
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       2 * time.Minute,
+		ErrorLog:          slog.NewLogLogger(s.logger.Handler(), slog.LevelWarn),
+	}
+	done := make(chan error, 1)
+	s.running = append(s.running, runningServer{srv: srv, done: done})
+	go func() {
+		err := srv.Serve(ln)
+		done <- err
+		if !errors.Is(err, http.ErrServerClosed) {
+			select {
+			case s.failed <- struct{}{}:
+			default:
+			}
+		}
+	}()
+}
+
+// stop shuts every server down, giving in-flight requests shutdownTimeout to
+// finish, and returns any error a server stopped with.
+func (s *servers) stop(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), shutdownTimeout)
+	defer cancel()
+	var errs []error
+	for _, r := range s.running {
+		if err := r.srv.Shutdown(ctx); err != nil {
+			errs = append(errs, fmt.Errorf("shut down: %w", err))
+		}
+	}
+	for _, r := range s.running {
+		if err := <-r.done; !errors.Is(err, http.ErrServerClosed) {
+			errs = append(errs, fmt.Errorf("serve: %w", err))
+		}
+	}
+	return errors.Join(errs...)
 }

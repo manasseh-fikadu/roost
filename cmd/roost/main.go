@@ -20,6 +20,7 @@ const usage = `Usage: roost <command> [flags]
 
 Commands:
   serve     Run the Roost hub
+  admin     Add or list Roost's admins
   version   Print the version
 
 Run "roost <command> -h" to see a command's flags.
@@ -50,6 +51,8 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	switch args[0] {
 	case "serve":
 		return serve(ctx, args[1:], stderr)
+	case "admin":
+		return admin(ctx, args[1:], stdout, stderr)
 	case "version":
 		fmt.Fprintln(stdout, buildVersion())
 		return nil

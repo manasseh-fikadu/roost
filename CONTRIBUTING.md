@@ -9,7 +9,7 @@ Thanks for helping. Roost is early, and the [roadmap to v0.1](https://github.com
 
 ## Set up
 
-You need Go 1.27 or newer, Node 22.17 or newer, and [Bun](https://bun.sh). To run `make lint`, you also need [golangci-lint](https://golangci-lint.run/) v2 and [ShellCheck](https://www.shellcheck.net/).
+You need Go 1.27.3 or newer, Node 22.17 or newer, and [Bun](https://bun.sh). To run `make lint`, you also need [golangci-lint](https://golangci-lint.run/) v2 and [ShellCheck](https://www.shellcheck.net/).
 
 ```sh
 git clone https://github.com/manasseh-fikadu/roost
@@ -17,7 +17,9 @@ cd roost
 make dev
 ```
 
-`make dev` runs the Go server on 127.0.0.1:4700 and the Vite dev server, which proxies `/api` to it. Open the URL Vite prints. The Go server doesn't reload on changes, so restart `make dev` after editing Go code.
+`make dev` runs the Vite dev server and the Go server, which serves Roost on your tailnet and proxies the web UI to Vite. Open the URL the Go server logs (`roost is running url=...`), not Vite's, so the API sees requests come over the tailnet the way it does in production. The first time, Roost joins your tailnet as a new machine: open <http://127.0.0.1:4700> to log it in. Roost makes whoever logs it in an admin, and only admins get the UI from Vite. If the machine you work on has Tailscale, `ROOST_TAILSCALE=host make dev` uses it instead and skips the login, but then open Roost from another device, since in host mode Roost signs no one in from its own machine. See [docs/tailscale.md](docs/tailscale.md) for both modes.
+
+The Go server doesn't reload on changes, so restart `make dev` after editing Go code.
 
 | Command | What it does |
 | --- | --- |
@@ -32,7 +34,7 @@ make dev
 - **Go:** format with `gofmt` and prefer the standard library; a new dependency needs a reason. `.golangci.yml` sets the linters. If you have to silence one, say which and why: `//nolint:gosec // reason`.
 - **Web:** use Svelte 5 runes and SvelteKit 3 only. SvelteKit 3 changed a lot, and most examples online are for version 2, so check [CLAUDE.md](CLAUDE.md) for the old patterns and their replacements. Run `bun run format` in `web/` before committing.
 - **API types:** change `internal/api/types.go` and run `make types`. Never edit `web/src/lib/api/types.ts` by hand.
-- **Database:** to change the schema, add the next numbered file to `internal/store/migrations`, such as `0002_add_device_notes.sql`. On startup, Roost copies the database to `roost.db.bak` and runs each new file in its own transaction. Never edit or renumber a migration once it's merged; add another one. A new table that keeps history also needs a line in `retention` in `internal/store/prune.go`, so its old rows get deleted.
+- **Database:** to change the schema, add the next numbered file to `internal/store/migrations`, such as `0002_add_device_notes.sql`. On startup, Roost copies the database to `roost.db.bak` and runs the new files in one transaction, so a failed upgrade leaves the database as it was. Never edit or renumber a migration once it's merged; add another one. A new table that keeps history also needs a line in `retention` in `internal/store/prune.go`, so its old rows get deleted.
 - **Agent:** `agent/` has to run on macOS's bash 3.2 and with any POSIX awk, using only `curl` and standard system tools.
 
 ## Tests

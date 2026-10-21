@@ -3,7 +3,6 @@ package api_test
 import (
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"testing"
 	"testing/fstest"
 
@@ -12,10 +11,10 @@ import (
 
 func TestNew_health(t *testing.T) {
 	t.Parallel()
-	h := api.New(api.Options{Version: "v1.2.3"})
+	h := api.New(withTailnet(testTailnet(), api.Options{Version: "v1.2.3"}))
 
-	rec := httptest.NewRecorder()
-	h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/api/health", nil))
+	// Health doesn't need anyone to be signed in.
+	rec := serve(h, newRequest(t, http.MethodGet, "/api/health", strangerIP))
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
@@ -35,13 +34,12 @@ func TestNew_health(t *testing.T) {
 func TestNew_unknownAPIPath(t *testing.T) {
 	t.Parallel()
 	// With a UI present, unknown API paths must still be JSON errors, not the app.
-	h := api.New(api.Options{UI: fstest.MapFS{"200.html": {Data: []byte("app")}}})
+	h := api.New(withTailnet(testTailnet(), api.Options{UI: fstest.MapFS{"200.html": {Data: []byte("app")}}}))
 
 	for _, target := range []string{"/api/", "/api/nope", "/api/health/extra"} {
 		t.Run(target, func(t *testing.T) {
 			t.Parallel()
-			rec := httptest.NewRecorder()
-			h.ServeHTTP(rec, httptest.NewRequestWithContext(t.Context(), http.MethodGet, target, nil))
+			rec := serve(h, newRequest(t, http.MethodGet, target, laptopIP))
 
 			if rec.Code != http.StatusNotFound {
 				t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)

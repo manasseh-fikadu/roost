@@ -4,7 +4,7 @@ The order of work is the checklist in issue #1. Issue #2 has the stack and layou
 
 ## Commands
 
-- `make dev` runs the Go server on 127.0.0.1:4700 and Vite, which proxies `/api` to it. The Go side doesn't reload, so restart after Go changes.
+- `make dev` runs Vite and the Go server, which serves Roost only on the tailnet and proxies the web UI to Vite (`--dev-ui`). Open the URL in the `roost is running` log line. `ROOST_TAILSCALE=host make dev` uses the machine's Tailscale instead of an embedded node, which needs a login the first time; in host mode, requests from the machine itself are anonymous, so open it from another device. Only admins get the UI through `--dev-ui`. The Go side doesn't reload, so restart after Go changes.
 - `make build` builds `./roost` with the UI embedded, using the `ui` build tag. Plain `go build`, `go test` and `go vet` leave the UI out, so they work without a web build.
 - `make test` runs `go test -race -shuffle=on ./...` and `svelte-check`.
 - `make lint` runs golangci-lint (configured in `.golangci.yml`), shellcheck and prettier. Run it before committing Go, shell or web changes.
