@@ -11,7 +11,7 @@ import (
 
 func TestNew_health(t *testing.T) {
 	t.Parallel()
-	h := api.New(withTailnet(testTailnet(), api.Options{Version: "v1.2.3"}))
+	h := api.New(withTailnet(t, testTailnet(), api.Options{Version: "v1.2.3"}))
 
 	// Health doesn't need anyone to be signed in.
 	rec := serve(h, newRequest(t, http.MethodGet, "/api/health", strangerIP))
@@ -34,7 +34,7 @@ func TestNew_health(t *testing.T) {
 func TestNew_unknownAPIPath(t *testing.T) {
 	t.Parallel()
 	// With a UI present, unknown API paths must still be JSON errors, not the app.
-	h := api.New(withTailnet(testTailnet(), api.Options{UI: fstest.MapFS{"200.html": {Data: []byte("app")}}}))
+	h := api.New(withTailnet(t, testTailnet(), api.Options{UI: fstest.MapFS{"200.html": {Data: []byte("app")}}}))
 
 	for _, target := range []string{"/api/", "/api/nope", "/api/health/extra"} {
 		t.Run(target, func(t *testing.T) {

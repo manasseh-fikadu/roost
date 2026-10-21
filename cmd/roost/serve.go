@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -163,7 +164,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		DevUI:    devUI,
 		WhoIs:    node.WhoIs,
 		Snapshot: poller.Snapshot,
-		IsAdmin:  st.IsAdmin,
+		Store:    st,
 		Logger:   logger,
 	}), res.ln)
 	appURL.Store(&res.url)
@@ -196,11 +197,11 @@ func addFirstAdmins(ctx context.Context, st *store.Store, tn tailnet.Tailnet, ad
 		logger.Info("made Roost's first admins", "logins", strings.Join(logins, ","))
 		return nil
 	}
-	have, err := st.Admins(ctx)
+	users, err := st.Users(ctx)
 	if err != nil {
 		return err
 	}
-	if len(have) == 0 {
+	if !slices.ContainsFunc(users, func(u store.User) bool { return u.Role == store.Admin }) {
 		logger.Warn("Roost has no admins, since its node is tagged and ROOST_ADMINS is empty; " +
 			"add one with `roost admin add <login>`")
 	}

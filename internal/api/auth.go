@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 )
 
@@ -18,12 +19,26 @@ import (
 // make a signed-in browser change anything.
 const CSRFHeader = "X-Roost"
 
-// caller is who sent a request, as Tailscale says.
+// caller is who sent a request, as Tailscale says, and what Roost lets them do.
 type caller struct {
 	// who is nil for an anonymous caller.
-	who    *tailnet.Identity
-	admin  bool
+	who *tailnet.Identity
+	// level is anyone, viewers or admins. guard always sets it, so a request
+	// that skipped guard has noLevel and can't use any route.
+	level  level
 	reason string // why an anonymous caller is anonymous: a Reason constant
+}
+
+// role returns the caller's role, or "" if they can't view Roost.
+func (c caller) role() Role {
+	switch c.level {
+	case admins:
+		return RoleAdmin
+	case viewers:
+		return RoleViewer
+	default:
+		return ""
+	}
 }
 
 type callerKey struct{}
@@ -44,8 +59,8 @@ func callerOf(r *http.Request) caller {
 //   - WebSockets must come from a page on Roost, since browsers let any page
 //     open one.
 //
-// Then it asks Tailscale who is on the other end of the connection. No header
-// can change the answer.
+// Then it asks Tailscale who is on the other end of the connection, and the
+// store what role they have. No header can change the answer.
 func (h *handler) guard(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		snap := h.opts.Snapshot()
@@ -79,46 +94,41 @@ func (h *handler) guard(next http.Handler) http.Handler {
 // anonymous, and so are tagged devices, which belong to no one, and
 // connections from Roost's own node. In host mode that node is the machine
 // Roost runs on, and any process there would otherwise act as its owner.
+// Anonymous callers can only use routes for anyone.
 func (h *handler) identify(ctx context.Context, remoteAddr, selfID string) caller {
 	who, err := h.opts.WhoIs(ctx, remoteAddr)
 	switch {
 	case errors.Is(err, tailnet.ErrUnknownPeer):
-		return caller{reason: ReasonUnknownDevice}
+		return caller{level: anyone, reason: ReasonUnknownDevice}
 	case err != nil:
 		h.log.Warn("ask Tailscale who sent a request", "remote_addr", remoteAddr, "error", err)
-		return caller{reason: ReasonWhoIsFailed}
+		return caller{level: anyone, reason: ReasonWhoIsFailed}
 	case who.NodeID == selfID:
-		return caller{reason: ReasonRoostMachine}
+		return caller{level: anyone, reason: ReasonRoostMachine}
 	case len(who.Tags) > 0:
-		return caller{reason: ReasonTaggedDevice}
+		return caller{level: anyone, reason: ReasonTaggedDevice}
 	case who.LoginName == "":
-		return caller{reason: ReasonNoUser}
+		return caller{level: anyone, reason: ReasonNoUser}
 	}
-	admin, err := h.opts.IsAdmin(ctx, who.LoginName)
+	// If Roost can't tell what someone's role is, they have none.
+	role, err := h.opts.Store.Role(ctx, who.LoginName)
 	if err != nil {
-		h.log.Error("check whether a caller is an admin", "login", who.LoginName, "error", err)
+		h.log.Error("look up a caller's role", "login", who.LoginName, "error", err)
 	}
-	return caller{who: who, admin: admin && err == nil}
-}
-
-// adminOnly lets only Roost's admins through to next.
-func (h *handler) adminOnly(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch c := callerOf(r); {
-		case c.admin:
-			next.ServeHTTP(w, r)
-		case c.who == nil:
-			h.deny(w, r, http.StatusForbidden, "only Roost's admins can see this, and Tailscale didn't say who you are")
-		default:
-			h.deny(w, r, http.StatusForbidden, "only Roost's admins can see this")
-		}
-	})
+	c := caller{who: who, level: anyone}
+	switch role {
+	case store.Admin:
+		c.level = admins
+	case store.Viewer:
+		c.level = viewers
+	}
+	return c
 }
 
 // deny answers with an error: JSON for the API, and text for anything else.
 func (h *handler) deny(w http.ResponseWriter, r *http.Request, status int, msg string) {
 	if strings.HasPrefix(r.URL.Path, "/api/") {
-		h.writeJSON(w, status, ErrorBody{Error: msg})
+		h.writeJSON(w, r, status, ErrorBody{Error: msg})
 		return
 	}
 	http.Error(w, msg, status)

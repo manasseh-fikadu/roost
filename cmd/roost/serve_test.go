@@ -190,7 +190,13 @@ func TestServe_firstAdmins(t *testing.T) {
 			if err := run(t.Context(), []string{"admin", "list", "--data-dir", cfg.DataDir}, &out, io.Discard); err != nil {
 				t.Fatal(err)
 			}
-			if got := strings.Fields(out.String()); !slices.Equal(got, tt.want) {
+			var got []string
+			for line := range strings.Lines(out.String()) {
+				if login, role, _ := strings.Cut(strings.TrimSpace(line), " "); strings.TrimSpace(role) == "admin" {
+					got = append(got, login)
+				}
+			}
+			if !slices.Equal(got, tt.want) {
 				t.Errorf("admins = %q, want %q", got, tt.want)
 			}
 			if !strings.Contains(log.String(), tt.wantLog) {
@@ -212,7 +218,7 @@ func TestServe_signIn(t *testing.T) {
 	log.waitFor(t, "roost is running")
 
 	code, body := get(t, tn.Client(laptopIP), tailnettest.URL+"/api/me")
-	if code != http.StatusOK || !strings.Contains(body, `"login":"alice@example.com"`) || !strings.Contains(body, `"admin":true`) {
+	if code != http.StatusOK || !strings.Contains(body, `"login":"alice@example.com"`) || !strings.Contains(body, `"role":"admin"`) {
 		t.Errorf("GET /api/me from alice's laptop = %d %s, want alice as an admin", code, body)
 	}
 	if code, _ := get(t, tn.Client(laptopIP), tailnettest.URL+"/api/debug/tailnet"); code != http.StatusOK {

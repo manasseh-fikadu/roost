@@ -15,6 +15,8 @@ import (
 )
 
 func TestNew_debugTailnet(t *testing.T) {
+	// The store's goroutines start outside the bubble, so it can end without them.
+	st := testStore(t)
 	synctest.Test(t, func(t *testing.T) {
 		laptop := laptopIP
 		tn := tailnettest.New(tailnet.Status{
@@ -37,7 +39,7 @@ func TestNew_debugTailnet(t *testing.T) {
 		go poller.Run(ctx)
 		synctest.Wait()
 
-		h := api.New(api.Options{WhoIs: tn.WhoIs, Snapshot: poller.Snapshot, IsAdmin: isAdmin})
+		h := api.New(api.Options{WhoIs: tn.WhoIs, Snapshot: poller.Snapshot, Store: st})
 		rec := serve(h, newRequest(t, http.MethodGet, "/api/debug/tailnet", laptop))
 
 		if rec.Code != http.StatusOK {

@@ -16,7 +16,7 @@ import (
 func TestUI(t *testing.T) {
 	t.Parallel()
 	const app = "<!doctype html><title>app</title>"
-	h := api.New(withTailnet(testTailnet(), api.Options{UI: fstest.MapFS{
+	h := api.New(withTailnet(t, testTailnet(), api.Options{UI: fstest.MapFS{
 		"200.html":                             {Data: []byte(app)},
 		"robots.txt":                           {Data: []byte("User-agent: *")},
 		"_app/version.json":                    {Data: []byte(`{"version":"1"}`)},
@@ -87,7 +87,7 @@ func TestUI(t *testing.T) {
 
 func TestUI_notBuilt(t *testing.T) {
 	t.Parallel()
-	h := api.New(withTailnet(testTailnet(), api.Options{}))
+	h := api.New(withTailnet(t, testTailnet(), api.Options{}))
 
 	rec := serve(h, newRequest(t, http.MethodGet, "/", laptopIP))
 
@@ -111,7 +111,7 @@ func TestUI_devProxy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := api.New(withTailnet(testTailnet(), api.Options{DevUI: viteURL}))
+	h := api.New(withTailnet(t, testTailnet(), api.Options{DevUI: viteURL}))
 
 	t.Run("UI routes go to Vite", func(t *testing.T) {
 		t.Parallel()
@@ -151,7 +151,7 @@ func TestUI_devProxyDown(t *testing.T) {
 		t.Fatal(err)
 	}
 	vite.Close()
-	h := api.New(withTailnet(testTailnet(), api.Options{DevUI: viteURL}))
+	h := api.New(withTailnet(t, testTailnet(), api.Options{DevUI: viteURL}))
 
 	rec := serve(h, newRequest(t, http.MethodGet, "/", laptopIP))
 
