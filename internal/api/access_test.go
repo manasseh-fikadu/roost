@@ -88,7 +88,8 @@ func TestAccess_errors(t *testing.T) {
 		{"bad login", http.MethodPut, "/api/access/users/carol", `{"role": "viewer"}`, http.StatusBadRequest},
 		{"bad login to remove", http.MethodDelete, "/api/access/users/carol", ``, http.StatusBadRequest},
 		{"unknown who can view", http.MethodPatch, "/api/access", `{"whoCanView": "everyone"}`, http.StatusBadRequest},
-		{"too big", http.MethodPatch, "/api/access", `{"whoCanView": "` + strings.Repeat("x", 2<<20) + `"}`, http.StatusBadRequest},
+		// Valid JSON, so only the size limit can refuse it.
+		{"too big", http.MethodPatch, "/api/access", `{"whoCanView": "tailnet"` + strings.Repeat(" ", 2<<20) + `}`, http.StatusBadRequest},
 		// Roost always keeps an admin.
 		{"last admin to viewer", http.MethodPut, "/api/access/users/" + alice, `{"role": "viewer"}`, http.StatusConflict},
 		{"last admin removed", http.MethodDelete, "/api/access/users/Alice@Example.com", ``, http.StatusConflict},
