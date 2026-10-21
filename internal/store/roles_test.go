@@ -168,14 +168,17 @@ func TestStore_Role(t *testing.T) {
 		t.Error("SetWhoCanView(everyone) succeeded")
 	}
 
-	// A value Roost doesn't know lets no one in.
-	if _, err := s.DB().ExecContext(ctx, "UPDATE kv SET value = 'Tailnet' WHERE key = 'who_can_view'"); err != nil {
-		t.Fatal(err)
+	// A value Roost doesn't know, even an empty one, lets no one else in,
+	// and WhoCanView says so.
+	for _, bad := range []string{"Tailnet", ""} {
+		if _, err := s.DB().ExecContext(ctx, "UPDATE kv SET value = ? WHERE key = 'who_can_view'", bad); err != nil {
+			t.Fatal(err)
+		}
+		if who, err := s.WhoCanView(ctx); err != nil || who != store.Listed {
+			t.Errorf("WhoCanView() with %q stored = %q, %v; want %q", bad, who, err, store.Listed)
+		}
+		check(store.Listed)
 	}
-	if who, err := s.WhoCanView(ctx); err != nil || who != store.Listed {
-		t.Errorf("WhoCanView() with a bad value = %q, %v; want %q", who, err, store.Listed)
-	}
-	check(store.Listed)
 }
 
 func TestStore_AddFirstAdmins(t *testing.T) {

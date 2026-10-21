@@ -1,7 +1,6 @@
 package store
 
 import (
-	"cmp"
 	"context"
 	"database/sql"
 	"errors"
@@ -88,7 +87,7 @@ func (s *Store) Role(ctx context.Context, login string) (Role, error) {
 		return "", fmt.Errorf("look up a role: %w", err)
 	case role.Valid:
 		return Role(role.String), nil
-	case cmp.Or(who.String, DefaultWhoCanView) == Tailnet:
+	case parseWhoCanView(who) == Tailnet:
 		return Viewer, nil
 	}
 	return "", nil
@@ -249,20 +248,29 @@ type querier interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// whoCanView reads who can view Roost. Role treats a value it doesn't know as
-// Listed, and so does this.
+// whoCanView reads who can view Roost.
 func whoCanView(ctx context.Context, q querier) (string, error) {
-	var who string
+	var who sql.NullString
 	err := q.QueryRowContext(ctx, "SELECT value FROM kv WHERE key = ?", whoCanViewKey).Scan(&who)
-	switch {
-	case errors.Is(err, sql.ErrNoRows):
-		return DefaultWhoCanView, nil
-	case err != nil:
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return "", err
-	case who == Tailnet:
-		return Tailnet, nil
 	}
-	return Listed, nil
+	return parseWhoCanView(who), nil
+}
+
+// parseWhoCanView turns the stored who can view setting into Tailnet or
+// Listed. Until it's set, it's DefaultWhoCanView. Any value but Tailnet,
+// even an empty one, is Listed, so a bad value lets no one else in. Role and
+// WhoCanView both use it, so what Roost enforces is what it reports.
+func parseWhoCanView(stored sql.NullString) string {
+	switch {
+	case !stored.Valid:
+		return DefaultWhoCanView
+	case stored.String == Tailnet:
+		return Tailnet
+	default:
+		return Listed
+	}
 }
 
 // roleIn returns the role login was given, or "" if it has none.
