@@ -24,7 +24,7 @@ Roost keeps its data in `~/.config/roost` (`~/Library/Application Support/roost`
 
 ```sh
 make dev     # runs Vite, and the Go server, which proxies the web UI to it
-make test    # Go tests, then svelte-check
+make test    # Go and web tests, then svelte-check
 make lint    # golangci-lint, shellcheck and prettier
 make types   # regenerates the web app's API types after you change internal/api/types.go
 ```
