@@ -57,10 +57,8 @@ func Parse(args []string, getenv func(string) string, output io.Writer) (Config,
 	fs := flag.NewFlagSet("roost serve", flag.ContinueOnError)
 	fs.SetOutput(output)
 
-	port, err := envInt(getenv, "ROOST_PORT", DefaultPort)
-	if err != nil {
-		return Config{}, err
-	}
+	// A bad ROOST_PORT only matters if --port doesn't replace it.
+	port, portErr := envInt(getenv, "ROOST_PORT", DefaultPort)
 	var cfg Config
 	fs.StringVar(&cfg.Tailscale, "tailscale", envOr(getenv, "ROOST_TAILSCALE", DefaultTailscale),
 		"`mode`: \"embedded\" joins the tailnet as its own machine, \"host\" uses this machine's Tailscale (env ROOST_TAILSCALE)")
@@ -80,6 +78,9 @@ func Parse(args []string, getenv func(string) string, output io.Writer) (Config,
 	}
 	if fs.NArg() > 0 {
 		return Config{}, fmt.Errorf("unexpected argument %q", fs.Arg(0))
+	}
+	if portErr != nil && !isSet(fs, "port") {
+		return Config{}, portErr
 	}
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
@@ -105,6 +106,13 @@ func (cfg Config) validate() error {
 		}
 	}
 	return nil
+}
+
+// isSet reports whether the flag called name was given.
+func isSet(fs *flag.FlagSet, name string) bool {
+	set := false
+	fs.Visit(func(f *flag.Flag) { set = set || f.Name == name })
+	return set
 }
 
 // DefaultDataDir returns the data directory used when none is set: roost in the

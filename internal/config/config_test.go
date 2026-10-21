@@ -91,6 +91,12 @@ func TestParse(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "port flag replaces a bad one in the environment",
+			args: []string{"--port", "4800"},
+			env:  map[string]string{"ROOST_PORT": "https"},
+			want: with(func(c *config.Config) { c.Port = 4800 }),
+		},
+		{
 			name:    "dev UI isn't an http URL",
 			args:    []string{"--dev-ui", "127.0.0.1:5173"},
 			wantErr: true,
