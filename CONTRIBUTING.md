@@ -17,7 +17,7 @@ cd roost
 make dev
 ```
 
-`make dev` runs the Vite dev server and the Go server, which serves Roost on your tailnet and proxies the web UI to Vite. Open the URL the Go server logs (`roost is running url=...`), not Vite's, so the API sees requests come over the tailnet the way it does in production. The first time, Roost joins your tailnet as a new machine: open <http://127.0.0.1:4700> to log it in. If the machine you work on has Tailscale, `ROOST_TAILSCALE=host make dev` uses it instead and skips that step. See [docs/tailscale.md](docs/tailscale.md) for both modes.
+`make dev` runs the Vite dev server and the Go server, which serves Roost on your tailnet and proxies the web UI to Vite. Open the URL the Go server logs (`roost is running url=...`), not Vite's, so the API sees requests come over the tailnet the way it does in production. The first time, Roost joins your tailnet as a new machine: open <http://127.0.0.1:4700> to log it in. Roost makes whoever logs it in an admin, and only admins get the UI from Vite. If the machine you work on has Tailscale, `ROOST_TAILSCALE=host make dev` uses it instead and skips the login, but then open Roost from another device, since in host mode Roost signs no one in from its own machine. See [docs/tailscale.md](docs/tailscale.md) for both modes.
 
 The Go server doesn't reload on changes, so restart `make dev` after editing Go code.
 

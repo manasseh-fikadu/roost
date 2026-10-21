@@ -16,6 +16,8 @@ make build      # builds ./roost with the web UI inside
 
 The first time, open <http://127.0.0.1:4700> on the same machine to log Roost in to Tailscale. After that, Roost is at `https://roost.<your-tailnet>.ts.net`. To use the machine's own Tailscale instead, run `./roost serve --tailscale host`. [docs/tailscale.md](docs/tailscale.md) explains both modes and the tailnet policy Roost needs.
 
+There's no password: Roost asks Tailscale who each connection comes from. Whoever logs Roost in to Tailscale becomes its first admin, and `roost admin add <login>` adds more. See [Signing in](docs/tailscale.md#signing-in).
+
 Roost keeps its data in `~/.config/roost` (`~/Library/Application Support/roost` on macOS). To put it somewhere else, use `--data-dir` or set `ROOST_DATA_DIR`.
 
 ## Develop
@@ -27,7 +29,7 @@ make lint    # golangci-lint, shellcheck and prettier
 make types   # regenerates the web app's API types after you change internal/api/types.go
 ```
 
-Open the URL that the Go server logs (`roost is running url=...`), which is on your tailnet, not Vite's. The Go server doesn't reload on changes yet, so restart `make dev` after editing Go code.
+Open the URL that the Go server logs (`roost is running url=...`), which is on your tailnet, not Vite's, from a device that belongs to one of Roost's admins. The Go server doesn't reload on changes yet, so restart `make dev` after editing Go code.
 
 | Path | What's in it |
 | --- | --- |

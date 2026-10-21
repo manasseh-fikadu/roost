@@ -33,7 +33,7 @@ Turn on MagicDNS and HTTPS certificates in the [DNS settings](https://login.tail
 
 ### Tailnet policy
 
-If you log Roost in as yourself, its node has your access, and nothing more is needed. For a node that belongs to no one, give it a tag. Use an auth key that applies the tag, and allow the tag in your [tailnet policy file](https://login.tailscale.com/admin/acls):
+If you log Roost in as yourself, its node has your access, and nothing more is needed. For a node that belongs to no one, give it a tag. Use an auth key that applies the tag, set `ROOST_ADMINS` (see [Admins](#admins)), and allow the tag in your [tailnet policy file](https://login.tailscale.com/admin/acls):
 
 ```jsonc
 {
@@ -71,6 +71,40 @@ sudo tailscale set --operator=$USER
 
 Otherwise Roost falls back to plain HTTP and says so in its log. If Roost may fetch the certificate but fetching it fails, for example because Let's Encrypt is slow, Roost serves HTTPS anyway and asks for the certificate again on each connection.
 
+## Signing in
+
+Your tailnet is the login. For every request, Roost asks Tailscale which device the connection comes from and which user owns that device. It never reads who you are from a header, so nothing in a request can claim to be someone else.
+
+- A device that belongs to a user signs that user in, as everywhere on Tailscale: anyone using your laptop is you to Roost.
+- Tagged devices, which belong to no one, and addresses Tailscale doesn't know are anonymous.
+- Roost's own node is anonymous too. In host mode, that node is the machine Roost runs on, so open Roost from another device. Any program on that machine can connect to Roost, and it shouldn't count as the machine's owner.
+- `GET /api/me` says who Roost thinks you are, or why you're anonymous.
+
+Tailscale identifies devices, not the people or programs using them, so anything running on a device you're logged in to acts as you. If a server runs other people's code, give its Tailscale node a tag, so that connections from it are anonymous.
+
+### Admins
+
+When Roost has no admins yet, it makes the first ones as soon as it's on the tailnet: the user who owns Roost's node, which is whoever logged it in, and any logins in `ROOST_ADMINS` or `--admins`, separated by commas. A node logged in with a tagged auth key has no owner, so give it `ROOST_ADMINS`:
+
+```sh
+TS_AUTHKEY=tskey-auth-... ROOST_ADMINS=alice@example.com roost serve
+```
+
+After that, Roost ignores `ROOST_ADMINS`. To add an admin later, for example when no admin can sign in, run this on the machine Roost runs on. It works while Roost is running.
+
+```sh
+roost admin add alice@example.com
+roost admin list
+```
+
+Only admins can see `GET /api/debug/tailnet`, and during development, the web UI that Roost proxies from Vite.
+
+### Programs that call the API
+
+A request that changes something, which is any method but GET, HEAD and OPTIONS, needs an `X-Roost` header with any value. A page on another website can't add one, so it can't make your browser change anything in Roost.
+
+Roost also only answers requests addressed to its own name or tailnet IPs, so a website can't reach it by pointing its own domain at Roost's address, and it only accepts WebSockets opened by its own pages.
+
 ## What Roost watches
 
 | What | How often | Where it comes from |
@@ -79,7 +113,7 @@ Otherwise Roost falls back to plain HTTP and says so in its log. If Roost may fe
 | The path to each online device (direct, DERP relay or peer relay) and its round-trip time | Every minute | A Tailscale ping |
 | UDP, IPv6, the public IP and the nearest DERP region | Every 10 minutes | A netcheck, as `tailscale netcheck` runs it |
 
-Tailscale's local API has no netcheck, so Roost runs the check in its own process, as the `tailscale` command does. It runs on the same machine as the node, so it sees the same network. `GET /api/debug/tailnet` shows what Roost currently knows.
+Tailscale's local API has no netcheck, so Roost runs the check in its own process, as the `tailscale` command does. It runs on the same machine as the node, so it sees the same network. `GET /api/debug/tailnet` shows admins what Roost currently knows.
 
 ## Logs
 
