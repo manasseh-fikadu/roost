@@ -55,6 +55,7 @@ func NewEmbedded(opts EmbeddedOptions) (*Embedded, error) {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
+	// AuthKey is left empty, so tsnet reads TS_AUTHKEY (or TS_AUTH_KEY) itself.
 	srv := &tsnet.Server{
 		Dir:      opts.Dir,
 		Hostname: opts.Hostname,
