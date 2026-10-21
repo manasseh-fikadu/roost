@@ -113,6 +113,11 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 			Logger: logger,
 		}), setupLn)
 		logger.Info("serving the setup page", "url", setupURL)
+		if !loopback(setupLn.Addr()) {
+			logger.Warn("other machines can reach the setup page, and until Roost is logged in, anyone who opens it "+
+				"can add Roost to their own tailnet; listen on 127.0.0.1 (in a container, publish the port on "+
+				"127.0.0.1 only), or log in with TS_AUTHKEY", "address", setupLn.Addr().String())
+		}
 		wg.Go(func() { announceLogin(ctx, node, setupURL, logger) })
 	}
 
@@ -193,6 +198,13 @@ func localURL(addr net.Addr) string {
 		return "http://" + addr.String()
 	}
 	return "http://" + net.JoinHostPort("localhost", strconv.Itoa(tcp.Port))
+}
+
+// loopback reports whether addr is a loopback address, which only this machine
+// can reach.
+func loopback(addr net.Addr) bool {
+	tcp, ok := addr.(*net.TCPAddr)
+	return ok && tcp.IP.IsLoopback()
 }
 
 func devUIURL(raw string) (*url.URL, error) {

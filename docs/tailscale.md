@@ -23,7 +23,7 @@ The first time, Roost isn't on your tailnet yet. Open the setup page at <http://
 TS_AUTHKEY=tskey-auth-... roost serve
 ```
 
-After that first login, Roost remembers its node in `tailscale/` inside the data directory, and the setup page just links to Roost on the tailnet. The setup page shows only the login state. It never serves the app or the API, and it only answers requests addressed to `localhost` or an IP address, so another website can't read the login link. To serve it on a different address, such as in a container, use `--setup-listen` or `ROOST_SETUP_LISTEN`.
+After that first login, Roost remembers its node in `tailscale/` inside the data directory, and the setup page just links to Roost on the tailnet. The setup page shows only the login state. It never serves the app or the API, and it only answers requests addressed to `localhost` or an IP address, so another website can't read the login link. To serve it on a different address, such as in a container, use `--setup-listen` or `ROOST_SETUP_LISTEN`. Until Roost is logged in, anyone who can open the setup page can add Roost to their own tailnet, so keep it to your machine: in a container, publish the port on the host's loopback only (`-p 127.0.0.1:4700:4700`), or use `TS_AUTHKEY`. Roost warns in its log when the page listens on more than loopback.
 
 The node's name is `roost`, or whatever you set with `--hostname` or `ROOST_HOSTNAME`.
 

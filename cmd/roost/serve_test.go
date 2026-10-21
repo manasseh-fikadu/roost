@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/netip"
 	"os"
@@ -123,6 +124,9 @@ func TestServe_login(t *testing.T) {
 	}
 	setupURL := m[1]
 	local := &http.Client{}
+	if strings.Contains(log.String(), "other machines can reach the setup page") {
+		t.Errorf("warned that a setup page on 127.0.0.1 can be reached from other machines; log:\n%s", log)
+	}
 
 	if code, body := get(t, local, setupURL); code != http.StatusOK || !strings.Contains(body, "Add Roost to your tailnet") {
 		t.Errorf("setup page before login = %d:\n%s", code, body)
@@ -196,6 +200,26 @@ func TestServe_errors(t *testing.T) {
 				t.Fatalf("runServe() error = %v, want one containing %q", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestLoopback(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		addr net.Addr
+		want bool
+	}{
+		{&net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 4700}, true},
+		{&net.TCPAddr{IP: net.IPv6loopback, Port: 4700}, true},
+		{&net.TCPAddr{IP: net.IPv4zero, Port: 4700}, false},
+		{&net.TCPAddr{IP: net.IPv6unspecified, Port: 4700}, false},
+		{&net.TCPAddr{IP: net.IPv4(192, 168, 1, 20), Port: 4700}, false},
+		{&net.UnixAddr{Name: "/run/roost.sock", Net: "unix"}, false},
+	}
+	for _, tt := range tests {
+		if got := loopback(tt.addr); got != tt.want {
+			t.Errorf("loopback(%v) = %v, want %v", tt.addr, got, tt.want)
+		}
 	}
 }
 
