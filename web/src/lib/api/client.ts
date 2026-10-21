@@ -18,8 +18,11 @@ export class ApiError extends Error {
 	}
 }
 
-async function get<T>(path: string): Promise<T> {
-	const res = await fetch(`/api/${path}`, {
+/** The global fetch, or the one SvelteKit passes to a `load` function. */
+type Fetch = typeof fetch;
+
+async function get<T>(path: string, fetcher: Fetch = fetch): Promise<T> {
+	const res = await fetcher(`/api/${path}`, {
 		headers: { accept: 'application/json', ...csrfHeaders }
 	});
 	if (!res.ok) {
@@ -33,7 +36,10 @@ export function getHealth(): Promise<Health> {
 	return get('health');
 }
 
-/** Who Roost thinks you are, from the device you're on. */
-export function getMe(): Promise<Me> {
-	return get('me');
+/**
+ * Who Roost thinks you are, from the device you're on. From a `load`
+ * function, pass the `fetch` it's given.
+ */
+export function getMe(fetcher?: Fetch): Promise<Me> {
+	return get('me', fetcher);
 }
