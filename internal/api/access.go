@@ -119,14 +119,9 @@ func (h *handler) roleChanged(w http.ResponseWriter, r *http.Request, err error)
 
 // writeAccess answers with who has a role in Roost and who else can view it.
 func (h *handler) writeAccess(w http.ResponseWriter, r *http.Request) {
-	who, err := h.opts.Store.WhoCanView(r.Context())
+	who, users, err := h.opts.Store.Access(r.Context())
 	if err != nil {
 		h.fail(w, r, "look up who can view Roost", err)
-		return
-	}
-	users, err := h.opts.Store.Users(r.Context())
-	if err != nil {
-		h.fail(w, r, "list users", err)
 		return
 	}
 	a := Access{WhoCanView: WhoCanViewListed, Users: make([]User, len(users))}

@@ -181,6 +181,29 @@ func TestStore_Role(t *testing.T) {
 	}
 }
 
+func TestStore_Access(t *testing.T) {
+	t.Parallel()
+	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	ctx := t.Context()
+	setRole(t, s, "bob@example.com", store.Viewer)
+	setRole(t, s, "alice@example.com", store.Admin)
+	if _, err := s.SetWhoCanView(ctx, store.Listed); err != nil {
+		t.Fatal(err)
+	}
+
+	who, us, err := s.Access(ctx)
+	if err != nil {
+		t.Fatalf("Access() error = %v", err)
+	}
+	var got []string
+	for _, u := range us {
+		got = append(got, u.Login+" "+string(u.Role))
+	}
+	if want := []string{"alice@example.com admin", "bob@example.com viewer"}; who != store.Listed || !slices.Equal(got, want) {
+		t.Errorf("Access() = %q, %q; want %q, %q", who, got, store.Listed, want)
+	}
+}
+
 func TestStore_AddFirstAdmins(t *testing.T) {
 	t.Parallel()
 	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)

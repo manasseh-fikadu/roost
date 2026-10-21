@@ -50,25 +50,28 @@ type User struct {
 
 // Users returns the logins that have a role, in order.
 func (s *Store) Users(ctx context.Context) ([]User, error) {
-	rows, err := s.db.QueryContext(ctx, "SELECT login, role, granted_at FROM roles ORDER BY login")
+	users, err := usersIn(ctx, s.db)
 	if err != nil {
 		return nil, fmt.Errorf("list users: %w", err)
 	}
-	defer func() { _ = rows.Close() }()
-	var users []User
-	for rows.Next() {
-		var u User
-		var since int64
-		if err := rows.Scan(&u.Login, &u.Role, &since); err != nil {
-			return nil, fmt.Errorf("list users: %w", err)
-		}
-		u.Since = time.UnixMilli(since)
-		users = append(users, u)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("list users: %w", err)
-	}
 	return users, nil
+}
+
+// Access returns who can view Roost, Tailnet or Listed, and the logins that
+// have a role, in order. It reads both in one transaction, so a change made
+// at the same time can't show up in one and not the other.
+func (s *Store) Access(ctx context.Context) (whoCanView string, users []User, err error) {
+	err = s.inTx(ctx, func(tx *sql.Tx) error {
+		if whoCanView, err = whoCanViewIn(ctx, tx); err != nil {
+			return err
+		}
+		users, err = usersIn(ctx, tx)
+		return err
+	})
+	if err != nil {
+		return "", nil, fmt.Errorf("look up who has access: %w", err)
+	}
+	return whoCanView, users, nil
 }
 
 // Role returns the role a signed-in Tailscale login has, ignoring case: the
@@ -186,7 +189,7 @@ func (s *Store) AddFirstAdmins(ctx context.Context, logins []string) (added bool
 
 // WhoCanView returns who can view Roost: Tailnet or Listed.
 func (s *Store) WhoCanView(ctx context.Context) (string, error) {
-	who, err := whoCanView(ctx, s.db)
+	who, err := whoCanViewIn(ctx, s.db)
 	if err != nil {
 		return "", fmt.Errorf("look up who can view Roost: %w", err)
 	}
@@ -200,7 +203,7 @@ func (s *Store) SetWhoCanView(ctx context.Context, who string) (changed bool, er
 		return false, fmt.Errorf("who can view Roost is %q or %q, not %q", Tailnet, Listed, who)
 	}
 	err = s.inTx(ctx, func(tx *sql.Tx) error {
-		was, err := whoCanView(ctx, tx)
+		was, err := whoCanViewIn(ctx, tx)
 		if err != nil || was == who {
 			return err
 		}
@@ -245,11 +248,32 @@ func (s *Store) inTx(ctx context.Context, fn func(*sql.Tx) error) error {
 
 // A querier is a *sql.DB or a *sql.Tx.
 type querier interface {
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
-// whoCanView reads who can view Roost.
-func whoCanView(ctx context.Context, q querier) (string, error) {
+// usersIn returns the logins that have a role, in order.
+func usersIn(ctx context.Context, q querier) ([]User, error) {
+	rows, err := q.QueryContext(ctx, "SELECT login, role, granted_at FROM roles ORDER BY login")
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var users []User
+	for rows.Next() {
+		var u User
+		var since int64
+		if err := rows.Scan(&u.Login, &u.Role, &since); err != nil {
+			return nil, err
+		}
+		u.Since = time.UnixMilli(since)
+		users = append(users, u)
+	}
+	return users, rows.Err()
+}
+
+// whoCanViewIn reads who can view Roost.
+func whoCanViewIn(ctx context.Context, q querier) (string, error) {
 	var who sql.NullString
 	err := q.QueryRowContext(ctx, "SELECT value FROM kv WHERE key = ?", whoCanViewKey).Scan(&who)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {

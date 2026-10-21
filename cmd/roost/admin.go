@@ -107,11 +107,7 @@ func admin(ctx context.Context, args []string, stdout, stderr io.Writer) (err er
 }
 
 func listUsers(ctx context.Context, st *store.Store, stdout, stderr io.Writer) error {
-	users, err := st.Users(ctx)
-	if err != nil {
-		return err
-	}
-	who, err := st.WhoCanView(ctx)
+	who, users, err := st.Access(ctx)
 	if err != nil {
 		return err
 	}
