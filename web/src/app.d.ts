@@ -12,6 +12,11 @@ declare global {
 			me: Me | null;
 			/** Why GET /api/me failed, or null if it didn't. */
 			hubError: string | null;
+			/**
+			 * The page's title, for the header and the tab, if it's not the
+			 * name of its sidebar item.
+			 */
+			title?: string;
 		}
 		// interface PageState {}
 		// interface Platform {}

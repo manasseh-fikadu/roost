@@ -28,9 +28,10 @@ dev-api:
 dev-web:
 	cd web && $(BUN) run dev --port $(VITE_PORT)
 
-## test: run the Go tests and type-check the web app
+## test: run the Go and web tests, and type-check the web app
 test: web/node_modules
 	$(GO) test -race -shuffle=on ./...
+	cd web && $(BUN) run test
 	cd web && $(BUN) run check
 
 ## lint: run golangci-lint, shellcheck and prettier

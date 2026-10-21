@@ -1,3 +1,4 @@
+import { toast } from '#lib/toast.svelte.js';
 import type { ErrorBody, Health, Me } from './types.js';
 
 /**
@@ -21,19 +22,58 @@ export class ApiError extends Error {
 /** The global fetch, or the one SvelteKit passes to a `load` function. */
 type Fetch = typeof fetch;
 
-async function get<T>(path: string, fetcher: Fetch = fetch): Promise<T> {
+/**
+ * Sends a request to /api/{path} with an optional JSON body, and returns the
+ * JSON response. It throws an ApiError, with the hub's message, if the
+ * response is an error.
+ */
+export async function request<T>(
+	method: string,
+	path: string,
+	body?: unknown,
+	fetcher: Fetch = fetch
+): Promise<T> {
+	const headers: Record<string, string> = { accept: 'application/json', ...csrfHeaders };
+	if (body !== undefined) {
+		headers['content-type'] = 'application/json';
+	}
 	const res = await fetcher(`/api/${path}`, {
-		headers: { accept: 'application/json', ...csrfHeaders }
+		method,
+		headers,
+		body: body === undefined ? undefined : JSON.stringify(body)
 	});
 	if (!res.ok) {
-		const body: Partial<ErrorBody> = await res.json().catch(() => ({}));
-		throw new ApiError(res.status, body.error ?? `${res.status} ${res.statusText}`);
+		const err: Partial<ErrorBody> = await res.json().catch(() => ({}));
+		throw new ApiError(res.status, err.error ?? `${res.status} ${res.statusText}`);
 	}
-	return res.json();
+	return res.status === 204 ? (undefined as T) : res.json();
+}
+
+/**
+ * Sends a request that changes something, for a button or form. If it
+ * fails, a toast says why and the error is thrown on. If it works and
+ * `success` is given, a toast says that.
+ */
+export async function mutate<T>(
+	method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
+	path: string,
+	body?: unknown,
+	{ success }: { success?: string } = {}
+): Promise<T> {
+	try {
+		const out = await request<T>(method, path, body);
+		if (success) {
+			toast(success);
+		}
+		return out;
+	} catch (err) {
+		toast(err instanceof Error ? err.message : String(err), 'error');
+		throw err;
+	}
 }
 
 export function getHealth(): Promise<Health> {
-	return get('health');
+	return request('GET', 'health');
 }
 
 /**
@@ -41,5 +81,5 @@ export function getHealth(): Promise<Health> {
  * function, pass the `fetch` it's given.
  */
 export function getMe(fetcher?: Fetch): Promise<Me> {
-	return get('me', fetcher);
+	return request('GET', 'me', undefined, fetcher);
 }

@@ -99,6 +99,7 @@ jobs:
       - name: Check formatting
         run: bun run lint
       - run: bun run check
+      - run: bun run test
 
   build:
     name: Build

@@ -4,11 +4,13 @@ import type { LayoutLoad } from './$types';
 // Roost's UI is a single-page app served by the Go binary, so nothing renders on a server.
 export const ssr = false;
 
-// Every page needs to know who's asking, so the root layout asks once. When
-// the hub doesn't answer (it answers 503 while it starts), the layout says so
-// instead of throwing: an error thrown here would skip +error.svelte and show
-// SvelteKit's bare fallback page.
-export const load: LayoutLoad = async ({ fetch }) => {
+// Every page needs to know who's asking, so the root layout asks once, and
+// again when the shell invalidates roost:me. When the hub doesn't answer (it
+// answers 503 while it starts), the layout says so instead of throwing: an
+// error thrown here would skip +error.svelte and show SvelteKit's bare
+// fallback page.
+export const load: LayoutLoad = async ({ fetch, depends }) => {
+	depends('roost:me');
 	try {
 		return { me: await getMe(fetch), hubError: null };
 	} catch (err) {
