@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net"
 	"net/netip"
-	"strconv"
 	"sync"
 
 	"tailscale.com/client/local"
@@ -91,11 +90,7 @@ func (h *Host) Listen(ctx context.Context) (net.Listener, string, error) {
 	}
 	var ln net.Listener = newMultiListener(lns)
 
-	port := ""
-	if h.port != 443 {
-		port = ":" + strconv.Itoa(h.port)
-	}
-	url := "http://" + hostForURL(st) + port
+	url := appURL("http", hostForURL(st), h.port)
 	if domain, ok := certDomain(st); ok {
 		err := h.fetchCert(ctx, domain)
 		switch {
@@ -104,12 +99,15 @@ func (h *Host) Listen(ctx context.Context) (net.Listener, string, error) {
 				"run Roost as root, or make its user the Tailscale operator with `sudo tailscale set --operator=$USER`",
 				"domain", domain)
 		case err != nil:
-			// Each TLS handshake asks again, so it may work later.
-			h.log.Warn("get this machine's HTTPS certificate", "domain", domain, "error", err)
+			// The tailnet has HTTPS on, so keep to it, as embedded mode does:
+			// each TLS handshake asks for the certificate again, and a failed
+			// fetch from Let's Encrypt shouldn't move the app to another URL.
+			h.log.Warn("couldn't get this machine's HTTPS certificate yet; Roost serves HTTPS anyway "+
+				"and asks again on each connection", "domain", domain, "error", err)
 			fallthrough
 		default:
 			ln = tlsListener(ln, h.lc.GetCertificate)
-			url = "https://" + domain + port
+			url = appURL("https", domain, h.port)
 		}
 	}
 

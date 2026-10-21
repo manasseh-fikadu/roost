@@ -259,6 +259,28 @@ func TestURLHost(t *testing.T) {
 	}
 }
 
+func TestAppURL(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		scheme, host string
+		port         int
+		want         string
+	}{
+		{"https", "roost.example.ts.net", 443, "https://roost.example.ts.net"},
+		{"https", "roost.example.ts.net", 4700, "https://roost.example.ts.net:4700"},
+		{"http", "100.64.0.1", 80, "http://100.64.0.1"},
+		{"http", "100.64.0.1", 4700, "http://100.64.0.1:4700"},
+		// Host mode on port 443 without a certificate serves HTTP there.
+		{"http", "roost.example.ts.net", 443, "http://roost.example.ts.net:443"},
+		{"http", "[fd7a:115c:a1e0::1]", 4700, "http://[fd7a:115c:a1e0::1]:4700"},
+	}
+	for _, tt := range tests {
+		if got := appURL(tt.scheme, tt.host, tt.port); got != tt.want {
+			t.Errorf("appURL(%q, %q, %d) = %q, want %q", tt.scheme, tt.host, tt.port, got, tt.want)
+		}
+	}
+}
+
 func TestMultiListener(t *testing.T) {
 	t.Parallel()
 	var lc net.ListenConfig

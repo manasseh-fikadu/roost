@@ -69,7 +69,7 @@ Roost serves HTTPS with the machine's certificate if the tailnet has HTTPS turne
 sudo tailscale set --operator=$USER
 ```
 
-Otherwise Roost falls back to plain HTTP and says so in its log.
+Otherwise Roost falls back to plain HTTP and says so in its log. If Roost may fetch the certificate but fetching it fails, for example because Let's Encrypt is slow, Roost serves HTTPS anyway and asks for the certificate again on each connection.
 
 ## What Roost watches
 

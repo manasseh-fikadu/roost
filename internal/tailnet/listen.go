@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -43,6 +44,15 @@ func certDomain(st *ipnstate.Status) (string, bool) {
 		return "", false
 	}
 	return st.CertDomains[0], true
+}
+
+// appURL returns the app's URL at host and port, leaving the port out if it's
+// the scheme's default.
+func appURL(scheme, host string, port int) string {
+	if (scheme == "https" && port == 443) || (scheme == "http" && port == 80) {
+		return scheme + "://" + host
+	}
+	return scheme + "://" + host + ":" + strconv.Itoa(port)
 }
 
 // hostForURL returns the node's MagicDNS name, or one of its tailnet IPs if
