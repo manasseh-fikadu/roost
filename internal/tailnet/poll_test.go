@@ -167,6 +167,26 @@ func TestPoller_waitsForLogin(t *testing.T) {
 	})
 }
 
+func TestPoller_Polled(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		p := tailnet.NewPoller(tailnettest.New(testStatus(tailnet.StateRunning)), nil)
+		select {
+		case <-p.Polled():
+			t.Fatal("Polled() is closed before Run")
+		default:
+		}
+
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		go p.Run(ctx)
+		<-p.Polled()
+
+		if p.Snapshot().Status == nil {
+			t.Error("Snapshot() has no status once Polled() is closed")
+		}
+	})
+}
+
 func TestPoller_errors(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		tn := tailnettest.New(testStatus(tailnet.StateRunning))

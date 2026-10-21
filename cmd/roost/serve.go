@@ -150,6 +150,13 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	}
 	poller := tailnet.NewPoller(node, logger)
 	wg.Go(func() { poller.Run(ctx) })
+	// The app checks requests against Roost's own names, from the first status.
+	select {
+	case <-poller.Polled():
+	case <-ctx.Done():
+		logger.Info("shutting down")
+		return errors.Join(res.ln.Close(), srvs.stop(ctx))
+	}
 	srvs.start(api.New(api.Options{
 		Version:  buildVersion(),
 		UI:       ui,
