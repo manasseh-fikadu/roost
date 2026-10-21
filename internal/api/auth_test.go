@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/manasseh-fikadu/roost/internal/api"
+	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 )
 
@@ -28,14 +29,17 @@ func getMe(t *testing.T, h http.Handler, req *http.Request) api.Me {
 
 func TestMe(t *testing.T) {
 	t.Parallel()
-	h := api.New(withTailnet(testTailnet(), api.Options{}))
+	opts := withTailnet(t, testTailnet(), api.Options{})
+	h := api.New(opts)
 	tests := []struct {
 		name string
 		from netip.Addr
 		want api.Me
 	}{
-		{"admin", laptopIP, api.Me{SignedIn: true, Login: alice, Name: alice, Device: "laptop.example.ts.net", Admin: true}},
-		{"not an admin", phoneIP, api.Me{SignedIn: true, Login: bob, Name: bob, Device: "phone.example.ts.net"}},
+		{"admin", laptopIP, api.Me{SignedIn: true, Login: alice, Name: alice, Device: "laptop.example.ts.net", Role: api.RoleAdmin}},
+		{"viewer", phoneIP, api.Me{SignedIn: true, Login: bob, Name: bob, Device: "phone.example.ts.net", Role: api.RoleViewer}},
+		// Only the listed users can view Roost, so carol can't.
+		{"no role", tabletIP, api.Me{SignedIn: true, Login: carol, Name: carol, Device: "tablet.example.ts.net"}},
 		{"tagged device", serverIP, api.Me{Reason: api.ReasonTaggedDevice}},
 		{"unknown address", strangerIP, api.Me{Reason: api.ReasonUnknownDevice}},
 		// In host mode, Roost's node is the machine Roost runs on. Its owner
@@ -50,12 +54,29 @@ func TestMe(t *testing.T) {
 			}
 		})
 	}
+
+	// When anyone on the tailnet can view Roost, carol is a viewer, but
+	// devices that belong to no one still aren't.
+	t.Run("anyone on the tailnet", func(t *testing.T) {
+		t.Parallel()
+		opts := withTailnet(t, testTailnet(), api.Options{})
+		if _, err := opts.Store.SetWhoCanView(t.Context(), store.Tailnet); err != nil {
+			t.Fatal(err)
+		}
+		h := api.New(opts)
+		if got := getMe(t, h, newRequest(t, http.MethodGet, "/api/me", tabletIP)); got.Role != api.RoleViewer {
+			t.Errorf("GET /api/me from carol = %+v, want a viewer", got)
+		}
+		if got := getMe(t, h, newRequest(t, http.MethodGet, "/api/me", serverIP)); got.Role != "" {
+			t.Errorf("GET /api/me from a tagged device = %+v, want no role", got)
+		}
+	})
 }
 
 // Identity comes only from Tailscale, never from headers, which anyone can send.
 func TestMe_spoofedHeaders(t *testing.T) {
 	t.Parallel()
-	h := api.New(withTailnet(testTailnet(), api.Options{}))
+	h := api.New(withTailnet(t, testTailnet(), api.Options{}))
 	spoof := func(req *http.Request) *http.Request {
 		req.Header.Set("Tailscale-User-Login", alice)
 		req.Header.Set("Tailscale-User-Name", "Alice")
@@ -65,11 +86,11 @@ func TestMe_spoofedHeaders(t *testing.T) {
 		return req
 	}
 
-	if got := getMe(t, h, spoof(newRequest(t, http.MethodGet, "/api/me", strangerIP))); got.SignedIn || got.Admin {
+	if got := getMe(t, h, spoof(newRequest(t, http.MethodGet, "/api/me", strangerIP))); got.SignedIn || got.Role != "" {
 		t.Errorf("unknown address with alice's headers = %+v, want anonymous", got)
 	}
-	if got := getMe(t, h, spoof(newRequest(t, http.MethodGet, "/api/me", phoneIP))); got.Login != bob || got.Admin {
-		t.Errorf("bob with alice's headers = %+v, want bob, not an admin", got)
+	if got := getMe(t, h, spoof(newRequest(t, http.MethodGet, "/api/me", phoneIP))); got.Login != bob || got.Role != api.RoleViewer {
+		t.Errorf("bob with alice's headers = %+v, want bob, a viewer", got)
 	}
 	rec := serve(h, spoof(newRequest(t, http.MethodGet, "/api/debug/tailnet", strangerIP)))
 	if rec.Code != http.StatusForbidden {
@@ -83,7 +104,7 @@ func TestMe_failures(t *testing.T) {
 
 	t.Run("Tailscale fails", func(t *testing.T) {
 		t.Parallel()
-		opts := withTailnet(tn, api.Options{})
+		opts := withTailnet(t, tn, api.Options{})
 		opts.WhoIs = func(context.Context, string) (*tailnet.Identity, error) {
 			return nil, errors.New("tailscaled went away")
 		}
@@ -95,7 +116,7 @@ func TestMe_failures(t *testing.T) {
 
 	t.Run("no user", func(t *testing.T) {
 		t.Parallel()
-		opts := withTailnet(tn, api.Options{})
+		opts := withTailnet(t, tn, api.Options{})
 		opts.WhoIs = func(context.Context, string) (*tailnet.Identity, error) {
 			return &tailnet.Identity{NodeID: "laptop", NodeName: "laptop.example.ts.net"}, nil
 		}
@@ -105,14 +126,16 @@ func TestMe_failures(t *testing.T) {
 		}
 	})
 
-	// If Roost can't tell whether someone is an admin, they aren't.
-	t.Run("admin lookup fails", func(t *testing.T) {
+	// If Roost can't tell what someone's role is, they have none.
+	t.Run("role lookup fails", func(t *testing.T) {
 		t.Parallel()
-		opts := withTailnet(tn, api.Options{})
-		opts.IsAdmin = func(context.Context, string) (bool, error) { return true, errors.New("database is locked") }
+		opts := withTailnet(t, tn, api.Options{})
+		if err := opts.Store.Close(); err != nil {
+			t.Fatal(err)
+		}
 		h := api.New(opts)
-		if got := getMe(t, h, newRequest(t, http.MethodGet, "/api/me", laptopIP)); got.Admin {
-			t.Errorf("GET /api/me = %+v, want not an admin", got)
+		if got := getMe(t, h, newRequest(t, http.MethodGet, "/api/me", laptopIP)); !got.SignedIn || got.Role != "" {
+			t.Errorf("GET /api/me = %+v, want alice with no role", got)
 		}
 		if rec := serve(h, newRequest(t, http.MethodGet, "/api/debug/tailnet", laptopIP)); rec.Code != http.StatusForbidden {
 			t.Errorf("GET /api/debug/tailnet = %d, want 403", rec.Code)
@@ -120,12 +143,13 @@ func TestMe_failures(t *testing.T) {
 	})
 }
 
-func TestAdminOnly(t *testing.T) {
+func TestDebugTailnet_onlyAdmins(t *testing.T) {
 	t.Parallel()
-	h := api.New(withTailnet(testTailnet(), api.Options{}))
+	h := api.New(withTailnet(t, testTailnet(), api.Options{}))
 	for from, want := range map[netip.Addr]int{
 		laptopIP:   http.StatusOK,
 		phoneIP:    http.StatusForbidden,
+		tabletIP:   http.StatusForbidden,
 		serverIP:   http.StatusForbidden,
 		strangerIP: http.StatusForbidden,
 		roostIP:    http.StatusForbidden,
@@ -144,7 +168,7 @@ func TestAdminOnly(t *testing.T) {
 // Roost as the browser's device, with the page's own origin.
 func TestGuard_host(t *testing.T) {
 	t.Parallel()
-	h := api.New(withTailnet(testTailnet(), api.Options{}))
+	h := api.New(withTailnet(t, testTailnet(), api.Options{}))
 	for host, want := range map[string]int{
 		roostHost:                  http.StatusOK,
 		roostHost + ":4700":        http.StatusOK,
@@ -170,7 +194,7 @@ func TestGuard_host(t *testing.T) {
 
 func TestGuard_csrf(t *testing.T) {
 	t.Parallel()
-	h := api.New(withTailnet(testTailnet(), api.Options{}))
+	h := api.New(withTailnet(t, testTailnet(), api.Options{}))
 	for _, method := range []string{http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete} {
 		rec := serve(h, newRequest(t, method, "/api/nope", laptopIP))
 		if rec.Code != http.StatusForbidden || !strings.Contains(rec.Body.String(), api.CSRFHeader) {
@@ -190,7 +214,7 @@ func TestGuard_csrf(t *testing.T) {
 
 func TestGuard_webSocketOrigin(t *testing.T) {
 	t.Parallel()
-	h := api.New(withTailnet(testTailnet(), api.Options{}))
+	h := api.New(withTailnet(t, testTailnet(), api.Options{}))
 	for origin, ok := range map[string]bool{
 		"http://" + roostHost:             true,
 		"https://" + roostHost:            false, // this request arrived without TLS
@@ -224,7 +248,7 @@ func TestGuard_webSocketOrigin(t *testing.T) {
 
 func TestGuard_starting(t *testing.T) {
 	t.Parallel()
-	opts := withTailnet(testTailnet(), api.Options{})
+	opts := withTailnet(t, testTailnet(), api.Options{})
 	opts.Snapshot = func() tailnet.Snapshot { return tailnet.Snapshot{} }
 	rec := serve(api.New(opts), newRequest(t, http.MethodGet, "/api/me", laptopIP))
 	if rec.Code != http.StatusServiceUnavailable || rec.Header().Get("Retry-After") == "" {
@@ -237,7 +261,7 @@ func TestNew_requiresTailnet(t *testing.T) {
 	t.Parallel()
 	defer func() {
 		if recover() == nil {
-			t.Error("New() without WhoIs, Snapshot and IsAdmin didn't panic")
+			t.Error("New() without WhoIs, Snapshot and Store didn't panic")
 		}
 	}()
 	api.New(api.Options{})

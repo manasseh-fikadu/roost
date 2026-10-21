@@ -28,7 +28,7 @@ func TestOpen_newDatabase(t *testing.T) {
 	if got, want := userVersion(t, s.DB()), latestVersion(t); got != want {
 		t.Errorf("user_version = %d, want %d", got, want)
 	}
-	if got, want := tables(t, s.DB()), []string{"admins", "events", "kv"}; !slices.Equal(got, want) {
+	if got, want := tables(t, s.DB()), []string{"events", "kv", "roles"}; !slices.Equal(got, want) {
 		t.Errorf("tables = %q, want %q", got, want)
 	}
 	if _, err := os.Stat(path + ".bak"); !errors.Is(err, fs.ErrNotExist) {
