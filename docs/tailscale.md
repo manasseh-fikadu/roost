@@ -82,7 +82,16 @@ Your tailnet is the login. For every request, Roost asks Tailscale which device 
 
 Tailscale identifies devices, not the people or programs using them, so anything running on a device you're logged in to acts as you. If a server runs other people's code, give its Tailscale node a tag, so that connections from it are anonymous.
 
-### Admins
+### Admins and viewers
+
+Roost has two roles:
+
+- **Admins** can do everything: open terminals, change files, control Docker, use SSH access, and change settings, including who has a role.
+- **Viewers** see the read-only dashboard. They can't change anything, and they don't see logs, files, process command lines or other secrets such as containers' environment variables.
+
+Anyone else, and anyone anonymous, can only see that Roost is there and why they can't view it.
+
+One setting decides who else can view Roost. By default, anyone who signs in from the tailnet is a viewer unless they have a role of their own. That includes people you share Roost's machine with, since Tailscale names them too, and it means your tailnet policy decides who can reach Roost at all. Set it to `listed` to let only Roost's admins and viewers in.
 
 When Roost has no admins yet, it makes the first ones as soon as it's on the tailnet: the user who owns Roost's node, which is whoever logged it in, and any logins in `ROOST_ADMINS` or `--admins`, separated by commas. A node logged in with a tagged auth key has no owner, so give it `ROOST_ADMINS`:
 
@@ -90,12 +99,17 @@ When Roost has no admins yet, it makes the first ones as soon as it's on the tai
 TS_AUTHKEY=tskey-auth-... ROOST_ADMINS=alice@example.com roost serve
 ```
 
-After that, Roost ignores `ROOST_ADMINS`. To add an admin later, for example when no admin can sign in, run this on the machine Roost runs on. It works while Roost is running.
+After that, Roost ignores `ROOST_ADMINS`. Manage roles with `roost admin` on the machine Roost runs on. It changes the database directly, so it works while Roost is running and when no admin can sign in. Roost always keeps one admin, so it won't remove the last one or make them a viewer.
 
 ```sh
-roost admin add alice@example.com
-roost admin list
+roost admin list                        # the admins and viewers, and who else can view Roost
+roost admin add alice@example.com       # make alice an admin
+roost admin add-viewer bob@example.com  # make bob a viewer
+roost admin remove bob@example.com      # take bob's role away
+roost admin who-can-view listed         # only admins and viewers; "tailnet" lets anyone on the tailnet view
 ```
+
+Admins can make the same changes through `GET` and `PATCH /api/access` and `PUT` and `DELETE /api/access/users/<login>`, which the Settings page will use.
 
 Only admins can see `GET /api/debug/tailnet`, and during development, the web UI that Roost proxies from Vite.
 
