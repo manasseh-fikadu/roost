@@ -37,7 +37,7 @@ type container struct {
 }
 
 func newContainer() container {
-	cmd := "server --token=hunter2"
+	cmd := "server hunter2"
 	return container{
 		Name:      "web",
 		Env:       []envVar{{"PATH", "/bin"}, {"API_KEY", "hunter2"}},
