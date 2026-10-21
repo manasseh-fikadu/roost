@@ -104,6 +104,10 @@ func (cfg Config) validate() error {
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
 			return fmt.Errorf("dev UI %q isn't an http:// URL", cfg.DevUI)
 		}
+		// The URL shows up in error pages that anyone on the tailnet can see.
+		if u.User != nil || u.RawQuery != "" || u.Fragment != "" {
+			return errors.New("the dev UI URL can't have a user, a query or a fragment")
+		}
 	}
 	return nil
 }
