@@ -35,6 +35,9 @@ type Poller struct {
 	tn  Tailnet
 	log *slog.Logger
 
+	polled     chan struct{} // closed after the first status poll
+	polledOnce sync.Once
+
 	mu   sync.Mutex
 	snap Snapshot
 }
@@ -74,14 +77,19 @@ func NewPoller(tn Tailnet, log *slog.Logger) *Poller {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Poller{tn: tn, log: log, snap: Snapshot{Pings: map[string]PingRecord{}}}
+	return &Poller{tn: tn, log: log, polled: make(chan struct{}), snap: Snapshot{Pings: map[string]PingRecord{}}}
 }
+
+// Polled is closed once Run has asked for the status the first time, whether
+// or not it got one.
+func (p *Poller) Polled() <-chan struct{} { return p.polled }
 
 // Run polls until ctx ends: the status every StatusInterval, each online peer
 // every PingInterval, and connectivity every ConnectivityInterval.
 func (p *Poller) Run(ctx context.Context) {
 	// Pings need the peers, so the status comes first.
 	p.pollStatus(ctx)
+	p.polledOnce.Do(func() { close(p.polled) })
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		repeat(ctx, StatusInterval, func() time.Duration {

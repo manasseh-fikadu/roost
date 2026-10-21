@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"io"
+	"reflect"
 	"testing"
 
 	"github.com/manasseh-fikadu/roost/internal/config"
@@ -44,6 +45,7 @@ func TestParse(t *testing.T) {
 				"ROOST_PORT":         "8443",
 				"ROOST_DATA_DIR":     "/srv/roost",
 				"ROOST_DEV_UI":       "http://127.0.0.1:5173",
+				"ROOST_ADMINS":       "alice@example.com, bob@github,",
 			},
 			want: config.Config{
 				Tailscale:   config.Host,
@@ -52,6 +54,7 @@ func TestParse(t *testing.T) {
 				Port:        8443,
 				DataDir:     "/srv/roost",
 				DevUI:       "http://127.0.0.1:5173",
+				Admins:      []string{"alice@example.com", "bob@github"},
 			},
 		},
 		{
@@ -95,6 +98,17 @@ func TestParse(t *testing.T) {
 			args: []string{"--port", "4800"},
 			env:  map[string]string{"ROOST_PORT": "https"},
 			want: with(func(c *config.Config) { c.Port = 4800 }),
+		},
+		{
+			name: "admins flag beats environment",
+			args: []string{"--admins", "carol@example.com"},
+			env:  map[string]string{"ROOST_ADMINS": "alice@example.com"},
+			want: with(func(c *config.Config) { c.Admins = []string{"carol@example.com"} }),
+		},
+		{
+			name:    "admin isn't a login",
+			args:    []string{"--admins", "alice@example.com,bob"},
+			wantErr: true,
 		},
 		{
 			name:    "dev UI with a password",
@@ -148,7 +162,7 @@ func TestParse(t *testing.T) {
 			case tt.wantErrIs != nil && !errors.Is(err, tt.wantErrIs):
 				t.Fatalf("Parse(%q) error = %v, want %v", tt.args, err, tt.wantErrIs)
 			}
-			if got != tt.want {
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Parse(%q) = %+v, want %+v", tt.args, got, tt.want)
 			}
 		})

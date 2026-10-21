@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -95,9 +96,6 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	poller := tailnet.NewPoller(node, logger)
-	wg.Go(func() { poller.Run(ctx) })
-
 	srvs := newServers(logger)
 	var appURL atomic.Pointer[string]
 	if setupLn != nil {
@@ -147,12 +145,26 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		return errors.Join(fmt.Errorf("listen on the tailnet: %w", res.err), srvs.stop(ctx))
 	}
 
+	if err := addFirstAdmins(ctx, st, node, cfg.Admins, logger); err != nil {
+		return errors.Join(err, res.ln.Close(), srvs.stop(ctx))
+	}
+	poller := tailnet.NewPoller(node, logger)
+	wg.Go(func() { poller.Run(ctx) })
+	// The app checks requests against Roost's own names, from the first status.
+	select {
+	case <-poller.Polled():
+	case <-ctx.Done():
+		logger.Info("shutting down")
+		return errors.Join(res.ln.Close(), srvs.stop(ctx))
+	}
 	srvs.start(api.New(api.Options{
-		Version: buildVersion(),
-		UI:      ui,
-		DevUI:   devUI,
-		Tailnet: poller,
-		Logger:  logger,
+		Version:  buildVersion(),
+		UI:       ui,
+		DevUI:    devUI,
+		WhoIs:    node.WhoIs,
+		Snapshot: poller.Snapshot,
+		IsAdmin:  st.IsAdmin,
+		Logger:   logger,
 	}), res.ln)
 	appURL.Store(&res.url)
 	logger.Info("roost is running", "version", buildVersion(), "url", res.url, "data_dir", cfg.DataDir)
@@ -163,6 +175,36 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		logger.Info("shutting down")
 	}
 	return srvs.stop(ctx)
+}
+
+// addFirstAdmins makes the owner of Roost's node and the logins in admins
+// Roost's admins, if it has none yet. A tagged node has no owner.
+func addFirstAdmins(ctx context.Context, st *store.Store, tn tailnet.Tailnet, admins []string, logger *slog.Logger) error {
+	status, err := tn.Status(ctx)
+	if err != nil {
+		return fmt.Errorf("get the tailnet status: %w", err)
+	}
+	logins := admins
+	if owner := status.Self.Owner; owner != "" {
+		logins = append([]string{owner}, admins...)
+	}
+	added, err := st.AddFirstAdmins(ctx, logins)
+	if err != nil {
+		return err
+	}
+	if added {
+		logger.Info("made Roost's first admins", "logins", strings.Join(logins, ","))
+		return nil
+	}
+	have, err := st.Admins(ctx)
+	if err != nil {
+		return err
+	}
+	if len(have) == 0 {
+		logger.Warn("Roost has no admins, since its node is tagged and ROOST_ADMINS is empty; " +
+			"add one with `roost admin add <login>`")
+	}
+	return nil
 }
 
 // announceLogin logs the login URL each time Tailscale makes a new one, until

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"testing/fstest"
 	"testing/synctest"
@@ -27,7 +28,7 @@ func TestOpen_newDatabase(t *testing.T) {
 	if got, want := userVersion(t, s.DB()), latestVersion(t); got != want {
 		t.Errorf("user_version = %d, want %d", got, want)
 	}
-	if got, want := tables(t, s.DB()), []string{"events", "kv"}; !slices.Equal(got, want) {
+	if got, want := tables(t, s.DB()), []string{"admins", "events", "kv"}; !slices.Equal(got, want) {
 		t.Errorf("tables = %q, want %q", got, want)
 	}
 	if _, err := os.Stat(path + ".bak"); !errors.Is(err, fs.ErrNotExist) {
@@ -160,8 +161,8 @@ func TestOpen_olderVersion(t *testing.T) {
 	if info, err := os.Stat(path + ".bak"); err != nil || info.Mode().Perm() != 0o600 {
 		t.Errorf("Stat(%s.bak) = %v, %v, want mode 0600", path, info, err)
 	}
-	if _, err := os.Stat(path + ".bak.tmp"); !errors.Is(err, fs.ErrNotExist) {
-		t.Errorf("the backup's temporary file was left behind: Stat error = %v", err)
+	if leftovers, _ := filepath.Glob(path + ".bak.*"); len(leftovers) > 0 {
+		t.Errorf("the backup's temporary file was left behind: %q", leftovers)
 	}
 
 	// The next upgrade replaces the backup.
@@ -169,6 +170,64 @@ func TestOpen_olderVersion(t *testing.T) {
 	openStore(t, path, migrations(createNotes, addPinned, indexPinned, "CREATE TABLE tags (name TEXT) STRICT;"))
 	if got := userVersion(t, rawDB(t, path+".bak")); got != 3 {
 		t.Errorf("backup user_version after the second upgrade = %d, want 3", got)
+	}
+}
+
+// roost serve and roost admin can open the same database at once, so two
+// processes can find the same migrations to apply.
+func TestOpen_concurrentUpgrades(t *testing.T) {
+	t.Parallel()
+	createNotes := "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL) STRICT;"
+	newer := migrations(createNotes, "CREATE TABLE tags (name TEXT) STRICT;", "CREATE TABLE pins (id INTEGER) STRICT;")
+	for round := range 20 {
+		path := filepath.Join(t.TempDir(), "roost.db")
+		closeStore(t, openStore(t, path, migrations(createNotes)))
+
+		const openers = 4
+		var wg sync.WaitGroup
+		errs := make(chan error, openers)
+		for range openers {
+			wg.Go(func() {
+				s, err := store.OpenWith(t.Context(), path, store.Options{}, newer)
+				if err == nil {
+					err = s.Close()
+				}
+				errs <- err
+			})
+		}
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			if err != nil {
+				t.Fatalf("round %d: Open() error = %v, want every opener to succeed", round, err)
+			}
+		}
+		if got := userVersion(t, rawDB(t, path)); got != 3 {
+			t.Fatalf("round %d: user_version = %d, want 3", round, got)
+		}
+		if leftovers, _ := filepath.Glob(path + ".bak.*"); len(leftovers) > 0 {
+			t.Fatalf("round %d: the backup left temporary files: %q", round, leftovers)
+		}
+		// The backup is the database before the upgrade, even if an opener
+		// copied it after another one had upgraded it.
+		if got := userVersion(t, rawDB(t, path+".bak")); got != 1 {
+			t.Fatalf("round %d: backup user_version = %d, want 1", round, got)
+		}
+	}
+}
+
+// A migration that another process applied after this one read the version
+// isn't applied again.
+func TestStore_applyFrom(t *testing.T) {
+	t.Parallel()
+	files := migrations("CREATE TABLE notes (id INTEGER) STRICT;", "CREATE TABLE tags (name TEXT) STRICT;")
+	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), files)
+
+	if err := s.ApplyFrom(t.Context(), files, 0); err != nil {
+		t.Errorf("applying migrations the database already has: %v", err)
+	}
+	if got := userVersion(t, s.DB()); got != 2 {
+		t.Errorf("user_version = %d, want 2", got)
 	}
 }
 
@@ -191,6 +250,20 @@ func TestOpen_failedMigration(t *testing.T) {
 	// The failed migration's first statement was rolled back with the rest.
 	if got, want := tables(t, db), []string{"notes"}; !slices.Equal(got, want) {
 		t.Errorf("tables = %q, want %q", got, want)
+	}
+
+	// So are the migrations before it in the same upgrade, which leaves the
+	// database as its backup has it.
+	_, err = store.OpenWith(t.Context(), path, store.Options{},
+		migrations(createNotes, "CREATE TABLE tags (name TEXT) STRICT;", "INSERT INTO missing VALUES (1);"))
+	if err == nil || !strings.Contains(err.Error(), "0003_step.sql") {
+		t.Fatalf("Open() error = %v, want an error naming 0003_step.sql", err)
+	}
+	if got := userVersion(t, db); got != 1 {
+		t.Errorf("user_version after a failed upgrade = %d, want 1", got)
+	}
+	if got, want := tables(t, db), []string{"notes"}; !slices.Equal(got, want) {
+		t.Errorf("tables after a failed upgrade = %q, want %q", got, want)
 	}
 }
 
