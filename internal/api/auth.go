@@ -110,19 +110,24 @@ func (h *handler) identify(ctx context.Context, remoteAddr, selfID string) calle
 	case who.LoginName == "":
 		return caller{level: anyone, reason: ReasonNoUser}
 	}
-	// If Roost can't tell what someone's role is, they have none.
-	role, err := h.opts.Store.Role(ctx, who.LoginName)
-	if err != nil {
-		h.log.Error("look up a caller's role", "login", who.LoginName, "error", err)
+	return caller{who: who, level: h.levelOf(ctx, who.LoginName)}
+}
+
+// levelOf returns the level of a signed-in caller, from the role the store
+// gives login. If Roost can't tell what someone's role is, they have none.
+func (h *handler) levelOf(ctx context.Context, login string) level {
+	role, err := h.opts.Store.Role(ctx, login)
+	if err != nil && ctx.Err() == nil {
+		h.log.Error("look up a caller's role", "login", login, "error", err)
 	}
-	c := caller{who: who, level: anyone}
 	switch role {
 	case store.Admin:
-		c.level = admins
+		return admins
 	case store.Viewer:
-		c.level = viewers
+		return viewers
+	default:
+		return anyone
 	}
-	return c
 }
 
 // deny answers with an error: JSON for the API, and text for anything else.

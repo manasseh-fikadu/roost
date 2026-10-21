@@ -154,3 +154,112 @@ export interface ChangeAccess {
 export interface SetRole {
   role: Role;
 }
+/**
+ * Snapshot is the data of each "snapshot" event on GET /api/stream: what
+ * Roost knows at one moment. The stream sends one as soon as it opens and
+ * another every few seconds, and the web app keeps the latest.
+ */
+export interface Snapshot {
+  /**
+   * GeneratedAt is when the hub made the snapshot.
+   */
+  generatedAt: string /* RFC 3339 */;
+  hub: Hub;
+  /**
+   * Collectors are the jobs that gather what Roost knows, in a fixed order.
+   */
+  collectors: Collector[];
+  /**
+   * Devices are the nodes on the tailnet: Roost's own, then its peers in
+   * the order of their DNS names.
+   */
+  devices: Device[];
+}
+/**
+ * Hub is the Roost server itself.
+ */
+export interface Hub {
+  /**
+   * Version is the hub's build version.
+   */
+  version: string;
+  /**
+   * DNSName is the MagicDNS name of Roost's node, such as
+   * roost.example.ts.net.
+   */
+  dnsName: string;
+  /**
+   * Tailnet is the tailnet's name, such as example.com.
+   */
+  tailnet: string;
+}
+/**
+ * A Collector is a job that gathers what Roost knows, such as polling
+ * Tailscale for the tailnet's status.
+ */
+export interface Collector {
+  /**
+   * Name says what the collector gathers, such as "Tailscale status".
+   */
+  name: string;
+  state: CollectorState;
+  /**
+   * Error is why the latest run failed, while State is CollectorStateFailing.
+   */
+  error?: string;
+  /**
+   * LastOK is when a run last worked, if one has.
+   */
+  lastOk?: string /* RFC 3339 */;
+}
+/**
+ * CollectorState says whether a collector works.
+ */
+/**
+ * CollectorStateOK means the latest run worked.
+ */
+export const CollectorStateOK = "ok";
+/**
+ * CollectorStateFailing means the latest run failed.
+ */
+export const CollectorStateFailing = "failing";
+/**
+ * CollectorStateWaiting means the collector hasn't finished a run yet.
+ */
+export const CollectorStateWaiting = "waiting";
+/**
+ * The states of a Collector.
+ */
+export type CollectorState = typeof CollectorStateOK | typeof CollectorStateFailing | typeof CollectorStateWaiting;
+/**
+ * A Device is a node on the tailnet.
+ */
+export interface Device {
+  /**
+   * ID is the node's stable ID.
+   */
+  id: string;
+  /**
+   * Name is the name the machine reports, or the first part of its DNS
+   * name if it reports none. It may not be unique.
+   */
+  name: string;
+  /**
+   * DNSName is the node's MagicDNS name, such as laptop.example.ts.net.
+   */
+  dnsName: string;
+  /**
+   * OS is the node's operating system, as Tailscale names it, such as
+   * "linux" or "macOS".
+   */
+  os: string;
+  ips: string[];
+  /**
+   * Online reports whether the node is connected to Tailscale.
+   */
+  online: boolean;
+  /**
+   * Self marks Roost's own node.
+   */
+  self?: boolean;
+}

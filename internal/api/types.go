@@ -113,3 +113,72 @@ type ChangeAccess struct {
 type SetRole struct {
 	Role Role `json:"role"`
 }
+
+// Snapshot is the data of each "snapshot" event on GET /api/stream: what
+// Roost knows at one moment. The stream sends one as soon as it opens and
+// another every few seconds, and the web app keeps the latest.
+type Snapshot struct {
+	// GeneratedAt is when the hub made the snapshot.
+	GeneratedAt time.Time `json:"generatedAt"`
+	Hub         Hub       `json:"hub"`
+	// Collectors are the jobs that gather what Roost knows, in a fixed order.
+	Collectors []Collector `json:"collectors"`
+	// Devices are the nodes on the tailnet: Roost's own, then its peers in
+	// the order of their DNS names.
+	Devices []Device `json:"devices"`
+}
+
+// Hub is the Roost server itself.
+type Hub struct {
+	// Version is the hub's build version.
+	Version string `json:"version"`
+	// DNSName is the MagicDNS name of Roost's node, such as
+	// roost.example.ts.net.
+	DNSName string `json:"dnsName"`
+	// Tailnet is the tailnet's name, such as example.com.
+	Tailnet string `json:"tailnet"`
+}
+
+// A Collector is a job that gathers what Roost knows, such as polling
+// Tailscale for the tailnet's status.
+type Collector struct {
+	// Name says what the collector gathers, such as "Tailscale status".
+	Name  string         `json:"name"`
+	State CollectorState `json:"state"`
+	// Error is why the latest run failed, while State is CollectorStateFailing.
+	Error string `json:"error,omitempty"`
+	// LastOK is when a run last worked, if one has.
+	LastOK *time.Time `json:"lastOk,omitempty"`
+}
+
+// CollectorState says whether a collector works.
+type CollectorState string
+
+// The states of a Collector.
+const (
+	// CollectorStateOK means the latest run worked.
+	CollectorStateOK CollectorState = "ok"
+	// CollectorStateFailing means the latest run failed.
+	CollectorStateFailing CollectorState = "failing"
+	// CollectorStateWaiting means the collector hasn't finished a run yet.
+	CollectorStateWaiting CollectorState = "waiting"
+)
+
+// A Device is a node on the tailnet.
+type Device struct {
+	// ID is the node's stable ID.
+	ID string `json:"id"`
+	// Name is the name the machine reports, or the first part of its DNS
+	// name if it reports none. It may not be unique.
+	Name string `json:"name"`
+	// DNSName is the node's MagicDNS name, such as laptop.example.ts.net.
+	DNSName string `json:"dnsName"`
+	// OS is the node's operating system, as Tailscale names it, such as
+	// "linux" or "macOS".
+	OS  string   `json:"os"`
+	IPs []string `json:"ips"`
+	// Online reports whether the node is connected to Tailscale.
+	Online bool `json:"online"`
+	// Self marks Roost's own node.
+	Self bool `json:"self,omitempty"`
+}
