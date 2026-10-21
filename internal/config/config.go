@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // The ways Roost can join the tailnet, set with --tailscale.
@@ -48,6 +49,9 @@ type Config struct {
 	// DevUI, if set, is the URL of a Vite dev server to proxy the web UI to,
 	// instead of serving the embedded build.
 	DevUI string
+	// Admins are the Tailscale logins to make Roost's first admins, along with
+	// the owner of Roost's node. They're only used while Roost has no admins.
+	Admins []string
 }
 
 // Parse reads the serve command's flags from args. A flag that isn't given falls
@@ -72,6 +76,8 @@ func Parse(args []string, getenv func(string) string, output io.Writer) (Config,
 		"`directory` to keep the database and Tailscale state in (env ROOST_DATA_DIR)")
 	fs.StringVar(&cfg.DevUI, "dev-ui", envOr(getenv, "ROOST_DEV_UI", ""),
 		"`URL` of a Vite dev server to proxy the web UI to, for development (env ROOST_DEV_UI)")
+	admins := fs.String("admins", getenv("ROOST_ADMINS"),
+		"comma-separated Tailscale `logins` to make admins while Roost has none (env ROOST_ADMINS)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -82,6 +88,7 @@ func Parse(args []string, getenv func(string) string, output io.Writer) (Config,
 	if portErr != nil && !isSet(fs, "port") {
 		return Config{}, portErr
 	}
+	cfg.Admins = splitList(*admins)
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
 	}
@@ -109,7 +116,23 @@ func (cfg Config) validate() error {
 			return errors.New("the dev UI URL can't have a user, a query or a fragment")
 		}
 	}
+	for _, login := range cfg.Admins {
+		if at := strings.IndexByte(login, '@'); at <= 0 || at == len(login)-1 || strings.ContainsAny(login, " \t") {
+			return fmt.Errorf("admin %q isn't a Tailscale login, such as alice@example.com", login)
+		}
+	}
 	return nil
+}
+
+// splitList splits a comma-separated list, dropping empty items.
+func splitList(s string) []string {
+	var items []string
+	for item := range strings.SplitSeq(s, ",") {
+		if item = strings.TrimSpace(item); item != "" {
+			items = append(items, item)
+		}
+	}
+	return items
 }
 
 // isSet reports whether the flag called name was given.
