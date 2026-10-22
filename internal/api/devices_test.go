@@ -92,8 +92,11 @@ func TestSetDeviceSettings(t *testing.T) {
 // A change to a device's settings shows up in the next snapshot straight
 // away.
 func TestSetDeviceSettings_publishes(t *testing.T) {
-	st := testStore(t)
 	synctest.Test(t, func(t *testing.T) {
+		// The request writes, so the store opens in the bubble, as in
+		// TestFeed_recordsPings.
+		st := testStore(t)
+		synctest.Wait()
 		tn := testTailnet()
 		opts := withStore(tn, st, api.Options{})
 		go opts.Feed.Run(t.Context())
@@ -176,8 +179,12 @@ func pointString(at time.Time, v *float64) string {
 
 // The feed records each ping once.
 func TestFeed_recordsPings(t *testing.T) {
-	st := testStore(t)
 	synctest.Test(t, func(t *testing.T) {
+		// The feed writes, so the store opens in the bubble, and its first
+		// prune ends before the feed starts. Otherwise the feed waits for its
+		// lock in fake time, and gives up at once.
+		st := testStore(t)
+		synctest.Wait()
 		var (
 			mu    sync.Mutex
 			pings = map[string]tailnet.PingRecord{}
