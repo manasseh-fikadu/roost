@@ -187,6 +187,35 @@ func TestPoller_Polled(t *testing.T) {
 	})
 }
 
+// Changes tells its receiver each time the snapshot changes, and never
+// blocks the poller.
+func TestPoller_Changes(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		tn := tailnettest.New(testStatus(tailnet.StateRunning))
+		tn.SetConnectivity(&tailnet.Connectivity{UDP: true}, nil)
+		p := runPoller(t, tn, nil)
+
+		// The first status poll and connectivity check come at once, and a
+		// receiver that's busy hears of them once.
+		synctest.Wait()
+		<-p.Changes()
+		select {
+		case <-p.Changes():
+			t.Fatal("Changes() has a second value for changes made while no one received")
+		default:
+		}
+
+		// The next status poll.
+		time.Sleep(tailnet.StatusInterval)
+		synctest.Wait()
+		select {
+		case <-p.Changes():
+		default:
+			t.Fatal("Changes() has nothing after the second status poll")
+		}
+	})
+}
+
 func TestPoller_errors(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		tn := tailnettest.New(testStatus(tailnet.StateRunning))
@@ -240,11 +269,12 @@ func TestSnapshot_PathTo(t *testing.T) {
 	snap := tailnet.Snapshot{
 		Status: &tailnet.Status{Self: tailnet.Device{ID: "self"}},
 		Pings: map[string]tailnet.PingRecord{
-			"direct":    {At: recent, Result: &tailnet.PingResult{Latency: 5 * time.Millisecond, Endpoint: "203.0.113.2:41641"}},
-			"derp":      {At: recent, Result: &tailnet.PingResult{Latency: 40 * time.Millisecond, DERPRegion: "fra"}},
-			"peerrelay": {At: recent, Result: &tailnet.PingResult{Latency: 9 * time.Millisecond, PeerRelay: "100.64.0.9:7777:vni:3"}},
-			"stale":     {At: stale, Result: &tailnet.PingResult{Latency: 5 * time.Millisecond, Endpoint: "203.0.113.4:41641"}},
-			"failed":    {At: recent, Err: errors.New("no reply")},
+			"direct":       {At: recent, Result: &tailnet.PingResult{Latency: 5 * time.Millisecond, Endpoint: "203.0.113.2:41641"}},
+			"derp":         {At: recent, Result: &tailnet.PingResult{Latency: 40 * time.Millisecond, DERPRegion: "fra"}},
+			"peerrelay":    {At: recent, Result: &tailnet.PingResult{Latency: 9 * time.Millisecond, PeerRelay: "100.64.0.9:7777:vni:3"}},
+			"stale":        {At: stale, Result: &tailnet.PingResult{Latency: 5 * time.Millisecond, Endpoint: "203.0.113.4:41641"}},
+			"failed":       {At: recent, Err: errors.New("no reply")},
+			"stale-failed": {At: stale, Err: errors.New("no reply")},
 		},
 	}
 	tests := []struct {
@@ -272,7 +302,11 @@ func TestSnapshot_PathTo(t *testing.T) {
 		},
 		{
 			"failed ping falls back to the status", tailnet.Device{ID: "failed", Online: true, CurAddr: "203.0.113.5:41641"},
-			tailnet.Path{Kind: tailnet.PathDirect, Endpoint: "203.0.113.5:41641", PingedAt: recent},
+			tailnet.Path{Kind: tailnet.PathDirect, Endpoint: "203.0.113.5:41641", PingedAt: recent, Unanswered: true},
+		},
+		{
+			"stale failed ping isn't unanswered", tailnet.Device{ID: "stale-failed", Online: true, Relay: "nyc"},
+			tailnet.Path{Kind: tailnet.PathDERP, Relay: "nyc", PingedAt: stale},
 		},
 		{
 			"never pinged, through a peer relay", tailnet.Device{ID: "new", Online: true, PeerRelay: "100.64.0.9:7777:vni:4"},

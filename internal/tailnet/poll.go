@@ -37,6 +37,7 @@ type Poller struct {
 
 	polled     chan struct{} // closed after the first status poll
 	polledOnce sync.Once
+	changes    chan struct{}
 
 	mu   sync.Mutex
 	snap Snapshot
@@ -77,12 +78,31 @@ func NewPoller(tn Tailnet, log *slog.Logger) *Poller {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Poller{tn: tn, log: log, polled: make(chan struct{}), snap: Snapshot{Pings: map[string]PingRecord{}}}
+	return &Poller{
+		tn:      tn,
+		log:     log,
+		polled:  make(chan struct{}),
+		changes: make(chan struct{}, 1),
+		snap:    Snapshot{Pings: map[string]PingRecord{}},
+	}
 }
 
 // Polled is closed once Run has asked for the status the first time, whether
 // or not it got one.
 func (p *Poller) Polled() <-chan struct{} { return p.polled }
+
+// Changes receives a value after each status poll, round of pings and
+// connectivity check, whether or not it worked. Only one goroutine should
+// receive from it.
+func (p *Poller) Changes() <-chan struct{} { return p.changes }
+
+// changed tells the receiver of Changes that the snapshot changed.
+func (p *Poller) changed() {
+	select {
+	case p.changes <- struct{}{}:
+	default:
+	}
+}
 
 // Run polls until ctx ends: the status every StatusInterval, each online peer
 // every PingInterval, and connectivity every ConnectivityInterval.
@@ -131,6 +151,7 @@ func (p *Poller) pollStatus(ctx context.Context) {
 	if ctx.Err() != nil {
 		return
 	}
+	defer p.changed()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err != nil {
@@ -188,6 +209,7 @@ func (p *Poller) pingPeers(ctx context.Context) time.Duration {
 
 	// Keep the last ping of a peer that's offline now, and forget peers that
 	// have left.
+	defer p.changed()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	for _, d := range st.Peers {
@@ -236,6 +258,7 @@ func (p *Poller) checkConnectivity(ctx context.Context) time.Duration {
 	if ctx.Err() != nil {
 		return ConnectivityInterval
 	}
+	defer p.changed()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err != nil {
@@ -282,6 +305,9 @@ type Path struct {
 	Latency time.Duration
 	// PingedAt is when the device was last pinged, or zero if it hasn't been.
 	PingedAt time.Time
+	// Unanswered reports whether the latest ping is fresh and got no reply,
+	// though the device is online.
+	Unanswered bool
 }
 
 // PathTo works out the path to d at now: from its latest ping, if that's
@@ -291,11 +317,12 @@ func (s Snapshot) PathTo(d Device, now time.Time) Path {
 		return Path{Kind: PathSelf}
 	}
 	ping, pinged := s.Pings[d.ID]
+	fresh := pinged && now.Sub(ping.At) < pingFresh
 	path := Path{PingedAt: ping.At}
 	switch res := ping.Result; {
 	case !d.Online:
 		path.Kind = PathOffline
-	case pinged && res != nil && now.Sub(ping.At) < pingFresh:
+	case fresh && res != nil:
 		path.Latency = res.Latency
 		switch {
 		case res.DERPRegion != "":
@@ -305,12 +332,16 @@ func (s Snapshot) PathTo(d Device, now time.Time) Path {
 		default:
 			path.Kind, path.Endpoint = PathDirect, res.Endpoint
 		}
-	case d.CurAddr != "":
-		path.Kind, path.Endpoint = PathDirect, d.CurAddr
-	case d.PeerRelay != "":
-		path.Kind, path.Relay = PathPeerRelay, d.PeerRelay
 	default:
-		path.Kind, path.Relay = PathDERP, d.Relay
+		path.Unanswered = fresh
+		switch {
+		case d.CurAddr != "":
+			path.Kind, path.Endpoint = PathDirect, d.CurAddr
+		case d.PeerRelay != "":
+			path.Kind, path.Relay = PathPeerRelay, d.PeerRelay
+		default:
+			path.Kind, path.Relay = PathDERP, d.Relay
+		}
 	}
 	return path
 }
