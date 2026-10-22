@@ -1,5 +1,12 @@
 import { toast } from '#lib/toast.svelte.js';
-import type { ErrorBody, Health, Me } from './types.js';
+import type {
+	DeviceHistory,
+	DeviceSettings,
+	ErrorBody,
+	Health,
+	Me,
+	SetDeviceSettings
+} from './types.js';
 
 /**
  * Roost refuses requests that change things unless they carry this header,
@@ -82,4 +89,22 @@ export function getHealth(): Promise<Health> {
  */
 export function getMe(fetcher?: Fetch): Promise<Me> {
 	return request('GET', 'me', undefined, fetcher);
+}
+
+/** How far back a device's history goes. */
+export type HistoryRange = '1h' | '6h' | '24h' | '7d';
+
+/** A device's round-trip times from the hub over the last range. */
+export function getDeviceHistory(id: string, range: HistoryRange): Promise<DeviceHistory> {
+	return request('GET', `devices/${encodeURIComponent(id)}/history?range=${range}`);
+}
+
+/** Replaces a device's settings, and says so in a toast. Admins only. */
+export function putDeviceSettings(
+	id: string,
+	settings: SetDeviceSettings
+): Promise<DeviceSettings> {
+	return mutate('PUT', `devices/${encodeURIComponent(id)}/settings`, settings, {
+		success: 'Saved'
+	});
 }

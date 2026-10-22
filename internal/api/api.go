@@ -33,6 +33,8 @@ type Options struct {
 	// Snapshot returns what Roost last learned about the tailnet, including
 	// its own node. It's reported by GET /api/debug/tailnet. Required.
 	Snapshot func() tailnet.Snapshot
+	// Feed builds the snapshots GET /api/stream sends. Required.
+	Feed *Feed
 	// Store holds who has a role in Roost. Required.
 	Store *store.Store
 	// Stopping is closed when the server starts to shut down, which ends
@@ -55,8 +57,8 @@ func New(opts Options) http.Handler {
 }
 
 func newHandler(opts Options) *handler {
-	if opts.WhoIs == nil || opts.Snapshot == nil || opts.Store == nil {
-		panic("api.New: Options.WhoIs, Snapshot and Store are required")
+	if opts.WhoIs == nil || opts.Snapshot == nil || opts.Feed == nil || opts.Store == nil {
+		panic("api.New: Options.WhoIs, Snapshot, Feed and Store are required")
 	}
 	h := &handler{opts: opts, log: opts.Logger}
 	if h.log == nil {
@@ -72,6 +74,9 @@ func (h *handler) routes(rt *router) {
 	rt.read("GET /api/health", anyone, h.health)
 	rt.read("GET /api/me", anyone, h.me)
 	rt.read("GET /api/stream", viewers, h.stream)
+
+	rt.read("GET /api/devices/{id}/history", viewers, h.deviceHistory)
+	rt.write("PUT /api/devices/{id}/settings", h.setDeviceSettings)
 
 	rt.read("GET /api/access", admins, h.access)
 	rt.write("PATCH /api/access", h.changeAccess)

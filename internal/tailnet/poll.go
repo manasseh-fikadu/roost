@@ -2,6 +2,7 @@ package tailnet
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -26,6 +27,10 @@ const (
 	retryInterval = time.Minute
 	// pingFresh is how long a ping's path is trusted over the status's.
 	pingFresh = 5 * time.Minute
+	// unansweredAfter is how many pings in a row an online peer misses
+	// before it counts as not answering. A phone waking up or a laptop on
+	// bad wifi often misses one.
+	unansweredAfter = 2
 )
 
 // Poller asks a Tailnet for its status, pings and connectivity in the
@@ -37,6 +42,7 @@ type Poller struct {
 
 	polled     chan struct{} // closed after the first status poll
 	polledOnce sync.Once
+	changes    chan struct{}
 
 	mu   sync.Mutex
 	snap Snapshot
@@ -68,8 +74,12 @@ type PingRecord struct {
 	At time.Time
 	// Result is the reply, or nil if there was none.
 	Result *PingResult
-	// Err is why there was no reply.
+	// Err is why there was no reply. It's ErrNoReply if the peer didn't
+	// answer in time.
 	Err error
+	// Misses is how many pings in a row, up to this one, the peer didn't
+	// answer in time. It starts again from zero while the peer is offline.
+	Misses int
 }
 
 // NewPoller returns a Poller for tn. Nothing is polled until Run.
@@ -77,12 +87,31 @@ func NewPoller(tn Tailnet, log *slog.Logger) *Poller {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Poller{tn: tn, log: log, polled: make(chan struct{}), snap: Snapshot{Pings: map[string]PingRecord{}}}
+	return &Poller{
+		tn:      tn,
+		log:     log,
+		polled:  make(chan struct{}),
+		changes: make(chan struct{}, 1),
+		snap:    Snapshot{Pings: map[string]PingRecord{}},
+	}
 }
 
 // Polled is closed once Run has asked for the status the first time, whether
 // or not it got one.
 func (p *Poller) Polled() <-chan struct{} { return p.polled }
+
+// Changes receives a value after each status poll, round of pings and
+// connectivity check, whether or not it worked. Only one goroutine should
+// receive from it.
+func (p *Poller) Changes() <-chan struct{} { return p.changes }
+
+// changed tells the receiver of Changes that the snapshot changed.
+func (p *Poller) changed() {
+	select {
+	case p.changes <- struct{}{}:
+	default:
+	}
+}
 
 // Run polls until ctx ends: the status every StatusInterval, each online peer
 // every PingInterval, and connectivity every ConnectivityInterval.
@@ -131,6 +160,7 @@ func (p *Poller) pollStatus(ctx context.Context) {
 	if ctx.Err() != nil {
 		return
 	}
+	defer p.changed()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err != nil {
@@ -162,11 +192,13 @@ func (p *Poller) pingPeers(ctx context.Context) time.Duration {
 		wg      sync.WaitGroup
 		slots   = make(chan struct{}, maxPings)
 	)
+	pinged := 0
 	for _, d := range st.Peers {
 		ip, ok := pingAddr(d)
 		if !d.Online || !ok {
 			continue
 		}
+		pinged++
 		wg.Go(func() {
 			slots <- struct{}{}
 			defer func() { <-slots }()
@@ -174,7 +206,7 @@ func (p *Poller) pingPeers(ctx context.Context) time.Duration {
 			defer cancel()
 			res, err := p.tn.Ping(pingCtx, ip)
 			if err != nil && pingCtx.Err() != nil {
-				err = errNoReply
+				err = ErrNoReply
 			}
 			mu.Lock()
 			results[d.ID] = PingRecord{At: time.Now(), Result: res, Err: err}
@@ -186,18 +218,31 @@ func (p *Poller) pingPeers(ctx context.Context) time.Duration {
 		return PingInterval
 	}
 
-	// Keep the last ping of a peer that's offline now, and forget peers that
-	// have left.
+	defer p.changed()
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	for id, rec := range results {
+		if errors.Is(rec.Err, ErrNoReply) {
+			rec.Misses = p.snap.Pings[id].Misses + 1
+			results[id] = rec
+		}
+	}
+	// Keep the last ping of a peer that's offline now, and forget peers that
+	// have left.
 	for _, d := range st.Peers {
 		if _, ok := results[d.ID]; !ok {
 			if old, ok := p.snap.Pings[d.ID]; ok {
+				old.Misses = 0
 				results[d.ID] = old
 			}
 		}
 	}
 	p.snap.Pings = results
+	if pinged == 0 {
+		// Peers can look offline for a moment after the node starts, so
+		// look again soon.
+		return StatusInterval
+	}
 	return PingInterval
 }
 
@@ -221,8 +266,8 @@ func pingAddr(d Device) (netip.Addr, bool) {
 	return netip.Addr{}, false
 }
 
-// errNoReply is the error of a ping that timed out.
-var errNoReply = fmt.Errorf("no reply within %v", pingTimeout)
+// ErrNoReply is the error of a ping that the peer didn't answer in time.
+var ErrNoReply = fmt.Errorf("no reply within %v", pingTimeout)
 
 // checkConnectivity runs a connectivity check and returns when to do it again.
 func (p *Poller) checkConnectivity(ctx context.Context) time.Duration {
@@ -236,6 +281,7 @@ func (p *Poller) checkConnectivity(ctx context.Context) time.Duration {
 	if ctx.Err() != nil {
 		return ConnectivityInterval
 	}
+	defer p.changed()
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if err != nil {
@@ -282,6 +328,9 @@ type Path struct {
 	Latency time.Duration
 	// PingedAt is when the device was last pinged, or zero if it hasn't been.
 	PingedAt time.Time
+	// Unanswered reports whether the device is online but didn't answer the
+	// last two pings, and the latest of them is fresh.
+	Unanswered bool
 }
 
 // PathTo works out the path to d at now: from its latest ping, if that's
@@ -291,11 +340,12 @@ func (s Snapshot) PathTo(d Device, now time.Time) Path {
 		return Path{Kind: PathSelf}
 	}
 	ping, pinged := s.Pings[d.ID]
+	fresh := pinged && now.Sub(ping.At) < pingFresh
 	path := Path{PingedAt: ping.At}
 	switch res := ping.Result; {
 	case !d.Online:
 		path.Kind = PathOffline
-	case pinged && res != nil && now.Sub(ping.At) < pingFresh:
+	case fresh && res != nil:
 		path.Latency = res.Latency
 		switch {
 		case res.DERPRegion != "":
@@ -305,12 +355,16 @@ func (s Snapshot) PathTo(d Device, now time.Time) Path {
 		default:
 			path.Kind, path.Endpoint = PathDirect, res.Endpoint
 		}
-	case d.CurAddr != "":
-		path.Kind, path.Endpoint = PathDirect, d.CurAddr
-	case d.PeerRelay != "":
-		path.Kind, path.Relay = PathPeerRelay, d.PeerRelay
 	default:
-		path.Kind, path.Relay = PathDERP, d.Relay
+		path.Unanswered = fresh && ping.Misses >= unansweredAfter
+		switch {
+		case d.CurAddr != "":
+			path.Kind, path.Endpoint = PathDirect, d.CurAddr
+		case d.PeerRelay != "":
+			path.Kind, path.Relay = PathPeerRelay, d.PeerRelay
+		default:
+			path.Kind, path.Relay = PathDERP, d.Relay
+		}
 	}
 	return path
 }

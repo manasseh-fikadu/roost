@@ -161,8 +161,10 @@ export interface SetRole {
 }
 /**
  * Snapshot is the data of each "snapshot" event on GET /api/stream: what
- * Roost knows at one moment. The stream sends one as soon as it opens and
- * another every few seconds, and the web app keeps the latest.
+ * Roost knows at one moment. The hub builds one each time something changes,
+ * at most once a second, and at least every few seconds. The stream sends the
+ * latest as soon as it opens, then each new one, and the web app keeps the
+ * latest.
  */
 export interface Snapshot {
   /**
@@ -174,9 +176,10 @@ export interface Snapshot {
    * Collectors are the jobs that gather what Roost knows, in a fixed order.
    */
   collectors: Collector[];
+  uplink: Uplink;
   /**
-   * Devices are the nodes on the tailnet: Roost's own, then its peers in
-   * the order of their DNS names.
+   * Devices are the nodes on the tailnet: Roost's own first, then servers,
+   * laptops, desktops, tablets, phones and others, each by name.
    */
   devices: Device[];
 }
@@ -240,6 +243,52 @@ export const CollectorStateWaiting = "waiting";
  */
 export type CollectorState = typeof CollectorStateOK | typeof CollectorStateFailing | typeof CollectorStateWaiting;
 /**
+ * Uplink is how Roost's machine reaches the internet and Tailscale's DERP
+ * relays, from Tailscale's latest connectivity check.
+ */
+export interface Uplink {
+  /**
+   * CheckedAt is when connectivity was last checked, if it has been. The
+   * other fields are empty until then.
+   */
+  checkedAt?: string /* RFC 3339 */;
+  /**
+   * UDP reports whether UDP gets out, which direct connections need.
+   */
+  udp: boolean;
+  /**
+   * IPv4 and IPv6 report whether the internet answered over each.
+   */
+  ipv4: boolean;
+  ipv6: boolean;
+  /**
+   * PublicIP is the address the internet sees Roost's machine at, IPv4 if
+   * it has one. Only admins get it.
+   */
+  publicIp?: string;
+  /**
+   * DERP is the relay region with the lowest latency, if any answered.
+   */
+  derp?: DERPRegion;
+}
+/**
+ * DERPRegion is a region of Tailscale's DERP relay servers.
+ */
+export interface DERPRegion {
+  /**
+   * Code is the region's short name, such as "fra".
+   */
+  code: string;
+  /**
+   * Name is the region's full name, such as "Frankfurt".
+   */
+  name: string;
+  /**
+   * LatencyMs is the round trip to the region, in milliseconds.
+   */
+  latencyMs: number /* float64 */;
+}
+/**
  * A Device is a node on the tailnet.
  */
 export interface Device {
@@ -248,10 +297,14 @@ export interface Device {
    */
   id: string;
   /**
-   * Name is the name the machine reports, or the first part of its DNS
-   * name if it reports none. It may not be unique.
+   * Name is the display name an admin gave the device, or else HostName,
+   * or else the first part of DNSName. It may not be unique.
    */
   name: string;
+  /**
+   * HostName is the name the machine reports.
+   */
+  hostName: string;
   /**
    * DNSName is the node's MagicDNS name, such as laptop.example.ts.net.
    */
@@ -261,13 +314,298 @@ export interface Device {
    * "linux" or "macOS".
    */
   os: string;
+  /**
+   * Kind is what sort of machine it is: the kind an admin set, or else
+   * Roost's guess.
+   */
+  kind: DeviceKind;
   ips: string[];
   /**
    * Online reports whether the node is connected to Tailscale.
    */
   online: boolean;
   /**
+   * LastSeen is when an offline node was last connected, if Tailscale
+   * knows.
+   */
+  lastSeen?: string /* RFC 3339 */;
+  /**
    * Self marks Roost's own node.
    */
   self?: boolean;
+  status: Status;
+  /**
+   * StatusReason says why the device has its status, such as
+   * "Disk 91% full".
+   */
+  statusReason: string;
+  path: Path;
+  /**
+   * RxBytes and TxBytes count the traffic between Roost's node and this
+   * one since Roost's node started.
+   */
+  rxBytes: number /* int64 */;
+  txBytes: number /* int64 */;
+  /**
+   * KeyExpiry is when the node's Tailscale key expires, unless expiry is
+   * off for it.
+   */
+  keyExpiry?: string /* RFC 3339 */;
+  /**
+   * Created is when the node joined the tailnet.
+   */
+  created?: string /* RFC 3339 */;
+  /**
+   * ExitNode reports whether Roost's traffic to the internet goes through
+   * this node.
+   */
+  exitNode?: boolean;
+  /**
+   * Metrics are the device's latest metrics, if Roost measures it. Roost
+   * measures its own machine on Linux. Other machines need the agent.
+   */
+  metrics?: Metrics;
+  /**
+   * Info is what the machine is, if Roost measures it.
+   */
+  info?: DeviceInfo;
+  settings: DeviceSettings;
+}
+/**
+ * Status is the state of something Roost watches, such as a device.
+ */
+export const StatusOnline = "online";
+/**
+ * StatusAttention means it works, but something needs a look, such as a
+ * disk that's nearly full.
+ */
+export const StatusAttention = "attention";
+export const StatusOffline = "offline";
+export const StatusUnknown = "unknown";
+/**
+ * The states of a Status.
+ */
+export type Status = typeof StatusOnline | typeof StatusAttention | typeof StatusOffline | typeof StatusUnknown;
+/**
+ * DeviceKind is what sort of machine a device is.
+ */
+export const DeviceKindServer = "server";
+export const DeviceKindLaptop = "laptop";
+export const DeviceKindDesktop = "desktop";
+export const DeviceKindTablet = "tablet";
+export const DeviceKindPhone = "phone";
+export const DeviceKindOther = "other";
+/**
+ * The kinds of Device, in the order the devices are listed.
+ */
+export type DeviceKind = typeof DeviceKindServer | typeof DeviceKindLaptop | typeof DeviceKindDesktop | typeof DeviceKindTablet | typeof DeviceKindPhone | typeof DeviceKindOther;
+/**
+ * Path is how traffic gets from Roost's node to a device.
+ */
+export interface Path {
+  kind: PathKind;
+  /**
+   * Endpoint is the device's public ip:port on a direct path. Only admins
+   * get it, since it says where the device is on the internet.
+   */
+  endpoint?: string;
+  /**
+   * DERP is the code of the DERP region that relays traffic, on a DERP
+   * path.
+   */
+  derp?: string;
+  /**
+   * PeerRelay is the ip:port:vni of the node that relays traffic, on a
+   * peer relay path. Only admins get it.
+   */
+  peerRelay?: string;
+  /**
+   * HomeDERP is the code of the device's home DERP region, such as "fra".
+   */
+  homeDerp?: string;
+  /**
+   * RTTMs is the round trip of the latest ping in milliseconds, if that
+   * ping is recent and got a reply.
+   */
+  rttMs?: number /* float64 */;
+  /**
+   * PingedAt is when the device was last pinged, if it has been.
+   */
+  pingedAt?: string /* RFC 3339 */;
+  /**
+   * Unanswered reports whether the device is online but didn't answer the
+   * last two pings, and the latest of them is recent.
+   */
+  unanswered?: boolean;
+}
+/**
+ * PathKind says how traffic gets from Roost's node to a device.
+ */
+/**
+ * PathKindSelf is Roost's own node.
+ */
+export const PathKindSelf = "self";
+/**
+ * PathKindDirect is a peer-to-peer WireGuard connection.
+ */
+export const PathKindDirect = "direct";
+/**
+ * PathKindDERP is relayed through one of Tailscale's DERP servers.
+ */
+export const PathKindDERP = "derp";
+/**
+ * PathKindPeerRelay is relayed through another node on the tailnet.
+ */
+export const PathKindPeerRelay = "peer-relay";
+/**
+ * PathKindOffline means the device isn't connected.
+ */
+export const PathKindOffline = "offline";
+/**
+ * The kinds of Path.
+ */
+export type PathKind = typeof PathKindSelf | typeof PathKindDirect | typeof PathKindDERP | typeof PathKindPeerRelay | typeof PathKindOffline;
+/**
+ * Metrics are what a machine was doing at one moment. A field is missing if
+ * the machine doesn't say.
+ */
+export interface Metrics {
+  at: string /* RFC 3339 */;
+  /**
+   * CPU is the percentage of time the CPUs were busy lately.
+   */
+  cpu?: number /* float64 */;
+  /**
+   * Load is the 1, 5 and 15 minute load averages.
+   */
+  load?: number /* float64 */[];
+  /**
+   * Procs is how many processes there are.
+   */
+  procs?: number /* int */;
+  memory?: Usage;
+  swap?: Usage;
+  /**
+   * Disk is the file system that holds /.
+   */
+  disk?: Usage;
+  /**
+   * NetRx and NetTx are bytes per second received and sent lately.
+   */
+  netRx?: number /* float64 */;
+  netTx?: number /* float64 */;
+  /**
+   * Temp is the hottest sensor, in degrees Celsius.
+   */
+  temp?: number /* float64 */;
+  /**
+   * Uptime is how long since the machine booted, in seconds.
+   */
+  uptime?: number /* int64 */;
+}
+/**
+ * Usage is how much of something is used, in bytes.
+ */
+export interface Usage {
+  used: number /* uint64 */;
+  total: number /* uint64 */;
+}
+/**
+ * DeviceInfo is what a machine is.
+ */
+export interface DeviceInfo {
+  hostname?: string;
+  /**
+   * OSVersion is the operating system's name and version, such as
+   * "Debian GNU/Linux 13 (trixie)".
+   */
+  osVersion?: string;
+  /**
+   * Kernel is the kernel's release, such as 6.12.48+deb13-amd64. Only
+   * admins get it, since it says which known bugs the machine has.
+   */
+  kernel?: string;
+  /**
+   * Model is the machine's maker and product, if it says.
+   */
+  model?: string;
+  /**
+   * Arch is the CPU architecture, such as x86_64.
+   */
+  arch?: string;
+  cores?: number /* int */;
+}
+/**
+ * DeviceSettings are what admins set for a device. They're part of each
+ * Device, and PUT /api/devices/{id}/settings replaces them.
+ */
+export interface DeviceSettings {
+  /**
+   * DisplayName is shown instead of the name the machine reports, unless
+   * it's empty.
+   */
+  displayName: string;
+  /**
+   * Kind is what sort of machine an admin says the device is. If it's
+   * empty, Roost guesses.
+   */
+  kind?: DeviceKind;
+  /**
+   * AlertOffline says whether to raise an alert when the device goes
+   * offline. It's on by default, except for phones and tablets, which
+   * leave the tailnet all the time.
+   */
+  alertOffline: boolean;
+  /**
+   * Notes are anything admins want to remember about the device. Viewers
+   * can read them too.
+   */
+  notes: string;
+}
+/**
+ * SetDeviceSettings is the body of PUT /api/devices/{id}/settings, which
+ * replaces a device's settings. A field that's left out gets its default.
+ */
+export interface SetDeviceSettings {
+  displayName?: string;
+  kind?: DeviceKind;
+  /**
+   * AlertOffline is on if it's left out, except for phones and tablets.
+   */
+  alertOffline?: boolean;
+  notes?: string;
+}
+/**
+ * DeviceHistory is the response to GET /api/devices/{id}/history?range=,
+ * where the range is 1h, 6h, 24h or 7d.
+ */
+export interface DeviceHistory {
+  /**
+   * From and To are when the history starts and ends.
+   */
+  from: string /* RFC 3339 */;
+  to: string /* RFC 3339 */;
+  /**
+   * Step is the time each point sums up, in milliseconds.
+   */
+  step: number /* int64 */;
+  /**
+   * RTT is the average round trip from Roost's node in milliseconds, for
+   * each step in which the device was pinged. The value is null if no
+   * ping in the step got a reply.
+   */
+  rtt: Point[];
+}
+/**
+ * Point is a value at a time.
+ */
+export interface Point {
+  /**
+   * TS is the start of the time the point sums up, in Unix milliseconds.
+   */
+  ts: number /* int64 */;
+  /**
+   * V is the value, or null if there's none.
+   */
+  v: number | null;
 }

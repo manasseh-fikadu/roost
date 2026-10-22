@@ -15,7 +15,7 @@
 	import { page } from '$app/state';
 	import { isAdmin, lookupFailed } from '#lib/access.js';
 	import { getMe } from '#lib/api/client.js';
-	import { connect } from '#lib/live.svelte.js';
+	import { connect, live } from '#lib/live.svelte.js';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import Kbd from '#lib/ui/Kbd.svelte';
 	import Toaster from '#lib/ui/Toaster.svelte';
@@ -39,8 +39,15 @@
 	let paletteOpen = $state(false);
 
 	const item = $derived(navItemFor(page.url.pathname));
+	/** A device's page is named after the device, which only the live data knows. */
+	const deviceName = $derived(
+		page.route.id === '/devices/[id]'
+			? live.snapshot?.devices.find((d) => d.id === page.params.id)?.name
+			: undefined
+	);
 	const title = $derived(
 		page.data.title ??
+			deviceName ??
 			(page.error ? (page.status === 404 ? 'Not found' : 'Error') : item?.label) ??
 			'Roost'
 	);

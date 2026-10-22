@@ -18,6 +18,8 @@ var retention = []struct {
 }{
 	// The activity log is small, so it's kept for a month.
 	{"events", 30 * 24 * time.Hour, "DELETE FROM events WHERE ts < ?"},
+	// Round-trip history goes back a week, as far as the device page shows.
+	{"pings", 7 * 24 * time.Hour, "DELETE FROM pings WHERE ts < ?"},
 }
 
 // pruneHourly deletes expired rows now and then once every pruneInterval, until

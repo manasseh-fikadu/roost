@@ -1,6 +1,9 @@
 package api
 
-import "net/http"
+import (
+	"context"
+	"net/http"
+)
 
 // Hooks for the api_test package.
 
@@ -42,3 +45,13 @@ func ServeValue(opts Options, v any) http.Handler {
 
 // Redact is redact, for any value.
 func Redact(v any) any { return redact(v) }
+
+// Latest returns the feed's latest snapshot, as admins see it, building the
+// first one if there's none yet.
+func (f *Feed) Latest() Snapshot { return f.latest(context.Background()).snap }
+
+const (
+	FeedGap           = feedGap
+	FeedHeartbeat     = feedHeartbeat
+	RoleCheckInterval = roleCheckInterval
+)

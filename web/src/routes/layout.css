@@ -39,6 +39,14 @@
 
 	--animate-ping-slow: ping-slow 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
 	--animate-shimmer: shimmer 1.6s ease-in-out infinite;
+	/* Dashes moving along a live line on the network map. */
+	--animate-flow: flow 1.6s linear infinite;
+
+	@keyframes flow {
+		to {
+			stroke-dashoffset: -24;
+		}
+	}
 
 	@keyframes ping-slow {
 		75%,

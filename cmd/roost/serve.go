@@ -20,6 +20,7 @@ import (
 
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/config"
+	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/web"
@@ -151,6 +152,19 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	}
 	poller := tailnet.NewPoller(node, logger)
 	wg.Go(func() { poller.Run(ctx) })
+	feedOpts := api.FeedOptions{
+		Version:        buildVersion(),
+		Tailnet:        poller.Snapshot,
+		TailnetChanged: poller.Changes(),
+		Store:          st,
+		Logger:         logger,
+	}
+	if hostmetrics.Supported {
+		host := hostmetrics.NewCollector(hostmetrics.Local(), logger)
+		wg.Go(func() { host.Run(ctx) })
+		feedOpts.Host, feedOpts.HostChanged = host.Reading, host.Changes()
+	}
+	feed := api.NewFeed(feedOpts)
 	// The app checks requests against Roost's own names, from the first status.
 	select {
 	case <-poller.Polled():
@@ -158,6 +172,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		logger.Info("shutting down")
 		return errors.Join(res.ln.Close(), srvs.stop(ctx))
 	}
+	wg.Go(func() { feed.Run(ctx) })
 	stopping := make(chan struct{})
 	app := srvs.start(api.New(api.Options{
 		Version:  buildVersion(),
@@ -165,6 +180,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		DevUI:    devUI,
 		WhoIs:    node.WhoIs,
 		Snapshot: poller.Snapshot,
+		Feed:     feed,
 		Store:    st,
 		Stopping: stopping,
 		Logger:   logger,

@@ -1,9 +1,14 @@
 <script lang="ts">
+	import ArrowRight from '@lucide/svelte/icons/arrow-right';
 	import Bell from '@lucide/svelte/icons/bell';
-	import Network from '@lucide/svelte/icons/network';
+	import { resolve } from '$app/paths';
+	import type { CollectorState } from '#lib/api/types.js';
 	import HealthRing from '#lib/charts/HealthRing.svelte';
+	import DevicesTable from '#lib/devices/DevicesTable.svelte';
 	import { plural } from '#lib/format.js';
 	import { live } from '#lib/live.svelte.js';
+	import MapLegend from '#lib/map/MapLegend.svelte';
+	import NetworkMap from '#lib/map/NetworkMap.svelte';
 	import type { Status } from '#lib/status.js';
 	import Card from '#lib/ui/Card.svelte';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
@@ -11,10 +16,10 @@
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import StatusDot from '#lib/ui/StatusDot.svelte';
 	import Tooltip from '#lib/ui/Tooltip.svelte';
-	import type { CollectorState } from '#lib/api/types.js';
 
 	const devices = $derived(live.snapshot?.devices ?? []);
 	const online = $derived(devices.filter((d) => d.online).length);
+	const now = $derived(live.snapshot ? Date.parse(live.snapshot.generatedAt) : Date.now());
 
 	const collectorStatus: Record<CollectorState, Status> = {
 		ok: 'online',
@@ -66,12 +71,15 @@
 <div class="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
 	<Card
 		title="Network map"
-		description="Live endpoint telemetry across the tailnet and this hub"
-		bodyClass="map-grid min-h-80 grid place-items-center"
+		description="How the hub reaches the internet and every machine on the tailnet"
+		bodyClass="p-2"
 	>
-		<EmptyState title="The map comes next" icon={Network}>
-			The internet and DERP, then this hub, then every peer and the path to it. Coming with #23.
-		</EmptyState>
+		<div class="px-2 pt-1 pb-2"><MapLegend /></div>
+		{#if live.snapshot}
+			<NetworkMap snapshot={live.snapshot} />
+		{:else}
+			<Skeleton class="h-130 rounded-lg" />
+		{/if}
 	</Card>
 	<div class="space-y-4">
 		<Card title="Network health">
@@ -90,3 +98,19 @@
 		</Card>
 	</div>
 </div>
+
+<Card title="Machines" class="mt-4">
+	{#snippet actions()}
+		<a
+			href={resolve('/devices')}
+			class="flex items-center gap-1 text-[12px] text-fg-subtle transition-colors hover:text-fg"
+		>
+			All devices <ArrowRight class="size-3" />
+		</a>
+	{/snippet}
+	{#if live.snapshot}
+		<DevicesTable {devices} {now} />
+	{:else}
+		<Skeleton class="m-4 h-24" />
+	{/if}
+</Card>

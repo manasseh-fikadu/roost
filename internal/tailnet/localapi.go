@@ -146,6 +146,10 @@ func convertStatus(st *ipnstate.Status) *Status {
 	}
 	if st.Self != nil {
 		out.Self = convertPeer(st.Self, st.User)
+		// tsnet doesn't mark its own node online, but a running node is on
+		// the tailnet.
+		out.Self.Online = out.State == StateRunning
+		out.Self.LastSeen = time.Time{}
 	}
 	out.Peers = make([]Device, 0, len(st.Peer))
 	for _, p := range st.Peer {

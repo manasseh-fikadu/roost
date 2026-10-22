@@ -39,7 +39,8 @@ func TestNew_debugTailnet(t *testing.T) {
 		go poller.Run(ctx)
 		synctest.Wait()
 
-		h := api.New(api.Options{WhoIs: tn.WhoIs, Snapshot: poller.Snapshot, Store: st})
+		feed := api.NewFeed(api.FeedOptions{Tailnet: poller.Snapshot, Store: st})
+		h := api.New(api.Options{WhoIs: tn.WhoIs, Snapshot: poller.Snapshot, Feed: feed, Store: st})
 		rec := serve(h, newRequest(t, http.MethodGet, "/api/debug/tailnet", laptop))
 
 		if rec.Code != http.StatusOK {

@@ -30,7 +30,8 @@ func TestConvertStatus(t *testing.T) {
 		CurrentTailnet: &ipnstate.TailnetStatus{Name: "example.com"},
 		Self: &ipnstate.PeerStatus{
 			ID: "self", HostName: "roost", DNSName: "roost.example.ts.net.", OS: "linux",
-			UserID: 1, TailscaleIPs: []netip.Addr{ip("100.64.0.1")}, Online: true,
+			// tsnet doesn't mark its own node online.
+			UserID: 1, TailscaleIPs: []netip.Addr{ip("100.64.0.1")}, LastSeen: lastSeen,
 		},
 		User: map[tailcfg.UserID]tailcfg.UserProfile{1: {LoginName: "alice@example.com"}},
 		Peer: map[key.NodePublic]*ipnstate.PeerStatus{
