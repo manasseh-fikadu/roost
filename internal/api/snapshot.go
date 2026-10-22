@@ -296,19 +296,22 @@ func shortDuration(d time.Duration) string {
 	return fmt.Sprintf("%dm", d/time.Minute)
 }
 
+// "tab", "nas" and "pi" only count as words of their own, and "nas" can
+// have a number after it, so "tabithas-pixel", "jonas", "nasser-macbook" and
+// "pixel" don't match.
 var (
-	tabletName = regexp.MustCompile(`ipad|tab`)
-	// "nas" and "pi" only start a word, so "jonas" and "pixel" aren't servers.
-	serverName = regexp.MustCompile(`vps|server|srv|raspberry|\bnas|\bpi\b`)
+	tabletName = regexp.MustCompile(`ipad|tablet|\btab\b`)
+	serverName = regexp.MustCompile(`vps|server|srv|raspberry|\bnas(\b|\d)|\bpi\b`)
 	laptopName = regexp.MustCompile(`book|laptop|thinkpad|surface|xps`)
 )
 
-// inferKind guesses what sort of machine d is, from its OS and names. hub is
-// true for the machine Roost runs on, and model is the machine's maker and
-// product, if Roost knows them.
+// inferKind guesses what sort of machine d is, from its OS, its host name
+// and the first label of its DNS name. The rest of the DNS name is the
+// tailnet's, the same for every device. hub is true for the machine Roost
+// runs on, and model is the machine's maker and product, if Roost knows them.
 func inferKind(d tailnet.Device, hub bool, model string) DeviceKind {
 	os := strings.ToLower(d.OS)
-	name := strings.ToLower(d.HostName + " " + d.DNSName + " " + model)
+	name := strings.ToLower(d.HostName + " " + firstLabel(d.DNSName) + " " + model)
 	switch {
 	case os == "android" || os == "ios":
 		if tabletName.MatchString(name) {

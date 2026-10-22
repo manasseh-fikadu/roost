@@ -3,6 +3,7 @@ package api_test
 import (
 	"errors"
 	"net/netip"
+	"strings"
 	"testing"
 	"time"
 
@@ -141,6 +142,44 @@ func TestSnapshot_devices(t *testing.T) {
 	} {
 		if got := findDevice(t, got, id).Settings; got != want {
 			t.Errorf("%s settings = %+v, want %+v", id, got, want)
+		}
+	}
+}
+
+// How Roost guesses what sort of machine a device is from its OS and name. The
+// tailnet's name matches the patterns, so the guess must leave it out.
+func TestSnapshot_kinds(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		host, os string
+		want     api.DeviceKind
+	}{
+		{"pixel-8", "android", api.DeviceKindPhone},
+		{"tabithas-pixel", "android", api.DeviceKindPhone},
+		{"galaxy-tab-s8", "android", api.DeviceKindTablet},
+		{"lenovo-tablet", "android", api.DeviceKindTablet},
+		{"iPad", "iOS", api.DeviceKindTablet},
+		{"nasser-macbook", "macOS", api.DeviceKindLaptop},
+		{"nasrin-pc", "windows", api.DeviceKindDesktop},
+		{"jonas-surface-book", "linux", api.DeviceKindLaptop},
+		{"nas", "freebsd", api.DeviceKindServer},
+		{"nas01", "freebsd", api.DeviceKindServer},
+		{"nas-1", "freebsd", api.DeviceKindServer},
+		{"nasser-box", "freebsd", api.DeviceKindOther},
+	}
+	st := &tailnet.Status{
+		State: tailnet.StateRunning,
+		Self:  tailnet.Device{ID: "roost", DNSName: "roost.pi-tab.ts.net", Online: true},
+	}
+	for _, tt := range tests {
+		st.Peers = append(st.Peers, tailnet.Device{
+			ID: tt.host, HostName: tt.host, DNSName: strings.ToLower(tt.host) + ".pi-tab.ts.net", OS: tt.os, Online: true,
+		})
+	}
+	got := snapshotOf(t, testStore(t), tailnet.Snapshot{Status: st}, nil)
+	for _, tt := range tests {
+		if d := findDevice(t, got, tt.host); d.Kind != tt.want {
+			t.Errorf("%s on %s: kind %s, want %s", tt.host, tt.os, d.Kind, tt.want)
 		}
 	}
 }
