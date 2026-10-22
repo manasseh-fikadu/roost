@@ -45,7 +45,9 @@ type Sample struct {
 	Mem   Usage
 	// Swap is nil if the machine has none.
 	Swap *Usage
-	// Disk is the file system that holds /.
+	// Disk is the file system that holds /. As in df, the blocks reserved
+	// for root are left out, so Total is what's used plus what's free for
+	// everyone else.
 	Disk *Usage
 	// NetRx and NetTx are bytes per second received and sent since the
 	// previous sample, on the interface of the default route.
@@ -83,9 +85,10 @@ type Info struct {
 type System struct {
 	// FS is the machine's root directory, for /proc, /sys and /etc.
 	FS fs.FS
-	// Statfs returns the size of the file system that holds path, and how
-	// much of it is free, in bytes.
-	Statfs func(path string) (total, free uint64, err error)
+	// Statfs returns how much of the file system that holds path is used,
+	// and how much more of it users other than root can use, in bytes, as df
+	// counts them.
+	Statfs func(path string) (used, avail uint64, err error)
 }
 
 // Reading is what a Collector knows at one moment.
@@ -215,8 +218,8 @@ func (r *reader) sample(now time.Time) (Sample, error) {
 	s.Mem, s.Swap = mem, swap
 
 	s.Load, s.Procs = r.load()
-	if total, free, err := r.sys.Statfs("/"); err == nil && total > 0 {
-		s.Disk = &Usage{Used: total - min(free, total), Total: total}
+	if used, avail, err := r.sys.Statfs("/"); err == nil && used+avail > 0 {
+		s.Disk = &Usage{Used: used, Total: used + avail}
 	}
 	s.NetRx, s.NetTx = r.network(now)
 	s.Temp = r.temperature()

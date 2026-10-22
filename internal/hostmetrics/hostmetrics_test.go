@@ -98,7 +98,7 @@ type fsFunc func() fs.FS
 func (f fsFunc) Open(name string) (fs.File, error) { return f().Open(name) }
 
 func newFake() *fakeSystem {
-	return &fakeSystem{fsys: machine(), disk: func() (uint64, uint64, error) { return 100 * gib, 40 * gib, nil }}
+	return &fakeSystem{fsys: machine(), disk: func() (uint64, uint64, error) { return 60 * gib, 40 * gib, nil }}
 }
 
 // collect runs a Collector of sys for long enough to take n samples, and

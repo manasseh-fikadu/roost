@@ -1,6 +1,7 @@
 package hostmetrics
 
 import (
+	"cmp"
 	"os"
 
 	"golang.org/x/sys/unix"
@@ -11,11 +12,13 @@ func Local() System {
 	return System{FS: os.DirFS("/"), Statfs: statfs}
 }
 
-func statfs(path string) (total, free uint64, err error) {
+func statfs(path string) (used, avail uint64, err error) {
 	var st unix.Statfs_t
 	if err := unix.Statfs(path, &st); err != nil {
 		return 0, 0, err
 	}
-	bsize := uint64(st.Bsize) //nolint:gosec // G115: a block size is positive.
-	return st.Blocks * bsize, st.Bfree * bsize, nil
+	// As in df, the counts are in fragments, and Bavail leaves out the blocks
+	// reserved for root, which Bfree counts as free.
+	size := cmp.Or(uint64(st.Frsize), uint64(st.Bsize)) //nolint:gosec // G115: block sizes are positive.
+	return (st.Blocks - min(st.Bfree, st.Blocks)) * size, st.Bavail * size, nil
 }
