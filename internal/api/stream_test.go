@@ -22,72 +22,88 @@ import (
 const streamInterval = 10 * time.Second
 
 func TestStream(t *testing.T) {
-	// The store's goroutines start outside the bubble, so it can end without them.
-	st := testStore(t)
-	synctest.Test(t, func(t *testing.T) {
-		tn := testTailnet()
-		polledAt := time.Now()
-		h := api.New(api.Options{
-			Version: "v1.2.3",
-			WhoIs:   tn.WhoIs,
-			Snapshot: func() tailnet.Snapshot {
-				status, _ := tn.Status(context.Background())
-				return tailnet.Snapshot{Status: status, StatusAt: polledAt, ConnectivityErr: errors.New("no DERP map")}
-			},
-			Store: st,
+	for _, tt := range []struct {
+		name string
+		from netip.Addr
+		// What the caller gets of the tailnet's name and of the failing
+		// collector's error.
+		tailnet, netcheckErr string
+	}{
+		{name: "admin", from: laptopIP, tailnet: "example.com", netcheckErr: "no DERP map"},
+		// A personal tailnet is named after its owner's email address, and an
+		// error can name paths and addresses on Roost's machine.
+		{name: "viewer", from: phoneIP},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			// The store's goroutines start outside the bubble, so it can end without them.
+			st := testStore(t)
+			synctest.Test(t, func(t *testing.T) {
+				tn := testTailnet()
+				polledAt := time.Now()
+				h := api.New(api.Options{
+					Version: "v1.2.3",
+					WhoIs:   tn.WhoIs,
+					Snapshot: func() tailnet.Snapshot {
+						status, _ := tn.Status(context.Background())
+						status.Tailnet = "example.com"
+						return tailnet.Snapshot{Status: status, StatusAt: polledAt, ConnectivityErr: errors.New("no DERP map")}
+					},
+					Store: st,
+				})
+				events := openStream(t, tn, h, tt.from)
+
+				synctest.Wait()
+				first := nextSnapshot(t, events)
+				if want := (api.Hub{Version: "v1.2.3", DNSName: roostHost, Tailnet: tt.tailnet}); first.Hub != want {
+					t.Errorf("hub = %+v, want %+v", first.Hub, want)
+				}
+				if !first.GeneratedAt.Equal(time.Now()) {
+					t.Errorf("generatedAt = %v, want %v", first.GeneratedAt, time.Now())
+				}
+				wantCollectors := []api.Collector{
+					{Name: "Tailscale status", State: api.CollectorStateOK, LastOK: &polledAt},
+					{Name: "Tailscale netcheck", State: api.CollectorStateFailing, Error: tt.netcheckErr},
+				}
+				if len(first.Collectors) != len(wantCollectors) {
+					t.Fatalf("collectors = %+v, want %+v", first.Collectors, wantCollectors)
+				}
+				for i, c := range first.Collectors {
+					want := wantCollectors[i]
+					if c.Name != want.Name || c.State != want.State || c.Error != want.Error ||
+						(c.LastOK == nil) != (want.LastOK == nil) || c.LastOK != nil && !c.LastOK.Equal(*want.LastOK) {
+						t.Errorf("collector %d = %+v, want %+v", i, c, want)
+					}
+				}
+				wantDevice := api.Device{
+					ID: "roost", Name: "roost", DNSName: roostHost, IPs: []string{roostIP.String(), roostIPv6.String()},
+					Online: true, Self: true,
+				}
+				if len(first.Devices) != 5 {
+					t.Fatalf("got %d devices, want Roost's node and its 4 peers", len(first.Devices))
+				}
+				if d := first.Devices[0]; d.ID != wantDevice.ID || d.Name != wantDevice.Name || !d.Self ||
+					strings.Join(d.IPs, ",") != strings.Join(wantDevice.IPs, ",") {
+					t.Errorf("first device = %+v, want %+v", d, wantDevice)
+				}
+				if d := first.Devices[1]; d.ID != "laptop" || d.Self {
+					t.Errorf("second device = %+v, want the laptop, which isn't Roost's node", d)
+				}
+
+				// Nothing more until the interval passes.
+				select {
+				case e := <-events:
+					t.Fatalf("got event %+v before the interval passed", e)
+				default:
+				}
+				time.Sleep(streamInterval)
+				synctest.Wait()
+				second := nextSnapshot(t, events)
+				if got := second.GeneratedAt.Sub(first.GeneratedAt); got != streamInterval {
+					t.Errorf("second snapshot came %v after the first, want %v", got, streamInterval)
+				}
+			})
 		})
-		events := openStream(t, tn, h, phoneIP)
-
-		synctest.Wait()
-		first := nextSnapshot(t, events)
-		if first.Hub != (api.Hub{Version: "v1.2.3", DNSName: roostHost}) {
-			t.Errorf("hub = %+v, want version v1.2.3 and DNS name %s", first.Hub, roostHost)
-		}
-		if !first.GeneratedAt.Equal(time.Now()) {
-			t.Errorf("generatedAt = %v, want %v", first.GeneratedAt, time.Now())
-		}
-		wantCollectors := []api.Collector{
-			{Name: "Tailscale status", State: api.CollectorStateOK, LastOK: &polledAt},
-			{Name: "Tailscale netcheck", State: api.CollectorStateFailing, Error: "no DERP map"},
-		}
-		if len(first.Collectors) != len(wantCollectors) {
-			t.Fatalf("collectors = %+v, want %+v", first.Collectors, wantCollectors)
-		}
-		for i, c := range first.Collectors {
-			want := wantCollectors[i]
-			if c.Name != want.Name || c.State != want.State || c.Error != want.Error ||
-				(c.LastOK == nil) != (want.LastOK == nil) || c.LastOK != nil && !c.LastOK.Equal(*want.LastOK) {
-				t.Errorf("collector %d = %+v, want %+v", i, c, want)
-			}
-		}
-		wantDevice := api.Device{
-			ID: "roost", Name: "roost", DNSName: roostHost, IPs: []string{roostIP.String(), roostIPv6.String()},
-			Online: true, Self: true,
-		}
-		if len(first.Devices) != 5 {
-			t.Fatalf("got %d devices, want Roost's node and its 4 peers", len(first.Devices))
-		}
-		if d := first.Devices[0]; d.ID != wantDevice.ID || d.Name != wantDevice.Name || !d.Self ||
-			strings.Join(d.IPs, ",") != strings.Join(wantDevice.IPs, ",") {
-			t.Errorf("first device = %+v, want %+v", d, wantDevice)
-		}
-		if d := first.Devices[1]; d.ID != "laptop" || d.Self {
-			t.Errorf("second device = %+v, want the laptop, which isn't Roost's node", d)
-		}
-
-		// Nothing more until the interval passes.
-		select {
-		case e := <-events:
-			t.Fatalf("got event %+v before the interval passed", e)
-		default:
-		}
-		time.Sleep(streamInterval)
-		synctest.Wait()
-		second := nextSnapshot(t, events)
-		if got := second.GeneratedAt.Sub(first.GeneratedAt); got != streamInterval {
-			t.Errorf("second snapshot came %v after the first, want %v", got, streamInterval)
-		}
-	})
+	}
 }
 
 // A caller whose role changes is cut off, so that their client connects

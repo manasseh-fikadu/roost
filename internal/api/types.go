@@ -135,8 +135,9 @@ type Hub struct {
 	// DNSName is the MagicDNS name of Roost's node, such as
 	// roost.example.ts.net.
 	DNSName string `json:"dnsName"`
-	// Tailnet is the tailnet's name, such as example.com.
-	Tailnet string `json:"tailnet"`
+	// Tailnet is the tailnet's name, such as example.com. Only admins get
+	// it: a personal tailnet is named after its owner's email address.
+	Tailnet string `json:"tailnet" roost:"secret"`
 }
 
 // A Collector is a job that gathers what Roost knows, such as polling
@@ -145,8 +146,10 @@ type Collector struct {
 	// Name says what the collector gathers, such as "Tailscale status".
 	Name  string         `json:"name"`
 	State CollectorState `json:"state"`
-	// Error is why the latest run failed, while State is CollectorStateFailing.
-	Error string `json:"error,omitempty"`
+	// Error is why the latest run failed, while State is
+	// CollectorStateFailing. Only admins get it, since it can name paths and
+	// addresses on Roost's machine.
+	Error string `json:"error,omitempty" roost:"secret"`
 	// LastOK is when a run last worked, if one has.
 	LastOK *time.Time `json:"lastOk,omitempty"`
 }

@@ -189,7 +189,8 @@ export interface Hub {
    */
   dnsName: string;
   /**
-   * Tailnet is the tailnet's name, such as example.com.
+   * Tailnet is the tailnet's name, such as example.com. Only admins get
+   * it: a personal tailnet is named after its owner's email address.
    */
   tailnet: string;
 }
@@ -204,7 +205,9 @@ export interface Collector {
   name: string;
   state: CollectorState;
   /**
-   * Error is why the latest run failed, while State is CollectorStateFailing.
+   * Error is why the latest run failed, while State is
+   * CollectorStateFailing. Only admins get it, since it can name paths and
+   * addresses on Roost's machine.
    */
   error?: string;
   /**
