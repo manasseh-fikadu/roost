@@ -208,21 +208,24 @@ func TestFeed_recordsPings(t *testing.T) {
 		go feed.Run(t.Context())
 		synctest.Wait()
 
+		// The server's ping failed on Roost's side, so it isn't a miss.
 		first := time.Now()
 		ping(map[string]tailnet.PingRecord{
 			"laptop": {At: first, Result: &tailnet.PingResult{Latency: 10 * time.Millisecond}},
-			"phone":  {At: first, Err: errors.New("no reply")},
+			"phone":  {At: first, Err: tailnet.ErrNoReply, Misses: 1},
+			"server": {At: first, Err: errors.New("the local API went away")},
 		})
 		time.Sleep(time.Minute)
 		// The phone went offline, so its last ping stays.
 		ping(map[string]tailnet.PingRecord{
 			"laptop": {At: time.Now(), Result: &tailnet.PingResult{Latency: 30 * time.Millisecond}},
-			"phone":  {At: first, Err: errors.New("no reply")},
+			"phone":  {At: first, Err: tailnet.ErrNoReply},
+			"server": {At: time.Now(), Result: &tailnet.PingResult{Latency: 20 * time.Millisecond}},
 		})
 		time.Sleep(time.Minute)
 		synctest.Wait()
 
-		for id, want := range map[string][2]int{"laptop": {2, 2}, "phone": {1, 0}} {
+		for id, want := range map[string][2]int{"laptop": {2, 2}, "phone": {1, 0}, "server": {1, 1}} {
 			buckets, err := st.RTTHistory(t.Context(), id, first.Add(-time.Hour), 24*time.Hour)
 			if err != nil {
 				t.Fatal(err)

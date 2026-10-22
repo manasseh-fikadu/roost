@@ -296,7 +296,8 @@ type Path struct {
 	RTTMs *float64 `json:"rttMs,omitempty"`
 	// PingedAt is when the device was last pinged, if it has been.
 	PingedAt *time.Time `json:"pingedAt,omitempty"`
-	// Unanswered reports whether the latest ping is recent and got no reply.
+	// Unanswered reports whether the device is online but didn't answer the
+	// last two pings, and the latest of them is recent.
 	Unanswered bool `json:"unanswered,omitempty"`
 }
 

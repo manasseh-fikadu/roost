@@ -53,7 +53,7 @@ func TestSnapshot_devices(t *testing.T) {
 		Pings: map[string]tailnet.PingRecord{
 			"mac":  {At: recent, Result: &tailnet.PingResult{Latency: 1500 * time.Microsecond, Endpoint: "203.0.113.2:41641"}},
 			"imac": {At: recent, Result: &tailnet.PingResult{Latency: 80 * time.Millisecond, DERPRegion: "nyc"}},
-			"desk": {At: recent, Err: errors.New("no reply")},
+			"desk": {At: recent, Err: tailnet.ErrNoReply, Misses: 2},
 		},
 	}
 	host := &hostmetrics.Reading{

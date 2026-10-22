@@ -2,6 +2,7 @@ package tailnet
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"maps"
@@ -26,6 +27,10 @@ const (
 	retryInterval = time.Minute
 	// pingFresh is how long a ping's path is trusted over the status's.
 	pingFresh = 5 * time.Minute
+	// unansweredAfter is how many pings in a row an online peer misses
+	// before it counts as not answering. A phone waking up or a laptop on
+	// bad wifi often misses one.
+	unansweredAfter = 2
 )
 
 // Poller asks a Tailnet for its status, pings and connectivity in the
@@ -69,8 +74,12 @@ type PingRecord struct {
 	At time.Time
 	// Result is the reply, or nil if there was none.
 	Result *PingResult
-	// Err is why there was no reply.
+	// Err is why there was no reply. It's ErrNoReply if the peer didn't
+	// answer in time.
 	Err error
+	// Misses is how many pings in a row, up to this one, the peer didn't
+	// answer in time. It starts again from zero while the peer is offline.
+	Misses int
 }
 
 // NewPoller returns a Poller for tn. Nothing is polled until Run.
@@ -197,7 +206,7 @@ func (p *Poller) pingPeers(ctx context.Context) time.Duration {
 			defer cancel()
 			res, err := p.tn.Ping(pingCtx, ip)
 			if err != nil && pingCtx.Err() != nil {
-				err = errNoReply
+				err = ErrNoReply
 			}
 			mu.Lock()
 			results[d.ID] = PingRecord{At: time.Now(), Result: res, Err: err}
@@ -209,14 +218,21 @@ func (p *Poller) pingPeers(ctx context.Context) time.Duration {
 		return PingInterval
 	}
 
-	// Keep the last ping of a peer that's offline now, and forget peers that
-	// have left.
 	defer p.changed()
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	for id, rec := range results {
+		if errors.Is(rec.Err, ErrNoReply) {
+			rec.Misses = p.snap.Pings[id].Misses + 1
+			results[id] = rec
+		}
+	}
+	// Keep the last ping of a peer that's offline now, and forget peers that
+	// have left.
 	for _, d := range st.Peers {
 		if _, ok := results[d.ID]; !ok {
 			if old, ok := p.snap.Pings[d.ID]; ok {
+				old.Misses = 0
 				results[d.ID] = old
 			}
 		}
@@ -250,8 +266,8 @@ func pingAddr(d Device) (netip.Addr, bool) {
 	return netip.Addr{}, false
 }
 
-// errNoReply is the error of a ping that timed out.
-var errNoReply = fmt.Errorf("no reply within %v", pingTimeout)
+// ErrNoReply is the error of a ping that the peer didn't answer in time.
+var ErrNoReply = fmt.Errorf("no reply within %v", pingTimeout)
 
 // checkConnectivity runs a connectivity check and returns when to do it again.
 func (p *Poller) checkConnectivity(ctx context.Context) time.Duration {
@@ -312,8 +328,8 @@ type Path struct {
 	Latency time.Duration
 	// PingedAt is when the device was last pinged, or zero if it hasn't been.
 	PingedAt time.Time
-	// Unanswered reports whether the latest ping is fresh and got no reply,
-	// though the device is online.
+	// Unanswered reports whether the device is online but didn't answer the
+	// last two pings, and the latest of them is fresh.
 	Unanswered bool
 }
 
@@ -340,7 +356,7 @@ func (s Snapshot) PathTo(d Device, now time.Time) Path {
 			path.Kind, path.Endpoint = PathDirect, res.Endpoint
 		}
 	default:
-		path.Unanswered = fresh
+		path.Unanswered = fresh && ping.Misses >= unansweredAfter
 		switch {
 		case d.CurAddr != "":
 			path.Kind, path.Endpoint = PathDirect, d.CurAddr

@@ -5,6 +5,7 @@ import (
 	"compress/flate"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
@@ -225,7 +226,9 @@ func (f *Feed) newEvent(name string, v any) (*event, error) {
 	return &event{raw: raw, deflated: buf.Bytes()}, nil
 }
 
-// recordPings stores the pings sent since the last ones it stored.
+// recordPings stores the pings sent since the last ones it stored. A ping
+// that failed on Roost's side says nothing about the device, so it's left
+// out.
 func (f *Feed) recordPings(ctx context.Context, pings map[string]tailnet.PingRecord) {
 	var (
 		batch []store.Ping
@@ -235,16 +238,20 @@ func (f *Feed) recordPings(ctx context.Context, pings map[string]tailnet.PingRec
 		if !rec.At.After(f.pingsUpTo) {
 			continue
 		}
-		p := store.Ping{DeviceID: id, At: rec.At}
-		if rec.Result != nil {
-			p.Replied, p.RTT = true, rec.Result.Latency
-		}
-		batch = append(batch, p)
 		if rec.At.After(upTo) {
 			upTo = rec.At
 		}
+		p := store.Ping{DeviceID: id, At: rec.At}
+		switch {
+		case rec.Result != nil:
+			p.Replied, p.RTT = true, rec.Result.Latency
+		case !errors.Is(rec.Err, tailnet.ErrNoReply):
+			continue
+		}
+		batch = append(batch, p)
 	}
 	if len(batch) == 0 {
+		f.pingsUpTo = upTo
 		return
 	}
 	if err := f.opts.Store.AddPings(ctx, batch); err != nil {

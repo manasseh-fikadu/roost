@@ -108,8 +108,8 @@ func TestPoller(t *testing.T) {
 		if got := snap.Pings["derp"].Result; !reflect.DeepEqual(got, derp) {
 			t.Errorf("ping of derp = %+v, want %+v", got, derp)
 		}
-		if got := snap.Pings["silent"]; got.Result != nil || got.Err == nil || !strings.Contains(got.Err.Error(), "no reply") {
-			t.Errorf("ping of silent = %+v, want a no-reply error", got)
+		if got := snap.Pings["silent"]; got.Result != nil || !errors.Is(got.Err, tailnet.ErrNoReply) || got.Misses != 1 {
+			t.Errorf("ping of silent = %+v, want its first miss", got)
 		}
 		if _, ok := snap.Pings["offline"]; ok {
 			t.Error("an offline peer was pinged")
@@ -213,6 +213,56 @@ func TestPoller_pingsPeersThatComeOnline(t *testing.T) {
 	})
 }
 
+// A peer counts as not answering once it misses two pings in a row. A ping
+// that fails for another reason isn't a miss, and a peer that was offline
+// starts again from zero.
+func TestPoller_countsMisses(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		tn := tailnettest.New(testStatus(tailnet.StateRunning))
+		tn.SetPing(directIP, &tailnet.PingResult{Endpoint: "203.0.113.2:41641"}, nil)
+		tn.SetPing(derpIP, nil, errors.New("the local API went away"))
+		p := runPoller(t, tn, nil)
+		check := func(when string, wantMisses int, wantUnanswered bool) {
+			t.Helper()
+			snap := p.Snapshot()
+			if got := snap.Pings["derp"]; got.Err == nil || got.Misses != 0 {
+				t.Errorf("%s, derp's ping = %+v, want an error that isn't a miss", when, got)
+			}
+			silent := snap.Pings["silent"]
+			if silent.Misses != wantMisses {
+				t.Errorf("%s, silent has %d misses, want %d", when, silent.Misses, wantMisses)
+			}
+			for _, d := range snap.Status.Peers {
+				if got := snap.PathTo(d, time.Now()).Unanswered; got != (d.ID == "silent" && wantUnanswered) {
+					t.Errorf("%s, PathTo(%s).Unanswered = %v", when, d.ID, got)
+				}
+			}
+		}
+
+		// A round that pings the silent peer ends when its ping times out, 5s
+		// after the round starts. The next round starts a minute after that.
+		time.Sleep(6 * time.Second)
+		synctest.Wait()
+		check("after one round", 1, false)
+		time.Sleep(tailnet.PingInterval + 5*time.Second)
+		synctest.Wait()
+		check("after two rounds", 2, true)
+
+		// The silent peer is offline for a round, which ends at once.
+		st := testStatus(tailnet.StateRunning)
+		st.Peers[2].Online = false
+		tn.SetStatus(st)
+		time.Sleep(tailnet.PingInterval)
+		synctest.Wait()
+		check("while it's offline", 0, false)
+
+		tn.SetStatus(testStatus(tailnet.StateRunning))
+		time.Sleep(tailnet.PingInterval + 5*time.Second)
+		synctest.Wait()
+		check("once it's back", 1, false)
+	})
+}
+
 // Changes tells its receiver each time the snapshot changes, and never
 // blocks the poller.
 func TestPoller_Changes(t *testing.T) {
@@ -299,8 +349,9 @@ func TestSnapshot_PathTo(t *testing.T) {
 			"derp":         {At: recent, Result: &tailnet.PingResult{Latency: 40 * time.Millisecond, DERPRegion: "fra"}},
 			"peerrelay":    {At: recent, Result: &tailnet.PingResult{Latency: 9 * time.Millisecond, PeerRelay: "100.64.0.9:7777:vni:3"}},
 			"stale":        {At: stale, Result: &tailnet.PingResult{Latency: 5 * time.Millisecond, Endpoint: "203.0.113.4:41641"}},
-			"failed":       {At: recent, Err: errors.New("no reply")},
-			"stale-failed": {At: stale, Err: errors.New("no reply")},
+			"failed":       {At: recent, Err: tailnet.ErrNoReply, Misses: 2},
+			"missed-once":  {At: recent, Err: tailnet.ErrNoReply, Misses: 1},
+			"stale-failed": {At: stale, Err: tailnet.ErrNoReply, Misses: 2},
 		},
 	}
 	tests := []struct {
@@ -329,6 +380,10 @@ func TestSnapshot_PathTo(t *testing.T) {
 		{
 			"failed ping falls back to the status", tailnet.Device{ID: "failed", Online: true, CurAddr: "203.0.113.5:41641"},
 			tailnet.Path{Kind: tailnet.PathDirect, Endpoint: "203.0.113.5:41641", PingedAt: recent, Unanswered: true},
+		},
+		{
+			"one missed ping isn't unanswered", tailnet.Device{ID: "missed-once", Online: true, Relay: "nyc"},
+			tailnet.Path{Kind: tailnet.PathDERP, Relay: "nyc", PingedAt: recent},
 		},
 		{
 			"stale failed ping isn't unanswered", tailnet.Device{ID: "stale-failed", Online: true, Relay: "nyc"},

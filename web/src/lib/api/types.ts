@@ -433,7 +433,8 @@ export interface Path {
    */
   pingedAt?: string /* RFC 3339 */;
   /**
-   * Unanswered reports whether the latest ping is recent and got no reply.
+   * Unanswered reports whether the device is online but didn't answer the
+   * last two pings, and the latest of them is recent.
    */
   unanswered?: boolean;
 }
