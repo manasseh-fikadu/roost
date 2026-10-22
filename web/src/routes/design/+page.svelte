@@ -15,6 +15,7 @@
 	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
 	import CodeLine from '#lib/ui/CodeLine.svelte';
+	import DataRow from '#lib/ui/DataRow.svelte';
 	import Dialog from '#lib/ui/Dialog.svelte';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import Field from '#lib/ui/Field.svelte';
@@ -24,12 +25,17 @@
 	import Menu from '#lib/ui/Menu.svelte';
 	import MenuItem from '#lib/ui/MenuItem.svelte';
 	import MenuSeparator from '#lib/ui/MenuSeparator.svelte';
+	import Meter from '#lib/ui/Meter.svelte';
 	import PageHeader from '#lib/ui/PageHeader.svelte';
+	import Segmented from '#lib/ui/Segmented.svelte';
+	import Select from '#lib/ui/Select.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import StatusDot from '#lib/ui/StatusDot.svelte';
 	import StatusPill from '#lib/ui/StatusPill.svelte';
+	import Switch from '#lib/ui/Switch.svelte';
 	import TabPanel from '#lib/ui/TabPanel.svelte';
 	import Tabs from '#lib/ui/Tabs.svelte';
+	import Textarea from '#lib/ui/Textarea.svelte';
 	import Tooltip from '#lib/ui/Tooltip.svelte';
 	import { buttonClass } from '#lib/ui/button.js';
 
@@ -51,6 +57,10 @@
 	}));
 
 	let name = $state('');
+	let kind = $state('');
+	let notes = $state('');
+	let alerts = $state(true);
+	let range = $state('24h');
 	let dialogOpen = $state(false);
 	let tab = $state('cpu');
 	let saving = $state(false);
@@ -133,6 +143,24 @@
 			<Field label="Display name" hint="Shown in place of the hostname.">
 				<Input bind:value={name} placeholder="MacBook Pro" />
 			</Field>
+			<Field label="Type">
+				<Select bind:value={kind}>
+					<option value="">Detect automatically</option>
+					<option value="laptop">Laptop</option>
+					<option value="server">Server</option>
+				</Select>
+			</Field>
+			<Field label="Notes">
+				<Textarea bind:value={notes} placeholder="Where it lives, what runs on it…" />
+			</Field>
+			<div class="flex flex-wrap items-center gap-4">
+				<Switch bind:checked={alerts} label="Alert when offline" />
+				<Segmented
+					bind:value={range}
+					label="Time range"
+					options={['1h', '6h', '24h', '7d'].map((r) => ({ value: r, label: r }))}
+				/>
+			</div>
 			<CodeLine command="roost admin add-viewer bob@example.com" />
 			<p class="text-[13px] text-fg-subtle">
 				Keys: <Kbd>⌘</Kbd>
@@ -230,6 +258,18 @@
 					</div>
 				</TabPanel>
 			</Tabs>
+		</div>
+	</Card>
+
+	<Card title="Facts and meters" description="Rows in a card's list, and how full something is.">
+		<dl>
+			<DataRow label="Tailnet IP" copy="100.64.0.2">100.64.0.2</DataRow>
+			<DataRow label="Path">direct</DataRow>
+		</dl>
+		<div class="space-y-3 p-4">
+			{#each [42, 86, 97, null] as value, i (i)}
+				<Meter {value} warn={85} crit={95} />
+			{/each}
 		</div>
 	</Card>
 
