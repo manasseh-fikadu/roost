@@ -1,52 +1,66 @@
 <script lang="ts">
-	import { resolve } from '$app/paths';
-	import { deviceIcon, deviceStatus, shortName } from '#lib/device.js';
+	import Monitor from '@lucide/svelte/icons/monitor';
+	import type { Status } from '#lib/api/types.js';
+	import DevicesTable from '#lib/devices/DevicesTable.svelte';
 	import { plural } from '#lib/format.js';
 	import { live } from '#lib/live.svelte.js';
-	import Badge from '#lib/ui/Badge.svelte';
+	import { statusMeta } from '#lib/status.js';
 	import Card from '#lib/ui/Card.svelte';
+	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import PageHeader from '#lib/ui/PageHeader.svelte';
+	import Segmented from '#lib/ui/Segmented.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
-	import StatusPill from '#lib/ui/StatusPill.svelte';
+	import StatusDot from '#lib/ui/StatusDot.svelte';
+
+	type Filter = 'all' | Status;
+
+	let filter: Filter = $state('all');
 
 	const devices = $derived(live.snapshot?.devices ?? []);
+	const shown = $derived(filter === 'all' ? devices : devices.filter((d) => d.status === filter));
+	const now = $derived(live.snapshot ? Date.parse(live.snapshot.generatedAt) : Date.now());
+
+	function count(s: Status) {
+		return devices.filter((d) => d.status === s).length;
+	}
+
+	const options = $derived([
+		{ value: 'all' as Filter, label: `All ${devices.length}` },
+		...(['online', 'attention', 'offline'] as const).map((s) => ({
+			value: s as Filter,
+			label: `${statusMeta[s].label}: ${count(s)}`
+		}))
+	]);
 </script>
 
 <PageHeader
 	title="Devices"
 	description={live.snapshot
-		? `${plural(devices.length, 'machine')} on the tailnet`
+		? `${plural(devices.length, 'machine')} on the tailnet, and the path from the hub to each.`
 		: 'Connecting to the hub…'}
-/>
-
-<Card bodyClass="divide-y divide-line">
-	{#each devices as d (d.id)}
-		{@const Icon = deviceIcon(d)}
-		<a
-			href={resolve('/devices/[id]', { id: d.id })}
-			class="flex items-center gap-3 px-4 py-3 transition-colors hover:bg-hover/50"
-		>
-			<span
-				class="flex size-8 shrink-0 items-center justify-center rounded-md border border-line-strong bg-raised text-fg-subtle"
-			>
-				<Icon class="size-4" strokeWidth={1.6} />
-			</span>
-			<span class="min-w-0 flex-1">
-				<span class="flex items-center gap-2">
-					<span class="truncate text-[14px] font-medium text-fg">{d.name}</span>
-					{#if d.self}
-						<Badge>This hub</Badge>
+>
+	{#snippet actions()}
+		{#if live.snapshot}
+			<Segmented bind:value={filter} {options} label="Show devices">
+				{#snippet option(o)}
+					{#if o.value === 'all'}
+						{o.label}
+					{:else}
+						<span class="flex items-center gap-1.5">
+							<StatusDot status={o.value} />
+							<span class="num">{count(o.value)}</span>
+						</span>
 					{/if}
-				</span>
-				<span class="block truncate font-mono text-[11.5px] text-fg-faint">
-					{shortName(d)} · {d.ips[0] ?? 'no address'}
-				</span>
-			</span>
-			<StatusPill status={deviceStatus(d)} />
-		</a>
-	{:else}
+				{/snippet}
+			</Segmented>
+		{/if}
+	{/snippet}
+</PageHeader>
+
+<Card>
+	{#if !live.snapshot}
 		{#each [1, 2, 3] as i (i)}
-			<div class="flex items-center gap-3 px-4 py-3">
+			<div class="flex items-center gap-3 border-b border-line px-4 py-3 last:border-0">
 				<Skeleton class="size-8" />
 				<div class="flex-1 space-y-1.5">
 					<Skeleton class="h-4 w-40" />
@@ -54,8 +68,20 @@
 				</div>
 			</div>
 		{/each}
-	{/each}
+	{:else if shown.length}
+		<DevicesTable devices={shown} {now} detailed />
+	{:else}
+		<EmptyState title="No devices here" icon={Monitor}>
+			{filter === 'all' ? 'Nothing is on the tailnet yet.' : 'No device has this status now.'}
+		</EmptyState>
+	{/if}
 </Card>
 <p class="mt-4 text-[13px] text-fg-subtle">
-	Paths, latency, metrics, agents and settings for each device come with #23 and #24.
+	Roost measures the machine it runs on. The agent, coming with
+	<a
+		href="https://github.com/manasseh-fikadu/roost/issues/24"
+		target="_blank"
+		rel="noreferrer"
+		class="text-fg-muted underline decoration-line-heavy underline-offset-4 hover:text-fg">#24</a
+	>, adds CPU, memory and disk for the others.
 </p>

@@ -1,7 +1,9 @@
 // How Roost shows the state of a device, service or check.
 
-/** The state of something Roost watches. */
-export type Status = 'online' | 'attention' | 'offline' | 'unknown';
+import type { Status } from './api/types.js';
+
+/** The state of something Roost watches. The hub sends it. */
+export type { Status };
 
 /** A color for badges and pills. */
 export type Tone = 'green' | 'amber' | 'red' | 'blue' | 'purple' | 'gray';
