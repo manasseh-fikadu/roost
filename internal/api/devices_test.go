@@ -43,6 +43,15 @@ func TestSetDeviceSettings(t *testing.T) {
 			want:     api.DeviceSettings{AlertOffline: true},
 		},
 		{
+			// Leaving alerting out means the default, not off.
+			name:     "alerting left out",
+			device:   "laptop",
+			body:     `{"displayName":"Work laptop"}`,
+			wantCode: http.StatusOK,
+			want:     api.DeviceSettings{DisplayName: "Work laptop", AlertOffline: true},
+			stored:   store.DeviceSettings{DisplayName: "Work laptop"},
+		},
+		{
 			name:     "Roost's own node",
 			device:   "roost",
 			body:     `{"displayName":"Hub","alertOffline":true,"notes":""}`,

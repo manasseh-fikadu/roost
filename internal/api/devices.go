@@ -58,7 +58,7 @@ func (h *handler) setDeviceSettings(w http.ResponseWriter, r *http.Request) {
 		h.notFound(w, r)
 		return
 	}
-	var body DeviceSettings
+	var body SetDeviceSettings
 	if !h.readJSON(w, r, &body) {
 		return
 	}
@@ -84,7 +84,7 @@ func (h *handler) setDeviceSettings(w http.ResponseWriter, r *http.Request) {
 // cleanSettings checks the settings an admin sent for d, and returns them as
 // the store keeps them. Alerting when d goes offline is only stored if it
 // differs from the default, so the default can change later.
-func cleanSettings(s DeviceSettings, d tailnet.Device) (store.DeviceSettings, error) {
+func cleanSettings(s SetDeviceSettings, d tailnet.Device) (store.DeviceSettings, error) {
 	name := strings.TrimSpace(s.DisplayName)
 	switch {
 	case utf8.RuneCountInString(name) > maxDisplayName:
@@ -97,8 +97,8 @@ func cleanSettings(s DeviceSettings, d tailnet.Device) (store.DeviceSettings, er
 		return store.DeviceSettings{}, errors.New("the notes are too long")
 	}
 	out := store.DeviceSettings{DisplayName: name, Kind: string(s.Kind), Notes: strings.TrimRightFunc(s.Notes, unicode.IsSpace)}
-	if s.AlertOffline != defaultAlertOffline(d) {
-		out.AlertOffline = &s.AlertOffline
+	if s.AlertOffline != nil && *s.AlertOffline != defaultAlertOffline(d) {
+		out.AlertOffline = s.AlertOffline
 	}
 	return out, nil
 }

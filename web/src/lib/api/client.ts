@@ -1,5 +1,12 @@
 import { toast } from '#lib/toast.svelte.js';
-import type { DeviceHistory, DeviceSettings, ErrorBody, Health, Me } from './types.js';
+import type {
+	DeviceHistory,
+	DeviceSettings,
+	ErrorBody,
+	Health,
+	Me,
+	SetDeviceSettings
+} from './types.js';
 
 /**
  * Roost refuses requests that change things unless they carry this header,
@@ -93,7 +100,10 @@ export function getDeviceHistory(id: string, range: HistoryRange): Promise<Devic
 }
 
 /** Replaces a device's settings, and says so in a toast. Admins only. */
-export function putDeviceSettings(id: string, settings: DeviceSettings): Promise<DeviceSettings> {
+export function putDeviceSettings(
+	id: string,
+	settings: SetDeviceSettings
+): Promise<DeviceSettings> {
 	return mutate('PUT', `devices/${encodeURIComponent(id)}/settings`, settings, {
 		success: 'Saved'
 	});

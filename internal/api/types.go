@@ -379,6 +379,16 @@ type DeviceSettings struct {
 	Notes string `json:"notes"`
 }
 
+// SetDeviceSettings is the body of PUT /api/devices/{id}/settings, which
+// replaces a device's settings. A field that's left out gets its default.
+type SetDeviceSettings struct {
+	DisplayName string     `json:"displayName,omitempty"`
+	Kind        DeviceKind `json:"kind,omitempty"`
+	// AlertOffline is on if it's left out, except for phones and tablets.
+	AlertOffline *bool  `json:"alertOffline,omitempty"`
+	Notes        string `json:"notes,omitempty"`
+}
+
 // DeviceHistory is the response to GET /api/devices/{id}/history?range=,
 // where the range is 1h, 6h, 24h or 7d.
 type DeviceHistory struct {

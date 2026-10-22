@@ -559,6 +559,19 @@ export interface DeviceSettings {
   notes: string;
 }
 /**
+ * SetDeviceSettings is the body of PUT /api/devices/{id}/settings, which
+ * replaces a device's settings. A field that's left out gets its default.
+ */
+export interface SetDeviceSettings {
+  displayName?: string;
+  kind?: DeviceKind;
+  /**
+   * AlertOffline is on if it's left out, except for phones and tablets.
+   */
+  alertOffline?: boolean;
+  notes?: string;
+}
+/**
  * DeviceHistory is the response to GET /api/devices/{id}/history?range=,
  * where the range is 1h, 6h, 24h or 7d.
  */
