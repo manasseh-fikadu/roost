@@ -8,12 +8,15 @@
 	const isLive = $derived(live.connection === 'live');
 </script>
 
-<div class="hidden items-center gap-2 font-mono text-[11.5px] text-fg-subtle md:flex" role="status">
+<div class="hidden items-center gap-2 font-mono text-[11.5px] text-fg-subtle md:flex">
 	<StatusDot
 		status={isLive ? 'online' : live.connection === 'connecting' ? 'unknown' : 'attention'}
 		pulse={isLive}
 	/>
-	<span class={isLive ? 'text-fg-muted' : 'text-amber-fg'}>{labels[live.connection]}</span>
+	<!-- Only the state is announced: the time next to it changes with every snapshot. -->
+	<span class={isLive ? 'text-fg-muted' : 'text-amber-fg'} role="status"
+		>{labels[live.connection]}</span
+	>
 	{#if live.receivedAt > 0}
 		<span class="text-fg-faint">Updated {clock(live.receivedAt)}</span>
 	{/if}
