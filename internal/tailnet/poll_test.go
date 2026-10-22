@@ -187,6 +187,32 @@ func TestPoller_Polled(t *testing.T) {
 	})
 }
 
+// Right after a node starts, its peers can look offline. They're pinged as
+// soon as they're online, not a whole interval later.
+func TestPoller_pingsPeersThatComeOnline(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		st := testStatus(tailnet.StateRunning)
+		for i := range st.Peers {
+			st.Peers[i].Online = false
+		}
+		tn := tailnettest.New(st)
+		tn.SetPing(directIP, &tailnet.PingResult{Endpoint: "203.0.113.2:41641"}, nil)
+		p := runPoller(t, tn, nil)
+		synctest.Wait()
+
+		// The next status poll sees them online, and the round of pings
+		// after it ends when the silent peer's ping times out, well before a
+		// whole PingInterval.
+		tn.SetStatus(testStatus(tailnet.StateRunning))
+		wait := 2*tailnet.StatusInterval + 6*time.Second
+		time.Sleep(wait)
+		synctest.Wait()
+		if p.Snapshot().Pings["direct"].Result == nil {
+			t.Errorf("a peer that came online wasn't pinged within %v", wait)
+		}
+	})
+}
+
 // Changes tells its receiver each time the snapshot changes, and never
 // blocks the poller.
 func TestPoller_Changes(t *testing.T) {

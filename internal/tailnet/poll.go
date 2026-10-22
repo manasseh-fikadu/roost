@@ -183,11 +183,13 @@ func (p *Poller) pingPeers(ctx context.Context) time.Duration {
 		wg      sync.WaitGroup
 		slots   = make(chan struct{}, maxPings)
 	)
+	pinged := 0
 	for _, d := range st.Peers {
 		ip, ok := pingAddr(d)
 		if !d.Online || !ok {
 			continue
 		}
+		pinged++
 		wg.Go(func() {
 			slots <- struct{}{}
 			defer func() { <-slots }()
@@ -220,6 +222,11 @@ func (p *Poller) pingPeers(ctx context.Context) time.Duration {
 		}
 	}
 	p.snap.Pings = results
+	if pinged == 0 {
+		// Peers can look offline for a moment after the node starts, so
+		// look again soon.
+		return StatusInterval
+	}
 	return PingInterval
 }
 
