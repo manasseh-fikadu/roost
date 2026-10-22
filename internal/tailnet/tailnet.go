@@ -87,6 +87,7 @@ type Device struct {
 	Owner string
 	Tags  []string
 	// Online reports whether the node is connected to the control server.
+	// Roost's own node is online while the State is StateRunning.
 	Online bool
 	// LastSeen is when an offline node was last connected to the control
 	// server. It's zero while the node is online.
