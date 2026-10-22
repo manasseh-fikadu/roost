@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -18,21 +19,20 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
 )
 
-// streamInterval is how often the stream sends a snapshot.
-const streamInterval = 10 * time.Second
-
 func TestStream(t *testing.T) {
 	for _, tt := range []struct {
 		name string
 		from netip.Addr
+		gzip bool
 		// What the caller gets of the tailnet's name and of the failing
 		// collector's error.
 		tailnet, netcheckErr string
 	}{
-		{name: "admin", from: laptopIP, tailnet: "example.com", netcheckErr: "no DERP map"},
+		{name: "admin", from: laptopIP, gzip: true, tailnet: "example.com", netcheckErr: "no DERP map"},
 		// A personal tailnet is named after its owner's email address, and an
 		// error can name paths and addresses on Roost's machine.
-		{name: "viewer", from: phoneIP},
+		{name: "viewer", from: phoneIP, gzip: true},
+		{name: "without gzip", from: laptopIP, tailnet: "example.com", netcheckErr: "no DERP map"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			// The store's goroutines start outside the bubble, so it can end without them.
@@ -40,17 +40,16 @@ func TestStream(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
 				tn := testTailnet()
 				polledAt := time.Now()
-				h := api.New(api.Options{
-					Version: "v1.2.3",
-					WhoIs:   tn.WhoIs,
-					Snapshot: func() tailnet.Snapshot {
-						status, _ := tn.Status(context.Background())
-						status.Tailnet = "example.com"
-						return tailnet.Snapshot{Status: status, StatusAt: polledAt, ConnectivityErr: errors.New("no DERP map")}
-					},
-					Store: st,
-				})
-				events := openStream(t, tn, h, tt.from)
+				snapshot := func() tailnet.Snapshot {
+					status, _ := tn.Status(context.Background())
+					status.Tailnet = "example.com"
+					return tailnet.Snapshot{Status: status, StatusAt: polledAt, ConnectivityErr: errors.New("no DERP map")}
+				}
+				changed := make(chan struct{}, 1)
+				feed := api.NewFeed(api.FeedOptions{Version: "v1.2.3", Tailnet: snapshot, TailnetChanged: changed, Store: st})
+				go feed.Run(t.Context())
+				h := api.New(api.Options{Version: "v1.2.3", WhoIs: tn.WhoIs, Snapshot: snapshot, Feed: feed, Store: st})
+				events := openStream(t, tn, h, tt.from, tt.gzip)
 
 				synctest.Wait()
 				first := nextSnapshot(t, events)
@@ -74,36 +73,78 @@ func TestStream(t *testing.T) {
 						t.Errorf("collector %d = %+v, want %+v", i, c, want)
 					}
 				}
-				wantDevice := api.Device{
-					ID: "roost", Name: "roost", DNSName: roostHost, IPs: []string{roostIP.String(), roostIPv6.String()},
-					Online: true, Self: true,
+				// Roost's node, then servers, laptops and the rest, by name.
+				if got, want := deviceIDs(first), []string{"roost", "server", "laptop", "phone", "tablet"}; !slices.Equal(got, want) {
+					t.Fatalf("devices = %q, want %q", got, want)
 				}
-				if len(first.Devices) != 5 {
-					t.Fatalf("got %d devices, want Roost's node and its 4 peers", len(first.Devices))
-				}
-				if d := first.Devices[0]; d.ID != wantDevice.ID || d.Name != wantDevice.Name || !d.Self ||
-					strings.Join(d.IPs, ",") != strings.Join(wantDevice.IPs, ",") {
-					t.Errorf("first device = %+v, want %+v", d, wantDevice)
-				}
-				if d := first.Devices[1]; d.ID != "laptop" || d.Self {
-					t.Errorf("second device = %+v, want the laptop, which isn't Roost's node", d)
+				if d := first.Devices[0]; d.Name != "roost" || !d.Self || strings.Join(d.IPs, ",") != roostIP.String()+","+roostIPv6.String() {
+					t.Errorf("first device = %+v, want Roost's node", d)
 				}
 
-				// Nothing more until the interval passes.
+				// Nothing more until something changes.
+				time.Sleep(api.FeedHeartbeat / 2)
+				synctest.Wait()
 				select {
 				case e := <-events:
-					t.Fatalf("got event %+v before the interval passed", e)
+					t.Fatalf("got event %+v before anything changed", e)
 				default:
 				}
-				time.Sleep(streamInterval)
+				status, _ := tn.Status(context.Background())
+				status.Peers[0].Online = false // the laptop
+				tn.SetStatus(*status)
+				changed <- struct{}{}
 				synctest.Wait()
 				second := nextSnapshot(t, events)
-				if got := second.GeneratedAt.Sub(first.GeneratedAt); got != streamInterval {
-					t.Errorf("second snapshot came %v after the first, want %v", got, streamInterval)
+				if d := findDevice(t, second, "laptop"); d.Online || d.Status != api.StatusOffline {
+					t.Errorf("laptop after it left = %+v, want it offline", d)
+				}
+
+				// With nothing changing, a snapshot still comes now and then,
+				// so the client knows the stream is alive.
+				time.Sleep(api.FeedHeartbeat)
+				synctest.Wait()
+				third := nextSnapshot(t, events)
+				if got := third.GeneratedAt.Sub(second.GeneratedAt); got != api.FeedHeartbeat {
+					t.Errorf("the next snapshot came %v later, want %v", got, api.FeedHeartbeat)
 				}
 			})
 		})
 	}
+}
+
+// Changes that come close together share one snapshot.
+func TestStream_gathersChanges(t *testing.T) {
+	st := testStore(t)
+	synctest.Test(t, func(t *testing.T) {
+		tn := testTailnet()
+		changed := make(chan struct{}, 1)
+		opts := withStore(tn, st, api.Options{})
+		opts.Feed = api.NewFeed(api.FeedOptions{Tailnet: opts.Snapshot, TailnetChanged: changed, Store: st})
+		go opts.Feed.Run(t.Context())
+		events := openStream(t, tn, api.New(opts), laptopIP, true)
+		synctest.Wait()
+		first := nextSnapshot(t, events)
+
+		for range 5 {
+			// Like the poller, tell of a change without waiting.
+			select {
+			case changed <- struct{}{}:
+			default:
+			}
+			time.Sleep(api.FeedGap / 10)
+		}
+		time.Sleep(api.FeedGap)
+		synctest.Wait()
+		second := nextSnapshot(t, events)
+		if got := second.GeneratedAt.Sub(first.GeneratedAt); got != api.FeedGap {
+			t.Errorf("the second snapshot came %v after the first, want %v", got, api.FeedGap)
+		}
+		select {
+		case e := <-events:
+			t.Errorf("got a third event %+v, want the changes to share the second", e)
+		default:
+		}
+	})
 }
 
 // A caller whose role changes is cut off, so that their client connects
@@ -113,14 +154,14 @@ func TestStream_roleChange(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		tn := testTailnet()
 		h := api.New(withStore(tn, st, api.Options{}))
-		events := openStream(t, tn, h, phoneIP)
+		events := openStream(t, tn, h, phoneIP, true)
 		synctest.Wait()
 		nextSnapshot(t, events)
 
 		if _, err := st.RemoveUser(context.Background(), bob); err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(streamInterval)
+		time.Sleep(api.RoleCheckInterval)
 		synctest.Wait()
 		if e, ok := <-events; ok {
 			t.Errorf("got event %+v after bob lost his role, want the stream to end", e)
@@ -135,16 +176,24 @@ func TestStream_roleLookupFails(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		tn := testTailnet()
 		h := api.New(withStore(tn, st, api.Options{}))
-		events := openStream(t, tn, h, phoneIP)
+		events := openStream(t, tn, h, phoneIP, true)
 		synctest.Wait()
 		nextSnapshot(t, events)
 
 		if err := st.Close(); err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(streamInterval)
+		time.Sleep(api.RoleCheckInterval)
 		synctest.Wait()
-		nextSnapshot(t, events)
+		select {
+		case e, ok := <-events:
+			if !ok {
+				t.Error("the stream ended when the store couldn't say what bob's role is")
+			} else {
+				t.Errorf("got event %+v, want nothing", e)
+			}
+		default:
+		}
 	})
 }
 
@@ -154,7 +203,7 @@ func TestStream_stopping(t *testing.T) {
 		tn := testTailnet()
 		stopping := make(chan struct{})
 		h := api.New(withStore(tn, st, api.Options{Stopping: stopping}))
-		events := openStream(t, tn, h, laptopIP)
+		events := openStream(t, tn, h, laptopIP, true)
 		synctest.Wait()
 		nextSnapshot(t, events)
 
@@ -173,8 +222,9 @@ type event struct {
 
 // openStream serves h on tn, opens GET /api/stream from the device at from,
 // and returns the events it sends. The channel is closed when the stream
-// ends.
-func openStream(t *testing.T, tn *tailnettest.Tailnet, h http.Handler, from netip.Addr) <-chan event {
+// ends. If gzip is true, the client asks for gzip, and the stream must use
+// it.
+func openStream(t *testing.T, tn *tailnettest.Tailnet, h http.Handler, from netip.Addr, gzip bool) <-chan event {
 	t.Helper()
 	ln, _, err := tn.Listen(t.Context())
 	if err != nil {
@@ -190,11 +240,18 @@ func openStream(t *testing.T, tn *tailnettest.Tailnet, h http.Handler, from neti
 	if err != nil {
 		t.Fatal(err)
 	}
+	if !gzip {
+		// The client asks for gzip and decodes it unless told otherwise.
+		req.Header.Set("Accept-Encoding", "identity")
+	}
 	res, err := client.Do(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = res.Body.Close() })
+	if res.Uncompressed != gzip {
+		t.Errorf("the stream used gzip: %v, want %v", res.Uncompressed, gzip)
+	}
 	if res.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(res.Body)
 		t.Fatalf("GET /api/stream = %d %s, want 200", res.StatusCode, body)
@@ -244,4 +301,23 @@ func nextSnapshot(t *testing.T, events <-chan event) api.Snapshot {
 		t.Fatalf("decode snapshot %q: %v", e.data, err)
 	}
 	return s
+}
+
+func deviceIDs(s api.Snapshot) []string {
+	ids := make([]string, len(s.Devices))
+	for i, d := range s.Devices {
+		ids[i] = d.ID
+	}
+	return ids
+}
+
+func findDevice(t *testing.T, s api.Snapshot, id string) api.Device {
+	t.Helper()
+	for _, d := range s.Devices {
+		if d.ID == id {
+			return d
+		}
+	}
+	t.Fatalf("no device %q in the snapshot", id)
+	return api.Device{}
 }

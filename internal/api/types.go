@@ -118,16 +118,19 @@ type SetRole struct {
 }
 
 // Snapshot is the data of each "snapshot" event on GET /api/stream: what
-// Roost knows at one moment. The stream sends one as soon as it opens and
-// another every few seconds, and the web app keeps the latest.
+// Roost knows at one moment. The hub builds one each time something changes,
+// at most once a second, and at least every few seconds. The stream sends the
+// latest as soon as it opens, then each new one, and the web app keeps the
+// latest.
 type Snapshot struct {
 	// GeneratedAt is when the hub made the snapshot.
 	GeneratedAt time.Time `json:"generatedAt"`
 	Hub         Hub       `json:"hub"`
 	// Collectors are the jobs that gather what Roost knows, in a fixed order.
 	Collectors []Collector `json:"collectors"`
-	// Devices are the nodes on the tailnet: Roost's own, then its peers in
-	// the order of their DNS names.
+	Uplink     Uplink      `json:"uplink"`
+	// Devices are the nodes on the tailnet: Roost's own first, then servers,
+	// laptops, desktops, tablets, phones and others, each by name.
 	Devices []Device `json:"devices"`
 }
 
@@ -170,21 +173,229 @@ const (
 	CollectorStateWaiting CollectorState = "waiting"
 )
 
+// Uplink is how Roost's machine reaches the internet and Tailscale's DERP
+// relays, from Tailscale's latest connectivity check.
+type Uplink struct {
+	// CheckedAt is when connectivity was last checked, if it has been. The
+	// other fields are empty until then.
+	CheckedAt *time.Time `json:"checkedAt,omitempty"`
+	// UDP reports whether UDP gets out, which direct connections need.
+	UDP bool `json:"udp"`
+	// IPv4 and IPv6 report whether the internet answered over each.
+	IPv4 bool `json:"ipv4"`
+	IPv6 bool `json:"ipv6"`
+	// PublicIP is the address the internet sees Roost's machine at, IPv4 if
+	// it has one. Only admins get it.
+	PublicIP string `json:"publicIp,omitempty" roost:"secret"`
+	// DERP is the relay region with the lowest latency, if any answered.
+	DERP *DERPRegion `json:"derp,omitempty"`
+}
+
+// DERPRegion is a region of Tailscale's DERP relay servers.
+type DERPRegion struct {
+	// Code is the region's short name, such as "fra".
+	Code string `json:"code"`
+	// Name is the region's full name, such as "Frankfurt".
+	Name string `json:"name"`
+	// LatencyMs is the round trip to the region, in milliseconds.
+	LatencyMs float64 `json:"latencyMs"`
+}
+
 // A Device is a node on the tailnet.
 type Device struct {
 	// ID is the node's stable ID.
 	ID string `json:"id"`
-	// Name is the name the machine reports, or the first part of its DNS
-	// name if it reports none. It may not be unique.
+	// Name is the display name an admin gave the device, or else HostName,
+	// or else the first part of DNSName. It may not be unique.
 	Name string `json:"name"`
+	// HostName is the name the machine reports.
+	HostName string `json:"hostName"`
 	// DNSName is the node's MagicDNS name, such as laptop.example.ts.net.
 	DNSName string `json:"dnsName"`
 	// OS is the node's operating system, as Tailscale names it, such as
 	// "linux" or "macOS".
-	OS  string   `json:"os"`
-	IPs []string `json:"ips"`
+	OS string `json:"os"`
+	// Kind is what sort of machine it is: the kind an admin set, or else
+	// Roost's guess.
+	Kind DeviceKind `json:"kind"`
+	IPs  []string   `json:"ips"`
 	// Online reports whether the node is connected to Tailscale.
 	Online bool `json:"online"`
+	// LastSeen is when an offline node was last connected, if Tailscale
+	// knows.
+	LastSeen *time.Time `json:"lastSeen,omitempty"`
 	// Self marks Roost's own node.
-	Self bool `json:"self,omitempty"`
+	Self   bool   `json:"self,omitempty"`
+	Status Status `json:"status"`
+	// StatusReason says why the device has its status, such as
+	// "Disk 91% full".
+	StatusReason string `json:"statusReason"`
+	Path         Path   `json:"path"`
+	// RxBytes and TxBytes count the traffic between Roost's node and this
+	// one since Roost's node started.
+	RxBytes int64 `json:"rxBytes"`
+	TxBytes int64 `json:"txBytes"`
+	// KeyExpiry is when the node's Tailscale key expires, unless expiry is
+	// off for it.
+	KeyExpiry *time.Time `json:"keyExpiry,omitempty"`
+	// Created is when the node joined the tailnet.
+	Created *time.Time `json:"created,omitempty"`
+	// ExitNode reports whether Roost's traffic to the internet goes through
+	// this node.
+	ExitNode bool `json:"exitNode,omitempty"`
+	// Metrics are the device's latest metrics, if Roost measures it. Roost
+	// measures its own machine on Linux. Other machines need the agent.
+	Metrics *Metrics `json:"metrics,omitempty"`
+	// Info is what the machine is, if Roost measures it.
+	Info     *DeviceInfo    `json:"info,omitempty"`
+	Settings DeviceSettings `json:"settings"`
+}
+
+// Status is the state of something Roost watches, such as a device.
+type Status string
+
+// The states of a Status.
+const (
+	StatusOnline Status = "online"
+	// StatusAttention means it works, but something needs a look, such as a
+	// disk that's nearly full.
+	StatusAttention Status = "attention"
+	StatusOffline   Status = "offline"
+	StatusUnknown   Status = "unknown"
+)
+
+// DeviceKind is what sort of machine a device is.
+type DeviceKind string
+
+// The kinds of Device, in the order the devices are listed.
+const (
+	DeviceKindServer  DeviceKind = "server"
+	DeviceKindLaptop  DeviceKind = "laptop"
+	DeviceKindDesktop DeviceKind = "desktop"
+	DeviceKindTablet  DeviceKind = "tablet"
+	DeviceKindPhone   DeviceKind = "phone"
+	DeviceKindOther   DeviceKind = "other"
+)
+
+// Path is how traffic gets from Roost's node to a device.
+type Path struct {
+	Kind PathKind `json:"kind"`
+	// Endpoint is the device's public ip:port on a direct path. Only admins
+	// get it, since it says where the device is on the internet.
+	Endpoint string `json:"endpoint,omitempty" roost:"secret"`
+	// DERP is the code of the DERP region that relays traffic, on a DERP
+	// path.
+	DERP string `json:"derp,omitempty"`
+	// PeerRelay is the ip:port:vni of the node that relays traffic, on a
+	// peer relay path. Only admins get it.
+	PeerRelay string `json:"peerRelay,omitempty" roost:"secret"`
+	// HomeDERP is the code of the device's home DERP region, such as "fra".
+	HomeDERP string `json:"homeDerp,omitempty"`
+	// RTTMs is the round trip of the latest ping in milliseconds, if that
+	// ping is recent and got a reply.
+	RTTMs *float64 `json:"rttMs,omitempty"`
+	// PingedAt is when the device was last pinged, if it has been.
+	PingedAt *time.Time `json:"pingedAt,omitempty"`
+	// Unanswered reports whether the latest ping is recent and got no reply.
+	Unanswered bool `json:"unanswered,omitempty"`
+}
+
+// PathKind says how traffic gets from Roost's node to a device.
+type PathKind string
+
+// The kinds of Path.
+const (
+	// PathKindSelf is Roost's own node.
+	PathKindSelf PathKind = "self"
+	// PathKindDirect is a peer-to-peer WireGuard connection.
+	PathKindDirect PathKind = "direct"
+	// PathKindDERP is relayed through one of Tailscale's DERP servers.
+	PathKindDERP PathKind = "derp"
+	// PathKindPeerRelay is relayed through another node on the tailnet.
+	PathKindPeerRelay PathKind = "peer-relay"
+	// PathKindOffline means the device isn't connected.
+	PathKindOffline PathKind = "offline"
+)
+
+// Metrics are what a machine was doing at one moment. A field is missing if
+// the machine doesn't say.
+type Metrics struct {
+	At time.Time `json:"at"`
+	// CPU is the percentage of time the CPUs were busy lately.
+	CPU *float64 `json:"cpu,omitempty"`
+	// Load is the 1, 5 and 15 minute load averages.
+	Load []float64 `json:"load,omitempty"`
+	// Procs is how many processes there are.
+	Procs  int    `json:"procs,omitempty"`
+	Memory *Usage `json:"memory,omitempty"`
+	Swap   *Usage `json:"swap,omitempty"`
+	// Disk is the file system that holds /.
+	Disk *Usage `json:"disk,omitempty"`
+	// NetRx and NetTx are bytes per second received and sent lately.
+	NetRx *float64 `json:"netRx,omitempty"`
+	NetTx *float64 `json:"netTx,omitempty"`
+	// Temp is the hottest sensor, in degrees Celsius.
+	Temp *float64 `json:"temp,omitempty"`
+	// Uptime is how long since the machine booted, in seconds.
+	Uptime int64 `json:"uptime,omitempty"`
+}
+
+// Usage is how much of something is used, in bytes.
+type Usage struct {
+	Used  uint64 `json:"used"`
+	Total uint64 `json:"total"`
+}
+
+// DeviceInfo is what a machine is.
+type DeviceInfo struct {
+	Hostname string `json:"hostname,omitempty"`
+	// OSVersion is the operating system's name and version, such as
+	// "Debian GNU/Linux 13 (trixie)".
+	OSVersion string `json:"osVersion,omitempty"`
+	Kernel    string `json:"kernel,omitempty"`
+	// Model is the machine's maker and product, if it says.
+	Model string `json:"model,omitempty"`
+	// Arch is the CPU architecture, such as x86_64.
+	Arch  string `json:"arch,omitempty"`
+	Cores int    `json:"cores,omitempty"`
+}
+
+// DeviceSettings are what admins set for a device. They're part of each
+// Device, and PUT /api/devices/{id}/settings replaces them.
+type DeviceSettings struct {
+	// DisplayName is shown instead of the name the machine reports, unless
+	// it's empty.
+	DisplayName string `json:"displayName"`
+	// Kind is what sort of machine an admin says the device is. If it's
+	// empty, Roost guesses.
+	Kind DeviceKind `json:"kind,omitempty"`
+	// AlertOffline says whether to raise an alert when the device goes
+	// offline. It's on by default, except for phones and tablets, which
+	// leave the tailnet all the time.
+	AlertOffline bool `json:"alertOffline"`
+	// Notes are anything admins want to remember about the device. Viewers
+	// can read them too.
+	Notes string `json:"notes"`
+}
+
+// DeviceHistory is the response to GET /api/devices/{id}/history?range=,
+// where the range is 1h, 6h, 24h or 7d.
+type DeviceHistory struct {
+	// From and To are when the history starts and ends.
+	From time.Time `json:"from"`
+	To   time.Time `json:"to"`
+	// Step is the time each point sums up, in milliseconds.
+	Step int64 `json:"step"`
+	// RTT is the average round trip from Roost's node in milliseconds, for
+	// each step in which the device was pinged. The value is null if no
+	// ping in the step got a reply.
+	RTT []Point `json:"rtt"`
+}
+
+// Point is a value at a time.
+type Point struct {
+	// TS is the start of the time the point sums up, in Unix milliseconds.
+	TS int64 `json:"ts"`
+	// V is the value, or null if there's none.
+	V *float64 `json:"v" tstype:"number | null,required"`
 }

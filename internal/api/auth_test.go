@@ -263,7 +263,7 @@ func TestNew_requiresTailnet(t *testing.T) {
 	t.Parallel()
 	defer func() {
 		if recover() == nil {
-			t.Error("New() without WhoIs, Snapshot and Store didn't panic")
+			t.Error("New() without WhoIs, Snapshot, Feed and Store didn't panic")
 		}
 	}()
 	api.New(api.Options{})

@@ -77,7 +77,8 @@ func withTailnet(t *testing.T, tn *tailnettest.Tailnet, opts api.Options) api.Op
 }
 
 // withStore fills in opts' required fields with tn, as of its current
-// status, and st.
+// status, and st. Its Feed isn't running, so it builds one snapshot, the
+// first time one is asked for.
 func withStore(tn *tailnettest.Tailnet, st *store.Store, opts api.Options) api.Options {
 	opts.WhoIs = tn.WhoIs
 	opts.Snapshot = func() tailnet.Snapshot {
@@ -85,6 +86,9 @@ func withStore(tn *tailnettest.Tailnet, st *store.Store, opts api.Options) api.O
 		return tailnet.Snapshot{Status: status, StatusErr: err}
 	}
 	opts.Store = st
+	if opts.Feed == nil {
+		opts.Feed = api.NewFeed(api.FeedOptions{Tailnet: opts.Snapshot, Store: st})
+	}
 	return opts
 }
 
