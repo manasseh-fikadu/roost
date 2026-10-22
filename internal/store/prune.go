@@ -10,7 +10,8 @@ const pruneInterval = time.Hour
 
 // retention lists the tables that keep history and how long their rows last. A
 // migration that adds such a table adds it here too. Each query deletes the rows
-// older than its one parameter, a time in Unix milliseconds.
+// older than its one parameter, a time in Unix milliseconds, or the parts of
+// them that aren't kept that long.
 var retention = []struct {
 	table string
 	keep  time.Duration
@@ -20,6 +21,14 @@ var retention = []struct {
 	{"events", 30 * 24 * time.Hour, "DELETE FROM events WHERE ts < ?"},
 	// Round-trip history goes back a week, as far as the device page shows.
 	{"pings", 7 * 24 * time.Hour, "DELETE FROM pings WHERE ts < ?"},
+	// Metrics and usage go back a week too. Rollups (#17) can keep a summary
+	// for longer.
+	{"metrics", 7 * 24 * time.Hour, "DELETE FROM metrics WHERE ts < ?"},
+	{"usage_samples", 7 * 24 * time.Hour, "DELETE FROM usage_samples WHERE ts < ?"},
+	// After a day, one minute in ten keeps the processes in detail. Every
+	// minute keeps its biggest groups, for history.
+	{"usage_samples", 24 * time.Hour,
+		"UPDATE usage_samples SET detail = NULL WHERE ts < ? AND detail IS NOT NULL AND ts / 60000 % 10 != 0"},
 }
 
 // pruneHourly deletes expired rows now and then once every pruneInterval, until
