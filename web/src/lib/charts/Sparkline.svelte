@@ -61,17 +61,22 @@
 				</linearGradient>
 			</defs>
 			{#each lines as run, i (i)}
-				{#if fill}
-					<path d={areaPath(run, height)} fill="url(#{gradient})" />
+				{#if run.length === 1}
+					<!-- A value between two gaps has no line, so it gets a dot. -->
+					<circle cx={run[0][0]} cy={run[0][1]} r="1.5" fill={color} />
+				{:else}
+					{#if fill}
+						<path d={areaPath(run, height)} fill="url(#{gradient})" />
+					{/if}
+					<path
+						d={linePath(run)}
+						fill="none"
+						stroke={color}
+						stroke-width="1.25"
+						stroke-linejoin="round"
+						stroke-linecap="round"
+					/>
 				{/if}
-				<path
-					d={linePath(run)}
-					fill="none"
-					stroke={color}
-					stroke-width="1.25"
-					stroke-linejoin="round"
-					stroke-linecap="round"
-				/>
 			{/each}
 		</svg>
 	{/if}

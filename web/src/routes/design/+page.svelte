@@ -37,16 +37,17 @@
 	const tones: Tone[] = ['green', 'amber', 'red', 'blue', 'purple', 'gray'];
 
 	// An hour of made-up CPU and memory, a point a minute, with a gap where
-	// the agent was quiet.
+	// the agent was quiet but for one reading.
 	const now = Math.floor(Date.now() / 60_000) * 60_000;
 	const minutes = Array.from({ length: 60 }, (_, i) => i);
+	const quiet = (i: number) => i >= 37 && i < 44 && i !== 40;
 	const cpu: Point[] = minutes.map((i) => ({
 		ts: now - (59 - i) * 60_000,
-		v: i >= 38 && i < 42 ? null : 22 + 14 * Math.sin(i / 6) + 6 * Math.sin(i / 1.7)
+		v: quiet(i) ? null : 22 + 14 * Math.sin(i / 6) + 6 * Math.sin(i / 1.7)
 	}));
 	const memory: Point[] = minutes.map((i) => ({
 		ts: now - (59 - i) * 60_000,
-		v: i >= 38 && i < 42 ? null : 48 + 4 * Math.sin(i / 11)
+		v: quiet(i) ? null : 48 + 4 * Math.sin(i / 11)
 	}));
 
 	let name = $state('');

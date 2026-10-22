@@ -234,16 +234,21 @@
 			{/each}
 			{#each series as s, i (s.key)}
 				{#each runs(s.points, x, y, step * 3) as run, j (j)}
-					{#if fill}
-						<path d={areaPath(run, baseline)} fill="url(#{gradient}-{i})" />
+					{#if run.length === 1}
+						<!-- A point between two gaps has no line, so it gets a dot. -->
+						<circle cx={run[0][0]} cy={run[0][1]} r="2" fill={s.color} />
+					{:else}
+						{#if fill}
+							<path d={areaPath(run, baseline)} fill="url(#{gradient}-{i})" />
+						{/if}
+						<path
+							d={linePath(run)}
+							fill="none"
+							stroke={s.color}
+							stroke-width="1.5"
+							stroke-linejoin="round"
+						/>
 					{/if}
-					<path
-						d={linePath(run)}
-						fill="none"
-						stroke={s.color}
-						stroke-width="1.5"
-						stroke-linejoin="round"
-					/>
 				{/each}
 			{/each}
 			{#if hover !== null}
