@@ -28,22 +28,28 @@ var historyRanges = map[string]struct{ span, step time.Duration }{
 	"7d":  {7 * 24 * time.Hour, time.Hour},
 }
 
-// device returns the device on the tailnet with the ID in r's path.
-func (h *handler) device(r *http.Request) (tailnet.Device, bool) {
-	id := r.PathValue("id")
+// device returns the device on the tailnet with the ID in r's path, and the
+// ID its history is kept under.
+func (h *handler) device(r *http.Request) (tailnet.Device, string, bool) {
+	return h.deviceByID(r.PathValue("id"))
+}
+
+// deviceByID returns the device on the tailnet with an ID, and the ID its
+// history is kept under.
+func (h *handler) deviceByID(id string) (tailnet.Device, string, bool) {
 	st := h.opts.Snapshot().Status
 	if st == nil {
-		return tailnet.Device{}, false
+		return tailnet.Device{}, "", false
 	}
 	if st.Self.ID == id {
-		return st.Self, true
+		return st.Self, historyID(st.Self, true), true
 	}
 	for _, d := range st.Peers {
 		if d.ID == id {
-			return d, true
+			return d, historyID(d, false), true
 		}
 	}
-	return tailnet.Device{}, false
+	return tailnet.Device{}, "", false
 }
 
 func (h *handler) notFound(w http.ResponseWriter, r *http.Request) {
@@ -53,7 +59,7 @@ func (h *handler) notFound(w http.ResponseWriter, r *http.Request) {
 // setDeviceSettings answers PUT /api/devices/{id}/settings, which replaces a
 // device's settings, with the settings as they are now.
 func (h *handler) setDeviceSettings(w http.ResponseWriter, r *http.Request) {
-	d, ok := h.device(r)
+	d, _, ok := h.device(r)
 	if !ok {
 		h.notFound(w, r)
 		return
@@ -103,30 +109,56 @@ func cleanSettings(s SetDeviceSettings, d tailnet.Device) (store.DeviceSettings,
 	return out, nil
 }
 
+// historyRange reads the range of a request for history, such as
+// ?range=6h, which is 24h if it's left out. If the range is unknown, it
+// answers with an error and returns false. Points start at multiples of the
+// step, so the first starts a little before the span does.
+func (h *handler) historyRange(w http.ResponseWriter, r *http.Request) (from, to time.Time, step time.Duration, ok bool) {
+	rg, ok := historyRanges[cmp.Or(r.URL.Query().Get("range"), "24h")]
+	if !ok {
+		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: "the range must be 1h, 6h, 24h or 7d"})
+		return time.Time{}, time.Time{}, 0, false
+	}
+	to = time.Now()
+	ms := rg.step.Milliseconds()
+	return time.UnixMilli(to.Add(-rg.span).UnixMilli() / ms * ms), to, rg.step, true
+}
+
 // deviceHistory answers GET /api/devices/{id}/history.
 func (h *handler) deviceHistory(w http.ResponseWriter, r *http.Request) {
-	d, ok := h.device(r)
+	d, historyID, ok := h.device(r)
 	if !ok {
 		h.notFound(w, r)
 		return
 	}
-	rg, ok := historyRanges[cmp.Or(r.URL.Query().Get("range"), "24h")]
+	from, to, step, ok := h.historyRange(w, r)
 	if !ok {
-		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: "the range must be 1h, 6h, 24h or 7d"})
 		return
 	}
-	now := time.Now()
-	step := rg.step.Milliseconds()
-	// Points start at multiples of the step, so the first starts a little
-	// before the span does.
-	from := time.UnixMilli(now.Add(-rg.span).UnixMilli() / step * step)
-	buckets, err := h.opts.Store.RTTHistory(r.Context(), d.ID, from, rg.step)
+	pings, err := h.opts.Store.RTTHistory(r.Context(), d.ID, from, step)
 	if err != nil {
 		h.fail(w, r, "read a device's history", err)
 		return
 	}
-	out := DeviceHistory{From: from, To: now, Step: step, RTT: make([]Point, 0, len(buckets))}
-	for _, b := range buckets {
+	metrics, err := h.opts.Store.MetricsHistory(r.Context(), historyID, from, step)
+	if err != nil {
+		h.fail(w, r, "read a device's history", err)
+		return
+	}
+	out := DeviceHistory{
+		From: from, To: to, Step: step.Milliseconds(),
+		CPU:    make([]Point, len(metrics)),
+		Memory: make([]Point, len(metrics)),
+		NetRx:  make([]Point, len(metrics)),
+		NetTx:  make([]Point, len(metrics)),
+		RTT:    make([]Point, 0, len(pings)),
+	}
+	for i, b := range metrics {
+		ts := b.Start.UnixMilli()
+		out.CPU[i], out.Memory[i] = Point{ts, b.CPU}, Point{ts, b.Mem}
+		out.NetRx[i], out.NetTx[i] = Point{ts, b.NetRx}, Point{ts, b.NetTx}
+	}
+	for _, b := range pings {
 		p := Point{TS: b.Start.UnixMilli()}
 		if b.Replies > 0 {
 			v := ms(b.RTT)

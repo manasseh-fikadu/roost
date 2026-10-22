@@ -18,11 +18,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/config"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/roost/internal/usage"
 	"github.com/manasseh-fikadu/roost/web"
 )
 
@@ -150,12 +152,25 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	if err := addFirstAdmins(ctx, st, node, cfg.Admins, logger); err != nil {
 		return errors.Join(err, res.ln.Close(), srvs.stop(ctx))
 	}
+	agentToken, err := st.AgentToken(ctx)
+	if err != nil {
+		return errors.Join(err, res.ln.Close(), srvs.stop(ctx))
+	}
+	registry := agents.NewRegistry(st, logger)
+	if err := registry.Load(ctx); err != nil {
+		// The agents report again within seconds.
+		logger.Warn("read the agents' last reports", "error", err)
+	}
+	recorder := usage.NewRecorder(st, logger)
+	wg.Go(func() { recorder.Run(ctx) })
+
 	poller := tailnet.NewPoller(node, logger)
 	wg.Go(func() { poller.Run(ctx) })
 	feedOpts := api.FeedOptions{
 		Version:        buildVersion(),
 		Tailnet:        poller.Snapshot,
 		TailnetChanged: poller.Changes(),
+		Agents:         registry,
 		Store:          st,
 		Logger:         logger,
 	}
@@ -163,6 +178,10 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		host := hostmetrics.NewCollector(hostmetrics.Local(), logger)
 		wg.Go(func() { host.Run(ctx) })
 		feedOpts.Host, feedOpts.HostChanged = host.Reading, host.Changes()
+		sampler := usage.NewSampler(os.DirFS("/"))
+		wg.Go(func() {
+			sampler.Run(ctx, logger, func(s usage.Sample) { recorder.Record(ctx, store.HubID, s) })
+		})
 	}
 	feed := api.NewFeed(feedOpts)
 	// The app checks requests against Roost's own names, from the first status.
@@ -175,15 +194,19 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	wg.Go(func() { feed.Run(ctx) })
 	stopping := make(chan struct{})
 	app := srvs.start(api.New(api.Options{
-		Version:  buildVersion(),
-		UI:       ui,
-		DevUI:    devUI,
-		WhoIs:    node.WhoIs,
-		Snapshot: poller.Snapshot,
-		Feed:     feed,
-		Store:    st,
-		Stopping: stopping,
-		Logger:   logger,
+		Version:    buildVersion(),
+		UI:         ui,
+		DevUI:      devUI,
+		WhoIs:      node.WhoIs,
+		Snapshot:   poller.Snapshot,
+		Feed:       feed,
+		Store:      st,
+		Agents:     registry,
+		Usage:      recorder,
+		AgentToken: agentToken,
+		AppURL:     res.url,
+		Stopping:   stopping,
+		Logger:     logger,
 	}), res.ln)
 	// Shutdown waits for every response to finish, and live streams don't
 	// until they're told to.

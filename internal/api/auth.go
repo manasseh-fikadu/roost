@@ -23,6 +23,9 @@ const CSRFHeader = "X-Roost"
 type caller struct {
 	// who is nil for an anonymous caller.
 	who *tailnet.Identity
+	// node is the ID of the node the request came from, if Tailscale said,
+	// even if the caller is anonymous.
+	node string
 	// level is anyone, viewers or admins. guard always sets it, so a request
 	// that skipped guard has noLevel and can't use any route.
 	level level
@@ -106,18 +109,18 @@ func (h *handler) identify(ctx context.Context, remoteAddr, selfID string) calle
 		h.log.Warn("ask Tailscale who sent a request", "remote_addr", remoteAddr, "error", err)
 		return caller{level: anyone, reason: ReasonWhoIsFailed}
 	case who.NodeID == selfID:
-		return caller{level: anyone, reason: ReasonRoostMachine}
+		return caller{node: who.NodeID, level: anyone, reason: ReasonRoostMachine}
 	case len(who.Tags) > 0:
-		return caller{level: anyone, reason: ReasonTaggedDevice}
+		return caller{node: who.NodeID, level: anyone, reason: ReasonTaggedDevice}
 	case who.LoginName == "":
-		return caller{level: anyone, reason: ReasonNoUser}
+		return caller{node: who.NodeID, level: anyone, reason: ReasonNoUser}
 	}
 	l, err := h.levelOf(ctx, who.LoginName)
 	if err != nil {
 		// If Roost can't tell what someone's role is, they have none.
-		return caller{who: who, level: anyone, reason: ReasonRoleLookupFailed}
+		return caller{who: who, node: who.NodeID, level: anyone, reason: ReasonRoleLookupFailed}
 	}
-	return caller{who: who, level: l}
+	return caller{who: who, node: who.NodeID, level: l}
 }
 
 // levelOf returns the level of a signed-in caller, from the role the store

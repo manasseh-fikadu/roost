@@ -361,6 +361,11 @@ export interface Device {
    */
   exitNode?: boolean;
   /**
+   * MeasuredBy says where Metrics and Info come from. It's empty if Roost
+   * doesn't measure the device.
+   */
+  measuredBy?: MeasuredBy;
+  /**
    * Metrics are the device's latest metrics, if Roost measures it. Roost
    * measures its own machine on Linux. Other machines need the agent.
    */
@@ -369,7 +374,51 @@ export interface Device {
    * Info is what the machine is, if Roost measures it.
    */
   info?: DeviceInfo;
+  /**
+   * Agent is the device's agent, if one has reported.
+   */
+  agent?: Agent;
   settings: DeviceSettings;
+}
+/**
+ * MeasuredBy says how Roost measures a device.
+ */
+/**
+ * MeasuredByHub means the device is the machine Roost runs on, which
+ * Roost measures itself.
+ */
+export const MeasuredByHub = "hub";
+/**
+ * MeasuredByAgent means the device's agent reports its metrics.
+ */
+export const MeasuredByAgent = "agent";
+/**
+ * The ways Roost measures a device.
+ */
+export type MeasuredBy = typeof MeasuredByHub | typeof MeasuredByAgent;
+/**
+ * Agent is a device's agent, which sends a heartbeat with the machine's
+ * metrics every 15 seconds.
+ */
+export interface Agent {
+  /**
+   * Version is the agent's version, such as 1.2.0.
+   */
+  version: string;
+  /**
+   * LastSeen is when the agent's latest heartbeat arrived.
+   */
+  lastSeen: string /* RFC 3339 */;
+  /**
+   * Stale reports whether the device is online, but the agent stopped
+   * sending heartbeats.
+   */
+  stale?: boolean;
+  /**
+   * Outdated reports whether the agent is older than the one Roost serves.
+   * Running the install command again updates it.
+   */
+  outdated?: boolean;
 }
 /**
  * Status is the state of something Roost watches, such as a device.
@@ -499,9 +548,24 @@ export interface Metrics {
    */
   temp?: number /* float64 */;
   /**
+   * Battery is missing if the machine has none.
+   */
+  battery?: Battery;
+  /**
    * Uptime is how long since the machine booted, in seconds.
    */
   uptime?: number /* int64 */;
+}
+/**
+ * Battery is how charged a machine's battery is.
+ */
+export interface Battery {
+  percent: number /* float64 */;
+  charging: boolean;
+  /**
+   * OnAC reports whether the machine runs on mains power.
+   */
+  onAc: boolean;
 }
 /**
  * Usage is how much of something is used, in bytes.
@@ -590,6 +654,19 @@ export interface DeviceHistory {
    */
   step: number /* int64 */;
   /**
+   * CPU is the average percentage of time the CPUs were busy, and Memory
+   * the average percentage of memory used, for each step in which Roost
+   * measured the device. A value is null if the device didn't report it.
+   */
+  cpu: Point[];
+  memory: Point[];
+  /**
+   * NetRx and NetTx are the average bytes per second received and sent,
+   * for the same steps.
+   */
+  netRx: Point[];
+  netTx: Point[];
+  /**
    * RTT is the average round trip from Roost's node in milliseconds, for
    * each step in which the device was pinged. The value is null if no
    * ping in the step got a reply.
@@ -608,4 +685,220 @@ export interface Point {
    * V is the value, or null if there's none.
    */
   v: number | null;
+}
+/**
+ * AgentSetup is the response to GET /api/agent: how to install the agent.
+ * Only admins can see it.
+ */
+export interface AgentSetup {
+  /**
+   * Version is the version of the agent that Roost serves.
+   */
+  version: string;
+  /**
+   * InstallCommand installs the agent on a macOS or Linux machine, or
+   * updates it, for the user who runs it. It holds the token that every
+   * agent sends until per-device enrollment (#8).
+   */
+  installCommand: string;
+  /**
+   * UninstallCommand removes the agent.
+   */
+  uninstallCommand: string;
+}
+/**
+ * DeviceUsage is the response to GET /api/devices/{id}/usage: what uses the
+ * device's CPU and memory now. With ?at= and a time in Unix milliseconds,
+ * it's the stored minute nearest that time instead.
+ */
+export interface DeviceUsage {
+  /**
+   * Sample is missing if Roost has none.
+   */
+  sample?: UsageSample;
+  /**
+   * Interval is how often the device sends a new sample, in seconds.
+   */
+  interval: number /* int */;
+}
+/**
+ * UsageSample is what used a device's CPU and memory at one moment, or over
+ * a stored minute, in which case CPU is the minute's average.
+ */
+export interface UsageSample {
+  at: string /* RFC 3339 */;
+  /**
+   * Cores is how many CPU cores the device has, if it said.
+   */
+  cores?: number /* int */;
+  /**
+   * Groups are the biggest groups of processes, by CPU and then memory.
+   */
+  groups: UsageGroup[];
+  /**
+   * Procs are the biggest processes, by CPU and then memory.
+   */
+  procs: UsageProc[];
+  /**
+   * Total sums up every process, including the ones not listed, if the
+   * device said.
+   */
+  total?: UsageTotal;
+}
+/**
+ * UsageKind is what a group of processes is.
+ */
+/**
+ * UsageKindContainer is a Docker or Podman container.
+ */
+export const UsageKindContainer = "container";
+/**
+ * UsageKindService is a systemd system service.
+ */
+export const UsageKindService = "service";
+/**
+ * UsageKindUserService is a systemd user service, or an app a desktop
+ * started.
+ */
+export const UsageKindUserService = "user-service";
+/**
+ * UsageKindSession is a user's login sessions, such as SSH.
+ */
+export const UsageKindSession = "session";
+/**
+ * UsageKindKernel is the kernel's own threads.
+ */
+export const UsageKindKernel = "kernel";
+/**
+ * UsageKindApp is a macOS app.
+ */
+export const UsageKindApp = "app";
+/**
+ * UsageKindOther is anything else, grouped by its program's name.
+ */
+export const UsageKindOther = "other";
+/**
+ * The kinds of UsageGroup.
+ */
+export type UsageKind = typeof UsageKindContainer | typeof UsageKindService | typeof UsageKindUserService | typeof UsageKindSession | typeof UsageKindKernel | typeof UsageKindApp | typeof UsageKindOther;
+/**
+ * UsageGroup is the processes of one service, container, app or the like.
+ */
+export interface UsageGroup {
+  /**
+   * Key is the group's kind and name, as "kind:name". It's the same from
+   * one sample to the next.
+   */
+  key: string;
+  kind: UsageKind;
+  name: string;
+  /**
+   * CPU is the group's share of the machine's CPU time, all cores
+   * together, in percent, so the groups add up to the machine's CPU.
+   */
+  cpu: number /* float64 */;
+  /**
+   * Mem is the group's resident memory in bytes, summed over its
+   * processes.
+   */
+  mem: number /* uint64 */;
+  /**
+   * Procs is how many processes the group has.
+   */
+  procs: number /* int */;
+  /**
+   * Top names the group's busiest processes.
+   */
+  top: string[];
+}
+/**
+ * UsageProc is one process.
+ */
+export interface UsageProc {
+  pid: number /* int */;
+  name: string;
+  /**
+   * User is who runs it, if the device said.
+   */
+  user: string;
+  /**
+   * Cmd is the command line. Only admins get it, since command lines can
+   * hold passwords and tokens.
+   */
+  cmd: string;
+  /**
+   * CPU and Mem are as in UsageGroup.
+   */
+  cpu: number /* float64 */;
+  mem: number /* uint64 */;
+  /**
+   * Group is the key of the group the process is in.
+   */
+  group: string;
+}
+/**
+ * UsageTotal sums up every process on a device.
+ */
+export interface UsageTotal {
+  cpu: number /* float64 */;
+  mem: number /* uint64 */;
+  procs: number /* int */;
+}
+/**
+ * UsageHistory is the response to GET /api/devices/{id}/usage/history?range=,
+ * where the range is 1h, 6h, 24h or 7d: which groups of processes used the
+ * device's CPU and memory.
+ */
+export interface UsageHistory {
+  from: string /* RFC 3339 */;
+  to: string /* RFC 3339 */;
+  /**
+   * Step is the time each point sums up, in milliseconds.
+   */
+  step: number /* int64 */;
+  /**
+   * Minutes is how many minutes Roost stored in the range. It stores one a
+   * minute while it gets samples from the device.
+   */
+  minutes: number /* int */;
+  /**
+   * Consumers are the biggest groups by average CPU, and by average
+   * memory, biggest CPU first.
+   */
+  consumers: UsageConsumer[];
+  /**
+   * CPU and Mem chart the few biggest groups by each.
+   */
+  cpu: UsageSeries[];
+  mem: UsageSeries[];
+}
+/**
+ * UsageConsumer is what a group of processes used over a range. A minute
+ * in which the group was too small to store counts as zero.
+ */
+export interface UsageConsumer {
+  key: string;
+  kind: UsageKind;
+  name: string;
+  /**
+   * CPUAvg and CPUPeak are the group's average and highest CPU of the
+   * minutes, in percent.
+   */
+  cpuAvg: number /* float64 */;
+  cpuPeak: number /* float64 */;
+  /**
+   * MemAvg and MemPeak are its average and most memory, in bytes.
+   */
+  memAvg: number /* uint64 */;
+  memPeak: number /* uint64 */;
+}
+/**
+ * UsageSeries is a group's CPU, in percent, or memory, in bytes, averaged
+ * over each step that has stored minutes.
+ */
+export interface UsageSeries {
+  key: string;
+  kind: UsageKind;
+  name: string;
+  points: Point[];
 }

@@ -11,9 +11,12 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/api"
+	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/roost/internal/usage"
 )
 
 func TestSetDeviceSettings(t *testing.T) {
@@ -142,6 +145,15 @@ func TestDeviceHistory(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	err = st.AddMetrics(t.Context(), []store.MetricsRow{
+		{DeviceID: "laptop", At: minute.Add(-20 * time.Minute), CPU: new(10.0), Mem: new(40.0), NetRx: new(100.0)},
+		{DeviceID: "laptop", At: minute.Add(-20*time.Minute + 30*time.Second), CPU: new(20.0), Mem: new(60.0), NetRx: new(300.0)},
+		// Roost's own machine.
+		{DeviceID: store.HubID, At: minute.Add(-5 * time.Minute), CPU: new(50.0)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	rec := serve(h, newRequest(t, http.MethodGet, "/api/devices/laptop/history?range=1h", phoneIP))
 	if rec.Code != http.StatusOK {
@@ -165,6 +177,30 @@ func TestDeviceHistory(t *testing.T) {
 		if s := pointString(time.UnixMilli(p.TS), p.V); s != want[i] {
 			t.Errorf("RTT point %d = %s, want %s", i, s, want[i])
 		}
+	}
+	at := minute.Add(-20 * time.Minute)
+	for name, tt := range map[string]struct {
+		points []api.Point
+		want   string
+	}{
+		"CPU":      {got.CPU, pointString(at, new(15.0))},
+		"memory":   {got.Memory, pointString(at, new(50.0))},
+		"received": {got.NetRx, pointString(at, new(200.0))},
+		"sent":     {got.NetTx, pointString(at, nil)},
+	} {
+		if len(tt.points) != 1 || pointString(time.UnixMilli(tt.points[0].TS), tt.points[0].V) != tt.want {
+			t.Errorf("%s = %+v, want one point, %s", name, tt.points, tt.want)
+		}
+	}
+
+	// The hub's metrics are kept apart from its node's ID.
+	rec = serve(h, newRequest(t, http.MethodGet, "/api/devices/roost/history?range=1h", phoneIP))
+	var hub api.DeviceHistory
+	if err := json.Unmarshal(rec.Body.Bytes(), &hub); err != nil {
+		t.Fatal(err)
+	}
+	if len(hub.CPU) != 1 || *hub.CPU[0].V != 50 {
+		t.Errorf("hub CPU = %+v, want the hub's one point", hub.CPU)
 	}
 
 	for target, code := range map[string]int{
@@ -242,6 +278,141 @@ func TestFeed_recordsPings(t *testing.T) {
 			if len(buckets) != 1 || buckets[0].Pings != want[0] || buckets[0].Replies != want[1] {
 				t.Errorf("%s history = %+v, want %d pings and %d replies", id, buckets, want[0], want[1])
 			}
+		}
+	})
+}
+
+// The feed stores each device's metrics about every 30 seconds.
+func TestFeed_recordsMetrics(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		st := testStore(t)
+		synctest.Wait()
+		var (
+			mu     sync.Mutex
+			sample *hostmetrics.Sample
+		)
+		changed := make(chan struct{}, 1)
+		measure := func(cpu float64) {
+			mu.Lock()
+			sample = &hostmetrics.Sample{At: time.Now(), CPU: &cpu, Mem: hostmetrics.Usage{Used: 1, Total: 4}, Load: &[3]float64{2, 1, 0}}
+			mu.Unlock()
+			changed <- struct{}{}
+		}
+		reg := agents.NewRegistry(st, nil)
+		feed := api.NewFeed(api.FeedOptions{
+			Tailnet: func() tailnet.Snapshot { return tailnet.Snapshot{} },
+			Host: func() hostmetrics.Reading {
+				mu.Lock()
+				defer mu.Unlock()
+				return hostmetrics.Reading{Sample: sample}
+			},
+			HostChanged: changed,
+			Agents:      reg,
+			Store:       st,
+		})
+		go feed.Run(t.Context())
+		start := time.Now()
+		// The hub measures itself every 5 seconds for 2 minutes, and an agent
+		// sends a heartbeat every 15 seconds.
+		var hb agents.Heartbeat
+		if err := json.Unmarshal([]byte(`{"v":1,"metrics":{"cpu":3,"battery":{"pct":70}}}`), &hb); err != nil {
+			t.Fatal(err)
+		}
+		for i := range 24 {
+			measure(float64(i))
+			if i%3 == 0 {
+				if _, err := reg.Record(t.Context(), "laptop", hb, time.Now()); err != nil {
+					t.Fatal(err)
+				}
+			}
+			time.Sleep(5 * time.Second)
+			synctest.Wait()
+		}
+
+		rows := func(id string) []store.MetricsBucket {
+			t.Helper()
+			b, err := st.MetricsHistory(t.Context(), id, start, time.Second)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return b
+		}
+		hub := rows(store.HubID)
+		if len(hub) != 4 {
+			t.Fatalf("hub rows = %d, want 4 in 2 minutes", len(hub))
+		}
+		for i, b := range hub {
+			if at := b.Start.Sub(start); at != time.Duration(i)*30*time.Second || *b.CPU != float64(i*6) || *b.Mem != 25 {
+				t.Errorf("hub row %d at %v = CPU %v, memory %v; want one every 30s", i, at, *b.CPU, *b.Mem)
+			}
+		}
+		if laptop := rows("laptop"); len(laptop) != 4 || *laptop[0].CPU != 3 {
+			t.Errorf("laptop rows = %d, want 4 with the agent's CPU", len(laptop))
+		}
+	})
+}
+
+func TestDeviceUsage(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		st := testStore(t)
+		synctest.Wait()
+		opts := withStore(testTailnet(), st, api.Options{})
+		h := api.New(opts)
+		get := func(target string) (api.DeviceUsage, int) {
+			t.Helper()
+			rec := serve(h, newRequest(t, http.MethodGet, target, laptopIP))
+			var got api.DeviceUsage
+			if rec.Code == http.StatusOK {
+				if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+					t.Fatal(err)
+				}
+			}
+			return got, rec.Code
+		}
+		if got, code := get("/api/devices/laptop/usage"); code != http.StatusOK || got.Sample != nil {
+			t.Errorf("usage before any sample = %d %+v, want 200 and no sample", code, got)
+		}
+
+		// Three minutes of samples, one every 15 seconds.
+		start := time.Now()
+		for i := range 13 {
+			opts.Usage.Record(t.Context(), "laptop", usage.Sample{
+				At: time.Now(), Source: usage.SourceAgent,
+				Groups: []usage.Group{{Key: "service:db", Kind: usage.KindService, Name: "db", CPU: float64(i), Mem: 100}},
+			})
+			time.Sleep(15 * time.Second)
+		}
+		got, code := get("/api/devices/laptop/usage")
+		if code != http.StatusOK || got.Sample == nil || got.Sample.Groups[0].CPU != 12 || got.Interval != 15 {
+			t.Errorf("latest usage = %d %+v, want the last sample, every 15s", code, got)
+		}
+		// The first minute's average.
+		got, code = get("/api/devices/laptop/usage?at=" + strconv.FormatInt(start.Add(30*time.Second).UnixMilli(), 10))
+		if code != http.StatusOK || got.Sample == nil || got.Sample.Groups[0].CPU != 1.5 {
+			t.Errorf("usage at 30s = %d %+v, want the first minute", code, got.Sample)
+		}
+		if got, _ := get("/api/devices/laptop/usage?at=" + strconv.FormatInt(start.Add(-time.Hour).UnixMilli(), 10)); got.Sample != nil {
+			t.Errorf("usage an hour before = %+v, want none", got.Sample)
+		}
+		for _, target := range []string{"/api/devices/laptop/usage?at=soon", "/api/devices/laptop/usage?at=-5"} {
+			if _, code := get(target); code != http.StatusBadRequest {
+				t.Errorf("GET %s = %d, want 400", target, code)
+			}
+		}
+		if _, code := get("/api/devices/toaster/usage"); code != http.StatusNotFound {
+			t.Errorf("GET a toaster's usage = %d, want 404", code)
+		}
+
+		rec := serve(h, newRequest(t, http.MethodGet, "/api/devices/laptop/usage/history?range=1h", laptopIP))
+		var hist api.UsageHistory
+		if err := json.Unmarshal(rec.Body.Bytes(), &hist); err != nil || rec.Code != http.StatusOK {
+			t.Fatalf("GET usage history = %d %s", rec.Code, rec.Body)
+		}
+		if hist.Minutes != 3 || len(hist.Consumers) != 1 || hist.Consumers[0].Name != "db" || len(hist.CPU) != 1 || len(hist.Mem) != 1 {
+			t.Errorf("usage history = %+v, want 3 minutes of db", hist)
+		}
+		if rec := serve(h, newRequest(t, http.MethodGet, "/api/devices/laptop/usage/history?range=year", laptopIP)); rec.Code != http.StatusBadRequest {
+			t.Errorf("GET usage history for a year = %d, want 400", rec.Code)
 		}
 	})
 }

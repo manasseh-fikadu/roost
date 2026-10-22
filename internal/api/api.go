@@ -12,8 +12,10 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/roost/internal/usage"
 )
 
 // maxBody is the largest request body the API reads.
@@ -37,6 +39,17 @@ type Options struct {
 	Feed *Feed
 	// Store holds who has a role in Roost. Required.
 	Store *store.Store
+	// Agents keeps what agents report in their heartbeats. Required.
+	Agents *agents.Registry
+	// Usage keeps what uses each device's CPU and memory. Required.
+	Usage *usage.Recorder
+	// AgentToken is the token agents send with each heartbeat. If it's
+	// empty, Roost takes no heartbeats.
+	AgentToken string
+	// AppURL is where the app is on the tailnet, such as
+	// https://roost.example.ts.net, which the agent sends its heartbeats to.
+	// If it's empty, it's worked out from each request.
+	AppURL string
 	// Stopping is closed when the server starts to shut down, which ends
 	// responses that would otherwise never finish, such as GET /api/stream.
 	// If it's nil, they end only when the client goes away.
@@ -57,8 +70,8 @@ func New(opts Options) http.Handler {
 }
 
 func newHandler(opts Options) *handler {
-	if opts.WhoIs == nil || opts.Snapshot == nil || opts.Feed == nil || opts.Store == nil {
-		panic("api.New: Options.WhoIs, Snapshot, Feed and Store are required")
+	if opts.WhoIs == nil || opts.Snapshot == nil || opts.Feed == nil || opts.Store == nil || opts.Agents == nil || opts.Usage == nil {
+		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents and Usage are required")
 	}
 	h := &handler{opts: opts, log: opts.Logger}
 	if h.log == nil {
@@ -76,7 +89,15 @@ func (h *handler) routes(rt *router) {
 	rt.read("GET /api/stream", viewers, h.stream)
 
 	rt.read("GET /api/devices/{id}/history", viewers, h.deviceHistory)
+	rt.read("GET /api/devices/{id}/usage", viewers, h.deviceUsage)
+	rt.read("GET /api/devices/{id}/usage/history", viewers, h.usageHistory)
 	rt.write("PUT /api/devices/{id}/settings", h.setDeviceSettings)
+	rt.write("DELETE /api/devices/{id}/agent", h.forgetAgent)
+
+	rt.read("GET /api/agent", admins, h.agentSetup)
+	// The script holds no secret: the install command passes it the token.
+	rt.read("GET /api/agent/install.sh", anyone, h.installScript)
+	rt.agent("POST /api/agent/heartbeat", h.heartbeat)
 
 	rt.read("GET /api/access", admins, h.access)
 	rt.write("PATCH /api/access", h.changeAccess)

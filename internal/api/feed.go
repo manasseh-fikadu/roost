@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
@@ -23,6 +24,9 @@ const (
 	// feedHeartbeat is the longest the feed goes without a new snapshot, so
 	// clients can tell a quiet stream from a dead one.
 	feedHeartbeat = 15 * time.Second
+	// metricsEvery is how often a device's metrics are stored for its
+	// history, give or take the time between its samples.
+	metricsEvery = 30 * time.Second
 )
 
 // FeedOptions configures NewFeed.
@@ -38,6 +42,8 @@ type FeedOptions struct {
 	Host func() hostmetrics.Reading
 	// HostChanged receives a value when Host's answer changes.
 	HostChanged <-chan struct{}
+	// Agents holds what agents report. Nil means there are none.
+	Agents *agents.Registry
 	// Store holds the devices' settings and history. Required.
 	Store *store.Store
 	// Logger receives errors. Nil discards them.
@@ -49,7 +55,8 @@ type FeedOptions struct {
 // compressed once, for admins and once for everyone else, and every client
 // gets the same bytes.
 //
-// It also records each ping of a peer, for the device's history.
+// It also records each ping of a peer, and the devices' metrics every
+// metricsEvery, for their history.
 type Feed struct {
 	opts  FeedOptions
 	log   *slog.Logger
@@ -64,6 +71,10 @@ type Feed struct {
 	// pingsUpTo is when the latest recorded ping was sent.
 	pingsUpTo time.Time
 	pingsErr  error
+	// metricsAt holds when each device's metrics were last recorded, by
+	// the ID their history is kept under.
+	metricsAt  map[string]time.Time
+	metricsErr error
 
 	mu  sync.Mutex
 	cur *published
@@ -87,7 +98,7 @@ func NewFeed(opts FeedOptions) *Feed {
 	if opts.Tailnet == nil || opts.Store == nil {
 		panic("api.NewFeed: FeedOptions.Tailnet and Store are required")
 	}
-	f := &Feed{opts: opts, log: opts.Logger, poked: make(chan struct{}, 1)}
+	f := &Feed{opts: opts, log: opts.Logger, poked: make(chan struct{}, 1), metricsAt: map[string]time.Time{}}
 	if f.log == nil {
 		f.log = slog.New(slog.DiscardHandler)
 	}
@@ -97,6 +108,7 @@ func NewFeed(opts FeedOptions) *Feed {
 // Run builds a snapshot now, and then each time what Roost knows changes,
 // until ctx ends.
 func (f *Feed) Run(ctx context.Context) {
+	agentsChanged := f.agentsChanged()
 	heartbeat := time.NewTimer(feedHeartbeat)
 	defer heartbeat.Stop()
 	gap := time.NewTimer(0)
@@ -110,6 +122,7 @@ func (f *Feed) Run(ctx context.Context) {
 			return
 		case <-f.opts.TailnetChanged:
 		case <-f.opts.HostChanged:
+		case <-agentsChanged:
 		case <-f.poked:
 		case <-heartbeat.C:
 		}
@@ -124,9 +137,20 @@ func (f *Feed) Run(ctx context.Context) {
 	}
 }
 
+// agentsChanged returns the channel that says agents reported, or nil.
+func (f *Feed) agentsChanged() <-chan struct{} {
+	if f.opts.Agents == nil {
+		return nil
+	}
+	return f.opts.Agents.Changes()
+}
+
+// measuresHub reports whether Roost measures the machine it runs on.
+func (f *Feed) measuresHub() bool { return f.opts.Host != nil }
+
 // drain takes the changes waiting to be heard of.
 func (f *Feed) drain() {
-	for _, ch := range []<-chan struct{}{f.opts.TailnetChanged, f.opts.HostChanged, f.poked} {
+	for _, ch := range []<-chan struct{}{f.opts.TailnetChanged, f.opts.HostChanged, f.agentsChanged(), f.poked} {
 		select {
 		case <-ch:
 		default:
@@ -165,10 +189,15 @@ func (f *Feed) publish(ctx context.Context) *published {
 		h := f.opts.Host()
 		src.host = &h
 	}
+	if f.opts.Agents != nil {
+		src.agents = f.opts.Agents.Reports()
+	}
+	now := time.Now()
 	f.recordPings(ctx, src.tailnet.Pings)
+	f.recordMetrics(ctx, src, now)
 	src.settings = f.loadSettings(ctx)
 
-	snap := newSnapshot(src, time.Now())
+	snap := newSnapshot(src, now)
 	p := &published{snap: snap, next: make(chan struct{})}
 	admin, err := f.newEvent("snapshot", snap)
 	if err == nil {
@@ -265,6 +294,65 @@ func (f *Feed) recordPings(ctx context.Context, pings map[string]tailnet.PingRec
 		f.log.Info("recorded pings again")
 	}
 	f.pingsUpTo, f.pingsErr = upTo, nil
+}
+
+// recordMetrics stores the metrics of each device that Roost measures, if
+// they're new since it last stored them metricsEvery ago, or nearly. Metrics
+// older than that, such as an agent's from before Roost restarted, aren't
+// new.
+func (f *Feed) recordMetrics(ctx context.Context, src sources, now time.Time) {
+	var rows []store.MetricsRow
+	add := func(id string, s hostmetrics.Sample, b *agents.Battery) {
+		// Samples come every few seconds, so allow for a little jitter.
+		if now.Sub(s.At) > metricsEvery || s.At.Sub(f.metricsAt[id]) < metricsEvery-time.Second {
+			return
+		}
+		rows = append(rows, metricsRow(id, s, b))
+	}
+	if h := src.host; h != nil && h.Sample != nil {
+		add(store.HubID, *h.Sample, nil)
+	}
+	for id, r := range src.agents {
+		add(id, r.Sample, r.Battery)
+	}
+	if len(rows) == 0 {
+		return
+	}
+	if err := f.opts.Store.AddMetrics(ctx, rows); err != nil {
+		if ctx.Err() == nil && f.metricsErr == nil {
+			f.log.Warn("record metrics", "error", err)
+		}
+		f.metricsErr = err
+		return
+	}
+	if f.metricsErr != nil {
+		f.log.Info("recorded metrics again")
+	}
+	f.metricsErr = nil
+	for _, r := range rows {
+		f.metricsAt[r.DeviceID] = r.At
+	}
+}
+
+// metricsRow returns a sample of the device whose history is kept under id,
+// as the store keeps it.
+func metricsRow(id string, s hostmetrics.Sample, b *agents.Battery) store.MetricsRow {
+	row := store.MetricsRow{DeviceID: id, At: s.At, CPU: s.CPU, NetRx: s.NetRx, NetTx: s.NetTx, Temp: s.Temp}
+	if pct, ok := percent(&Usage{Used: s.Mem.Used, Total: s.Mem.Total}); ok {
+		row.Mem = &pct
+	}
+	if s.Disk != nil {
+		if pct, ok := percent(&Usage{Used: s.Disk.Used, Total: s.Disk.Total}); ok {
+			row.Disk = &pct
+		}
+	}
+	if s.Load != nil {
+		row.Load1 = new(s.Load[0])
+	}
+	if b != nil {
+		row.Battery = new(b.Percent)
+	}
+	return row
 }
 
 // loadSettings returns the devices' settings, or the last ones it read if

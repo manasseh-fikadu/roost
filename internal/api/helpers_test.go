@@ -10,10 +10,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/roost/internal/usage"
 )
 
 // The test tailnet: Roost's node, alice's laptop (alice is an admin), bob's
@@ -86,8 +88,14 @@ func withStore(tn *tailnettest.Tailnet, st *store.Store, opts api.Options) api.O
 		return tailnet.Snapshot{Status: status, StatusErr: err}
 	}
 	opts.Store = st
+	if opts.Agents == nil {
+		opts.Agents = agents.NewRegistry(st, nil)
+	}
+	if opts.Usage == nil {
+		opts.Usage = usage.NewRecorder(st, nil)
+	}
 	if opts.Feed == nil {
-		opts.Feed = api.NewFeed(api.FeedOptions{Tailnet: opts.Snapshot, Store: st})
+		opts.Feed = api.NewFeed(api.FeedOptions{Tailnet: opts.Snapshot, Agents: opts.Agents, Store: st})
 	}
 	return opts
 }

@@ -4,7 +4,7 @@
 # Works on macOS (bash 3.2) and Linux. Needs only curl and standard system tools.
 set -u
 
-AGENT_VERSION="1.1.0"
+AGENT_VERSION="1.2.0"
 CONF="${ROOST_AGENT_CONF:-$HOME/.config/roost-agent/env}"
 # shellcheck disable=SC1090
 [ -f "$CONF" ] && . "$CONF"
@@ -100,15 +100,6 @@ function emit(    i, g, key, sep, tc, tm, u) {
   printf "],\"total\":[%.2f,%.0f,%d]}\n", tc, tm, N
 }
 '
-
-tailscale_ip() {
-  local bin
-  for bin in tailscale /Applications/Tailscale.app/Contents/MacOS/Tailscale; do
-    if command -v "$bin" >/dev/null 2>&1 || [ -x "$bin" ]; then
-      "$bin" ip -4 2>/dev/null | head -n 1 && return
-    fi
-  done
-}
 
 collect_macos() {
   cpu=$(top -l 2 -n 0 -s 1 2>/dev/null | awk '/CPU usage/ { idle=$7 } END { gsub("%", "", idle); if (idle != "") printf "%.1f", 100 - idle }')
@@ -361,8 +352,8 @@ build_payload() {
   esac
   # A truncated or empty usage object must not take the rest of the heartbeat down with it.
   case "$usage" in '{"groups":['*']}') ;; *) usage=null ;; esac
-  payload=$(printf '{"v":1,"agentVersion":%s,"hostname":%s,"tailscaleIp":%s,"os":%s,"osVersion":%s,"kernel":%s,"model":%s,"arch":%s,"metrics":{"cpu":%s,"cores":%s,"load":[%s,%s,%s],"memUsed":%s,"memTotal":%s,"swapUsed":%s,"swapTotal":%s,"diskUsed":%s,"diskTotal":%s,"netRxTotal":%s,"netTxTotal":%s,"temp":%s,"battery":%s,"uptime":%s,"procs":%s},"usage":%s}' \
-    "$(json_str "$AGENT_VERSION")" "$(json_str "$host")" "$(json_str "$(tailscale_ip)")" \
+  payload=$(printf '{"v":1,"agentVersion":%s,"hostname":%s,"os":%s,"osVersion":%s,"kernel":%s,"model":%s,"arch":%s,"metrics":{"cpu":%s,"cores":%s,"load":[%s,%s,%s],"memUsed":%s,"memTotal":%s,"swapUsed":%s,"swapTotal":%s,"diskUsed":%s,"diskTotal":%s,"netRxTotal":%s,"netTxTotal":%s,"temp":%s,"battery":%s,"uptime":%s,"procs":%s},"usage":%s}' \
+    "$(json_str "$AGENT_VERSION")" "$(json_str "$host")" \
     "$(json_str "$os_name")" "$(json_str "$os_version")" "$(json_str "$(uname -r)")" \
     "$(json_str "$model")" "$(json_str "$(uname -m)")" \
     "$(num "$cpu")" "$(num "$cores")" "$(num "$load1")" "$(num "$load5")" "$(num "$load15")" \
@@ -371,12 +362,25 @@ build_payload() {
     "$(num "$temp")" "$battery" "$(num "$uptime_s")" "$(num "$procs")" "$usage")
 }
 
+# Sends one heartbeat. If it fails, says why on stderr, with what the hub answered.
 send_heartbeat() {
+  local out code body msg
   build_payload
-  # The token goes through stdin (-K -) so it never shows up in `ps`.
-  printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" |
-    curl -fsS -m 10 -K - -o /dev/null -X POST -H 'Content-Type: application/json' \
-      --data-binary "$payload" "$SERVER_URL/api/agent/heartbeat"
+  # The token goes through stdin (-K -) so it never shows up in `ps`. Roost
+  # refuses POSTs without an X-Roost header, which pages on other sites can't send.
+  out=$(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" |
+    curl -sS -m 10 -K - -w '\n%{http_code}' -X POST -H 'Content-Type: application/json' -H 'X-Roost: agent' \
+      --data-binary "$payload" "$SERVER_URL/api/agent/heartbeat") || {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') heartbeat failed: couldn't reach $SERVER_URL" >&2
+    return 1
+  }
+  code=${out##*$'\n'}
+  case "$code" in 2??) return 0 ;; esac
+  body=${out%$'\n'*}
+  # Roost's errors look like {"error":"..."}.
+  msg=$(printf '%s' "$body" | sed -n 's/^{"error":"\(.*\)"}$/\1/p')
+  echo "$(date '+%Y-%m-%d %H:%M:%S') heartbeat failed with HTTP $code: ${msg:-$body}" >&2
+  return 1
 }
 
 if [ "${1:-}" = "--print" ]; then
@@ -391,6 +395,6 @@ if [ "${1:-}" = "--once" ]; then
 fi
 
 while true; do
-  send_heartbeat || echo "$(date '+%Y-%m-%d %H:%M:%S') heartbeat failed" >&2
+  send_heartbeat
   sleep "$INTERVAL"
 done

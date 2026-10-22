@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/manasseh-fikadu/roost/agent"
+	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
@@ -35,6 +37,9 @@ type sources struct {
 	tailnet tailnet.Snapshot
 	// host is what Roost measured of its own machine, or nil if it can't.
 	host *hostmetrics.Reading
+	// agents holds what agents reported, by device ID, or store.HubID for
+	// the machine Roost runs on.
+	agents map[string]agents.Report
 	// settings holds the settings of the devices that have any, by ID.
 	settings map[string]store.DeviceSettings
 }
@@ -65,10 +70,14 @@ func newSnapshot(src sources, now time.Time) Snapshot {
 	out.Hub.DNSName, out.Hub.Tailnet = st.Self.DNSName, st.Tailnet
 	for i, d := range append([]tailnet.Device{st.Self}, st.Peers...) {
 		dev := deviceInput{device: d, self: i == 0, settings: src.settings[d.ID]}
-		// Roost measures the machine it runs on. In embedded mode, that
-		// machine's own node is a peer.
+		// Roost measures the machine it runs on, and on a machine it can't
+		// measure, an agent can. In embedded mode, that machine's own node
+		// is a peer.
 		if dev.self || d.SameMachine {
 			dev.host = src.host
+		}
+		if r, ok := src.agents[historyID(d, dev.self)]; ok {
+			dev.agent = &r
 		}
 		out.Devices = append(out.Devices, newDevice(s, dev, now))
 	}
@@ -130,6 +139,9 @@ type deviceInput struct {
 	// host is what Roost measured of the device, if it's the machine Roost
 	// runs on.
 	host *hostmetrics.Reading
+	// agent is what the device's agent last reported, if it has one. It's
+	// only used if host is nil.
+	agent *agents.Report
 }
 
 func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) Device {
@@ -156,15 +168,32 @@ func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) Device {
 		ExitNode:  d.ExitNode,
 	}
 	var sustained *float64
-	if h := in.host; h != nil {
+	switch {
+	case in.host != nil:
+		h := in.host
+		out.MeasuredBy = MeasuredByHub
 		if h.Sample != nil {
 			out.Metrics = newMetrics(*h.Sample)
 			sustained = h.Sample.CPUSustained
 		}
-		info := h.Info
-		out.Info = &DeviceInfo{
-			Hostname: info.Hostname, OSVersion: info.OSVersion, Kernel: info.Kernel,
-			Model: info.Model, Arch: info.Arch, Cores: info.Cores,
+		out.Info = newInfo(h.Info)
+	case in.agent != nil:
+		a := in.agent
+		out.MeasuredBy = MeasuredByAgent
+		out.Metrics = newMetrics(a.Sample)
+		if b := a.Battery; b != nil {
+			out.Metrics.Battery = &Battery{Percent: b.Percent, Charging: b.Charging, OnAC: b.OnAC}
+		}
+		out.Info = newInfo(a.Info)
+		out.Agent = &Agent{
+			Version:  a.Version,
+			LastSeen: a.ReceivedAt,
+			Stale:    d.Online && a.Stale(now),
+			Outdated: agent.Older(a.Version),
+		}
+		// The CPU of an agent that stopped is out of date.
+		if !out.Agent.Stale {
+			sustained = a.Sample.CPUSustained
 		}
 	}
 	model := ""
@@ -211,11 +240,13 @@ func newMetrics(s hostmetrics.Sample) *Metrics {
 		At:     s.At,
 		CPU:    s.CPU,
 		Procs:  s.Procs,
-		Memory: &Usage{Used: s.Mem.Used, Total: s.Mem.Total},
 		NetRx:  s.NetRx,
 		NetTx:  s.NetTx,
 		Temp:   s.Temp,
 		Uptime: int64(s.Uptime / time.Second),
+	}
+	if s.Mem.Total > 0 {
+		m.Memory = &Usage{Used: s.Mem.Used, Total: s.Mem.Total}
 	}
 	if s.Load != nil {
 		m.Load = s.Load[:]
@@ -227,6 +258,23 @@ func newMetrics(s hostmetrics.Sample) *Metrics {
 		m.Disk = &Usage{Used: s.Disk.Used, Total: s.Disk.Total}
 	}
 	return m
+}
+
+func newInfo(i hostmetrics.Info) *DeviceInfo {
+	return &DeviceInfo{
+		Hostname: i.Hostname, OSVersion: i.OSVersion, Kernel: i.Kernel,
+		Model: i.Model, Arch: i.Arch, Cores: i.Cores,
+	}
+}
+
+// historyID returns the ID that d's history is kept under: store.HubID if d
+// is the machine Roost runs on, as Roost's own node or as the peer that is
+// the same machine, or else d's ID.
+func historyID(d tailnet.Device, self bool) string {
+	if self || d.SameMachine {
+		return store.HubID
+	}
+	return d.ID
 }
 
 // deviceStatus works out whether d needs attention at now, and why. sustained
@@ -257,6 +305,9 @@ func deviceStatus(d Device, sustained *float64, now time.Time) (Status, string) 
 	}
 	if d.Path.Unanswered {
 		reasons = append(reasons, "Not answering pings")
+	}
+	if d.Agent != nil && d.Agent.Stale {
+		reasons = append(reasons, "Agent stopped reporting")
 	}
 	if len(reasons) > 0 {
 		return StatusAttention, strings.Join(reasons, " · ")

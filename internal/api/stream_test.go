@@ -14,9 +14,11 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/roost/internal/usage"
 )
 
 func TestStream(t *testing.T) {
@@ -48,7 +50,10 @@ func TestStream(t *testing.T) {
 				changed := make(chan struct{}, 1)
 				feed := api.NewFeed(api.FeedOptions{Version: "v1.2.3", Tailnet: snapshot, TailnetChanged: changed, Store: st})
 				go feed.Run(t.Context())
-				h := api.New(api.Options{Version: "v1.2.3", WhoIs: tn.WhoIs, Snapshot: snapshot, Feed: feed, Store: st})
+				h := api.New(api.Options{
+					Version: "v1.2.3", WhoIs: tn.WhoIs, Snapshot: snapshot, Feed: feed, Store: st,
+					Agents: agents.NewRegistry(st, nil), Usage: usage.NewRecorder(st, nil),
+				})
 				events := openStream(t, tn, h, tt.from, tt.gzip)
 
 				synctest.Wait()
