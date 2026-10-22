@@ -4,7 +4,7 @@
 -->
 <script lang="ts">
 	import { page } from '$app/state';
-	import { addViewerCommand, whyCantView } from '#lib/access.js';
+	import { addViewerCommand, lookupFailed, whyCantView } from '#lib/access.js';
 	import Button from '#lib/ui/Button.svelte';
 	import CodeLine from '#lib/ui/CodeLine.svelte';
 	import StatusDot from '#lib/ui/StatusDot.svelte';
@@ -12,6 +12,11 @@
 
 	const me = $derived(page.data.me);
 	const command = $derived(me ? addViewerCommand(me) : undefined);
+	/**
+	 * Whether asking again could help: the hub didn't answer, Roost couldn't
+	 * tell who they are or what their role is, or an admin can still add them.
+	 */
+	const canRetry = $derived(!me || me.signedIn || lookupFailed(me));
 </script>
 
 <svelte:head>
@@ -41,6 +46,8 @@
 				<StatusDot status="offline" />
 				Can't reach the hub: {page.data.hubError}
 			</p>
+		{/if}
+		{#if canRetry}
 			<Button class="mt-4" onclick={() => location.reload()}>Try again</Button>
 		{/if}
 	</section>

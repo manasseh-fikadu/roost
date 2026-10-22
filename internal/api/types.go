@@ -37,12 +37,12 @@ type Me struct {
 	// anonymous callers can't, and neither can signed-in callers without a
 	// role unless anyone on the tailnet can view it.
 	Role Role `json:"role,omitempty"`
-	// Reason says why an anonymous caller isn't signed in: one of the
-	// Reason constants.
+	// Reason says why an anonymous caller isn't signed in, or why Roost
+	// doesn't know a signed-in caller's role: one of the Reason constants.
 	Reason string `json:"reason,omitempty"`
 }
 
-// Why a caller is anonymous, in Me.Reason.
+// Why a caller is anonymous, or has no role, in Me.Reason.
 const (
 	// ReasonUnknownDevice means the request didn't come from a device that
 	// Tailscale knows.
@@ -57,6 +57,9 @@ const (
 	ReasonRoostMachine = "roost-machine"
 	// ReasonWhoIsFailed means Roost couldn't ask Tailscale.
 	ReasonWhoIsFailed = "whois-failed"
+	// ReasonRoleLookupFailed means the caller is signed in, but Roost
+	// couldn't look up their role, so for now they have none.
+	ReasonRoleLookupFailed = "role-lookup-failed"
 )
 
 // Role is what a signed-in caller may do in Roost.

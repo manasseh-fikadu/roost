@@ -128,6 +128,26 @@ func TestStream_roleChange(t *testing.T) {
 	})
 }
 
+// A role the store can't look up isn't a role taken away, so the stream
+// carries on.
+func TestStream_roleLookupFails(t *testing.T) {
+	st := testStore(t)
+	synctest.Test(t, func(t *testing.T) {
+		tn := testTailnet()
+		h := api.New(withStore(tn, st, api.Options{}))
+		events := openStream(t, tn, h, phoneIP)
+		synctest.Wait()
+		nextSnapshot(t, events)
+
+		if err := st.Close(); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(streamInterval)
+		synctest.Wait()
+		nextSnapshot(t, events)
+	})
+}
+
 func TestStream_stopping(t *testing.T) {
 	st := testStore(t)
 	synctest.Test(t, func(t *testing.T) {

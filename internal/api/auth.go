@@ -25,8 +25,10 @@ type caller struct {
 	who *tailnet.Identity
 	// level is anyone, viewers or admins. guard always sets it, so a request
 	// that skipped guard has noLevel and can't use any route.
-	level  level
-	reason string // why an anonymous caller is anonymous: a Reason constant
+	level level
+	// reason says why an anonymous caller is anonymous, or why Roost doesn't
+	// know a signed-in caller's role: a Reason constant.
+	reason string
 }
 
 // role returns the caller's role, or "" if they can't view Roost.
@@ -110,23 +112,31 @@ func (h *handler) identify(ctx context.Context, remoteAddr, selfID string) calle
 	case who.LoginName == "":
 		return caller{level: anyone, reason: ReasonNoUser}
 	}
-	return caller{who: who, level: h.levelOf(ctx, who.LoginName)}
+	l, err := h.levelOf(ctx, who.LoginName)
+	if err != nil {
+		// If Roost can't tell what someone's role is, they have none.
+		return caller{who: who, level: anyone, reason: ReasonRoleLookupFailed}
+	}
+	return caller{who: who, level: l}
 }
 
 // levelOf returns the level of a signed-in caller, from the role the store
-// gives login. If Roost can't tell what someone's role is, they have none.
-func (h *handler) levelOf(ctx context.Context, login string) level {
+// gives login. It returns an error if the store can't say.
+func (h *handler) levelOf(ctx context.Context, login string) (level, error) {
 	role, err := h.opts.Store.Role(ctx, login)
-	if err != nil && ctx.Err() == nil {
-		h.log.Error("look up a caller's role", "login", login, "error", err)
+	if err != nil {
+		if ctx.Err() == nil {
+			h.log.Error("look up a caller's role", "login", login, "error", err)
+		}
+		return anyone, err
 	}
 	switch role {
 	case store.Admin:
-		return admins
+		return admins, nil
 	case store.Viewer:
-		return viewers
+		return viewers, nil
 	default:
-		return anyone
+		return anyone, nil
 	}
 }
 

@@ -3,6 +3,7 @@
 
 import {
 	ReasonNoUser,
+	ReasonRoleLookupFailed,
 	ReasonRoostMachine,
 	ReasonTaggedDevice,
 	ReasonUnknownDevice,
@@ -41,11 +42,20 @@ const reasons: Record<Reason, string> = {
 	[ReasonNoUser]: 'Tailscale knows this device, but not who uses it.',
 	[ReasonRoostMachine]:
 		"You're on the machine Roost runs on. Any program here could connect to Roost, so Roost signs no one in from it. Open Roost from another device.",
-	[ReasonWhoIsFailed]: "Roost couldn't ask Tailscale who you are. Try again in a moment."
+	[ReasonWhoIsFailed]: "Roost couldn't ask Tailscale who you are. Try again in a moment.",
+	[ReasonRoleLookupFailed]: "Roost couldn't look up your role. Try again in a moment."
 };
 
 function isReason(reason: string | undefined): reason is Reason {
 	return reason !== undefined && Object.hasOwn(reasons, reason);
+}
+
+/**
+ * Whether Roost couldn't find out who the caller is or what their role is,
+ * this time. Asking again may work.
+ */
+export function lookupFailed(me: Me): boolean {
+	return me.reason === ReasonWhoIsFailed || me.reason === ReasonRoleLookupFailed;
 }
 
 /** Why the caller can't view Roost, in a sentence or two, or "" if they can. */
@@ -53,7 +63,7 @@ export function whyCantView(me: Me): string {
 	if (canView(me)) {
 		return '';
 	}
-	if (me.signedIn) {
+	if (me.signedIn && !lookupFailed(me)) {
 		const as = me.login ? ` as ${me.login}` : '';
 		return `You're signed in${as}, but only Roost's admins and viewers can view it. Ask an admin to add you.`;
 	}
@@ -65,7 +75,7 @@ export function whyCantView(me: Me): string {
  * without a role a viewer, or undefined if that wouldn't help.
  */
 export function addViewerCommand(me: Me): string | undefined {
-	if (canView(me) || !me.signedIn || !me.login) {
+	if (canView(me) || !me.signedIn || !me.login || lookupFailed(me)) {
 		return undefined;
 	}
 	return `roost admin add-viewer ${shellWord(me.login)}`;

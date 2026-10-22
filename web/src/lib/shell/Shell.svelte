@@ -13,7 +13,7 @@
 	import { afterNavigate, invalidate } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { isAdmin } from '#lib/access.js';
+	import { isAdmin, lookupFailed } from '#lib/access.js';
 	import { getMe } from '#lib/api/client.js';
 	import { connect } from '#lib/live.svelte.js';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
@@ -56,12 +56,13 @@
 	/**
 	 * Asks the hub again who the caller is, and reloads `me` if their role
 	 * changed, so the sidebar and pages follow. The hub ends the stream when
-	 * a role changes.
+	 * a role changes. An answer that Roost couldn't find out their role isn't
+	 * a change: the next drop asks again.
 	 */
 	async function checkRole() {
 		try {
 			const me = await getMe();
-			if (me.role !== page.data.me?.role) {
+			if (me.role !== page.data.me?.role && !lookupFailed(me)) {
 				await invalidate('roost:me');
 			}
 		} catch {

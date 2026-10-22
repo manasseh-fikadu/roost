@@ -126,7 +126,8 @@ func TestMe_failures(t *testing.T) {
 		}
 	})
 
-	// If Roost can't tell what someone's role is, they have none.
+	// If Roost can't tell what someone's role is, they have none, and Roost
+	// says why, so the web app doesn't take it for a role taken away.
 	t.Run("role lookup fails", func(t *testing.T) {
 		t.Parallel()
 		opts := withTailnet(t, tn, api.Options{})
@@ -134,11 +135,12 @@ func TestMe_failures(t *testing.T) {
 			t.Fatal(err)
 		}
 		h := api.New(opts)
-		if got := getMe(t, h, newRequest(t, http.MethodGet, "/api/me", laptopIP)); !got.SignedIn || got.Role != "" {
-			t.Errorf("GET /api/me = %+v, want alice with no role", got)
+		got := getMe(t, h, newRequest(t, http.MethodGet, "/api/me", laptopIP))
+		if !got.SignedIn || got.Role != "" || got.Reason != api.ReasonRoleLookupFailed {
+			t.Errorf("GET /api/me = %+v, want alice with no role, because the lookup failed", got)
 		}
-		if rec := serve(h, newRequest(t, http.MethodGet, "/api/debug/tailnet", laptopIP)); rec.Code != http.StatusForbidden {
-			t.Errorf("GET /api/debug/tailnet = %d, want 403", rec.Code)
+		if rec := serve(h, newRequest(t, http.MethodGet, "/api/debug/tailnet", laptopIP)); rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("GET /api/debug/tailnet = %d, want 503", rec.Code)
 		}
 	})
 }

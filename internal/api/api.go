@@ -113,6 +113,7 @@ func (h *handler) me(w http.ResponseWriter, r *http.Request) {
 		Name:     c.who.DisplayName,
 		Device:   c.who.NodeName,
 		Role:     c.role(),
+		Reason:   c.reason,
 	})
 }
 

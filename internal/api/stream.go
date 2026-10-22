@@ -55,7 +55,9 @@ func (h *handler) stream(w http.ResponseWriter, r *http.Request) {
 			return
 		case <-t.C:
 		}
-		if h.levelOf(r.Context(), c.who.LoginName) != c.level {
+		// If the store can't say, the stream carries on, and the next tick
+		// asks again. Only a role that's known to differ ends it.
+		if l, err := h.levelOf(r.Context(), c.who.LoginName); err == nil && l != c.level {
 			return
 		}
 	}

@@ -49,8 +49,8 @@ export interface Me {
    */
   role?: Role;
   /**
-   * Reason says why an anonymous caller isn't signed in: one of the
-   * Reason constants.
+   * Reason says why an anonymous caller isn't signed in, or why Roost
+   * doesn't know a signed-in caller's role: one of the Reason constants.
    */
   reason?: string;
 }
@@ -78,9 +78,14 @@ export const ReasonRoostMachine = "roost-machine";
  */
 export const ReasonWhoIsFailed = "whois-failed";
 /**
- * Why a caller is anonymous, in Me.Reason.
+ * ReasonRoleLookupFailed means the caller is signed in, but Roost
+ * couldn't look up their role, so for now they have none.
  */
-export type Reason = typeof ReasonUnknownDevice | typeof ReasonTaggedDevice | typeof ReasonNoUser | typeof ReasonRoostMachine | typeof ReasonWhoIsFailed;
+export const ReasonRoleLookupFailed = "role-lookup-failed";
+/**
+ * Why a caller is anonymous, or has no role, in Me.Reason.
+ */
+export type Reason = typeof ReasonUnknownDevice | typeof ReasonTaggedDevice | typeof ReasonNoUser | typeof ReasonRoostMachine | typeof ReasonWhoIsFailed | typeof ReasonRoleLookupFailed;
 /**
  * Role is what a signed-in caller may do in Roost.
  */
