@@ -353,7 +353,9 @@ type DeviceInfo struct {
 	// OSVersion is the operating system's name and version, such as
 	// "Debian GNU/Linux 13 (trixie)".
 	OSVersion string `json:"osVersion,omitempty"`
-	Kernel    string `json:"kernel,omitempty"`
+	// Kernel is the kernel's release, such as 6.12.48+deb13-amd64. Only
+	// admins get it, since it says which known bugs the machine has.
+	Kernel string `json:"kernel,omitempty" roost:"secret"`
 	// Model is the machine's maker and product, if it says.
 	Model string `json:"model,omitempty"`
 	// Arch is the CPU architecture, such as x86_64.

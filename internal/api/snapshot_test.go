@@ -202,7 +202,7 @@ func TestSnapshot_secrets(t *testing.T) {
 		ConnectivityAt:  now,
 		ConnectivityErr: errors.New("open /var/lib/tailscale: permission denied"),
 	}
-	admin := snapshotOf(t, st, snap, nil)
+	admin := snapshotOf(t, st, snap, &hostmetrics.Reading{Info: hostmetrics.Info{Kernel: "6.12.48+deb13-amd64"}})
 	viewer, ok := api.Redact(admin).(api.Snapshot)
 	if !ok {
 		t.Fatal("Redact() changed the snapshot's type")
@@ -214,17 +214,25 @@ func TestSnapshot_secrets(t *testing.T) {
 		tailnet, ip   string
 		endpoint      string
 		relay, errMsg string
+		kernel        string
 	}{
-		{"admin", admin, "alice@example.com", "203.0.113.1", "203.0.113.2:41641", "203.0.113.9:7777:vni:1", "open /var/lib/tailscale: permission denied"},
-		{"viewer", viewer, "", "", "", "", ""},
+		{
+			"admin", admin, "alice@example.com", "203.0.113.1", "203.0.113.2:41641", "203.0.113.9:7777:vni:1",
+			"open /var/lib/tailscale: permission denied", "6.12.48+deb13-amd64",
+		},
+		{"viewer", viewer, "", "", "", "", "", ""},
 	} {
 		s := tt.snap
-		if s.Hub.Tailnet != tt.tailnet || s.Uplink.PublicIP != tt.ip || s.Collectors[1].Error != tt.errMsg ||
+		netcheck := s.Collectors[len(s.Collectors)-1]
+		if s.Hub.Tailnet != tt.tailnet || s.Uplink.PublicIP != tt.ip || netcheck.Error != tt.errMsg ||
 			findDevice(t, s, "direct").Path.Endpoint != tt.endpoint || findDevice(t, s, "relayed").Path.PeerRelay != tt.relay {
 			t.Errorf("%s gets tailnet %q, public IP %q, error %q, endpoint %q, peer relay %q; want %q, %q, %q, %q, %q",
-				tt.name, s.Hub.Tailnet, s.Uplink.PublicIP, s.Collectors[1].Error,
+				tt.name, s.Hub.Tailnet, s.Uplink.PublicIP, netcheck.Error,
 				findDevice(t, s, "direct").Path.Endpoint, findDevice(t, s, "relayed").Path.PeerRelay,
 				tt.tailnet, tt.ip, tt.errMsg, tt.endpoint, tt.relay)
+		}
+		if info := findDevice(t, s, "roost").Info; info == nil || info.Kernel != tt.kernel {
+			t.Errorf("%s gets the hub's info %+v, want kernel %q", tt.name, info, tt.kernel)
 		}
 	}
 }

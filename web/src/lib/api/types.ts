@@ -520,6 +520,10 @@ export interface DeviceInfo {
    * "Debian GNU/Linux 13 (trixie)".
    */
   osVersion?: string;
+  /**
+   * Kernel is the kernel's release, such as 6.12.48+deb13-amd64. Only
+   * admins get it, since it says which known bugs the machine has.
+   */
   kernel?: string;
   /**
    * Model is the machine's maker and product, if it says.

@@ -227,7 +227,10 @@
 					<dl>
 						<DataRow label="Hostname">{info.hostname || device.hostName}</DataRow>
 						<DataRow label="OS">{info.osVersion || osLabel(device.os)}</DataRow>
-						<DataRow label="Kernel">{info.kernel || '—'}</DataRow>
+						{#if info.kernel}
+							<!-- Only admins get the kernel. -->
+							<DataRow label="Kernel">{info.kernel}</DataRow>
+						{/if}
 						<DataRow label="Model">{info.model || '—'}</DataRow>
 						<DataRow label="Arch">{info.arch || '—'}</DataRow>
 						<DataRow label="Cores">{info.cores || '—'}</DataRow>
