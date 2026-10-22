@@ -35,6 +35,10 @@ type Options struct {
 	Snapshot func() tailnet.Snapshot
 	// Store holds who has a role in Roost. Required.
 	Store *store.Store
+	// Stopping is closed when the server starts to shut down, which ends
+	// responses that would otherwise never finish, such as GET /api/stream.
+	// If it's nil, they end only when the client goes away.
+	Stopping <-chan struct{}
 	// Logger receives errors that can't be reported to the client. Nil discards them.
 	Logger *slog.Logger
 }
@@ -67,6 +71,7 @@ func newHandler(opts Options) *handler {
 func (h *handler) routes(rt *router) {
 	rt.read("GET /api/health", anyone, h.health)
 	rt.read("GET /api/me", anyone, h.me)
+	rt.read("GET /api/stream", viewers, h.stream)
 
 	rt.read("GET /api/access", admins, h.access)
 	rt.write("PATCH /api/access", h.changeAccess)
@@ -108,6 +113,7 @@ func (h *handler) me(w http.ResponseWriter, r *http.Request) {
 		Name:     c.who.DisplayName,
 		Device:   c.who.NodeName,
 		Role:     c.role(),
+		Reason:   c.reason,
 	})
 }
 

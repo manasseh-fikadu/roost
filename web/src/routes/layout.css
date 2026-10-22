@@ -1,1 +1,146 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+
+/*
+ * Roost's dark theme: the old dashboard's palette, after the Geist design
+ * system. Surfaces get lighter as they rise (canvas, surface, raised, hover),
+ * lines get stronger as they matter more, and text fades from fg to faint.
+ * Each status color has a fill and a lighter -fg for text on dark.
+ */
+@theme {
+	--font-sans: 'Geist Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+	--font-mono: 'Geist Mono Variable', ui-monospace, SFMono-Regular, Menlo, monospace;
+
+	--color-canvas: #000000;
+	--color-surface: #0a0a0a;
+	--color-raised: #111111;
+	--color-hover: #1a1a1a;
+	--color-line: #1f1f1f;
+	--color-line-strong: #2e2e2e;
+	--color-line-heavy: #454545;
+
+	--color-fg: #ededed;
+	--color-fg-muted: #a1a1a1;
+	--color-fg-subtle: #8f8f8f;
+	--color-fg-faint: #5c5c5c;
+
+	--color-green: #45a557;
+	--color-green-fg: #62c073;
+	--color-amber: #ffb224;
+	--color-amber-fg: #f1a10d;
+	--color-red: #e5484d;
+	--color-red-fg: #ff6166;
+	--color-blue: #0070f3;
+	--color-blue-fg: #52a8ff;
+	--color-purple-fg: #bf7af0;
+
+	--shadow-popover: 0 8px 30px rgb(0 0 0 / 0.6);
+
+	--animate-ping-slow: ping-slow 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+	--animate-shimmer: shimmer 1.6s ease-in-out infinite;
+
+	@keyframes ping-slow {
+		75%,
+		100% {
+			transform: scale(2.4);
+			opacity: 0;
+		}
+	}
+	@keyframes shimmer {
+		0%,
+		100% {
+			opacity: 0.45;
+		}
+		50% {
+			opacity: 0.9;
+		}
+	}
+}
+
+@layer base {
+	html {
+		color-scheme: dark;
+		background: var(--color-canvas);
+	}
+	body {
+		@apply bg-canvas font-sans text-fg antialiased;
+		font-size: 14px;
+		line-height: 1.5;
+		font-feature-settings: 'ss01', 'cv11';
+		text-rendering: optimizeLegibility;
+	}
+	::selection {
+		background: rgb(82 168 255 / 0.35);
+	}
+	:focus-visible {
+		outline: none;
+		box-shadow:
+			0 0 0 1px var(--color-canvas),
+			0 0 0 3px rgb(82 168 255 / 0.7);
+		border-radius: 6px;
+	}
+	* {
+		scrollbar-width: thin;
+		scrollbar-color: var(--color-line-strong) transparent;
+	}
+	button:not(:disabled),
+	[role='button']:not([aria-disabled='true']) {
+		cursor: pointer;
+	}
+}
+
+/* Numbers that line up in columns. */
+@utility num {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+@utility card {
+	border-radius: 12px;
+	border: 1px solid var(--color-line);
+	background: var(--color-surface);
+}
+
+/* The faint dot grid behind the network map. */
+@utility map-grid {
+	background-image: radial-gradient(circle at 1px 1px, rgb(255 255 255 / 0.055) 1px, transparent 0);
+	background-size: 20px 20px;
+}
+
+/*
+ * Popovers, menus and dialogs fade and rise in. bits-ui sets
+ * data-starting-style for their first frame and data-ending-style while they
+ * close, and waits for the transition before it removes them.
+ */
+@utility pop {
+	transition-property: opacity, scale, translate;
+	transition-duration: 160ms;
+	transition-timing-function: ease-out;
+	&[data-starting-style],
+	&[data-ending-style] {
+		opacity: 0;
+		scale: 0.98;
+		translate: 0 4px;
+	}
+}
+
+@utility fade {
+	transition-property: opacity;
+	transition-duration: 160ms;
+	transition-timing-function: ease-out;
+	&[data-starting-style],
+	&[data-ending-style] {
+		opacity: 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.001ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.001ms !important;
+	}
+}

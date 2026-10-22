@@ -73,12 +73,18 @@ func testStore(t *testing.T) *store.Store {
 // and a testStore.
 func withTailnet(t *testing.T, tn *tailnettest.Tailnet, opts api.Options) api.Options {
 	t.Helper()
+	return withStore(tn, testStore(t), opts)
+}
+
+// withStore fills in opts' required fields with tn, as of its current
+// status, and st.
+func withStore(tn *tailnettest.Tailnet, st *store.Store, opts api.Options) api.Options {
 	opts.WhoIs = tn.WhoIs
 	opts.Snapshot = func() tailnet.Snapshot {
-		st, err := tn.Status(context.Background())
-		return tailnet.Snapshot{Status: st, StatusErr: err}
+		status, err := tn.Status(context.Background())
+		return tailnet.Snapshot{Status: status, StatusErr: err}
 	}
-	opts.Store = testStore(t)
+	opts.Store = st
 	return opts
 }
 

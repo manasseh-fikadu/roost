@@ -158,15 +158,20 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		logger.Info("shutting down")
 		return errors.Join(res.ln.Close(), srvs.stop(ctx))
 	}
-	srvs.start(api.New(api.Options{
+	stopping := make(chan struct{})
+	app := srvs.start(api.New(api.Options{
 		Version:  buildVersion(),
 		UI:       ui,
 		DevUI:    devUI,
 		WhoIs:    node.WhoIs,
 		Snapshot: poller.Snapshot,
 		Store:    st,
+		Stopping: stopping,
 		Logger:   logger,
 	}), res.ln)
+	// Shutdown waits for every response to finish, and live streams don't
+	// until they're told to.
+	app.RegisterOnShutdown(func() { close(stopping) })
 	appURL.Store(&res.url)
 	logger.Info("roost is running", "version", buildVersion(), "url", res.url, "data_dir", cfg.DataDir)
 
@@ -278,7 +283,8 @@ func newServers(logger *slog.Logger) *servers {
 	return &servers{logger: logger, failed: make(chan struct{}, 1)}
 }
 
-func (s *servers) start(h http.Handler, ln net.Listener) {
+// start serves h on ln, and returns the server.
+func (s *servers) start(h http.Handler, ln net.Listener) *http.Server {
 	srv := &http.Server{
 		Handler:           h,
 		ReadHeaderTimeout: 10 * time.Second,
@@ -297,6 +303,7 @@ func (s *servers) start(h http.Handler, ln net.Listener) {
 			}
 		}
 	}()
+	return srv
 }
 
 // stop shuts every server down, giving in-flight requests shutdownTimeout to

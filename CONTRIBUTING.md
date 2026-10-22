@@ -23,7 +23,7 @@ The Go server doesn't reload on changes, so restart `make dev` after editing Go 
 
 | Command | What it does |
 | --- | --- |
-| `make test` | Runs the Go tests with the race detector, then `svelte-check` |
+| `make test` | Runs the Go tests with the race detector, the web tests with `bun test`, then `svelte-check` |
 | `make lint` | Runs golangci-lint, ShellCheck and Prettier |
 | `make build` | Builds `./roost` with the web UI embedded |
 | `make types` | Regenerates the web app's API types from `internal/api/types.go` |
@@ -33,6 +33,7 @@ The Go server doesn't reload on changes, so restart `make dev` after editing Go 
 
 - **Go:** format with `gofmt` and prefer the standard library; a new dependency needs a reason. `.golangci.yml` sets the linters. If you have to silence one, say which and why: `//nolint:gosec // reason`.
 - **Web:** use Svelte 5 runes and SvelteKit 3 only. SvelteKit 3 changed a lot, and most examples online are for version 2, so check [CLAUDE.md](CLAUDE.md) for the old patterns and their replacements. Run `bun run format` in `web/` before committing.
+- **Web UI:** build pages from the components in `web/src/lib/ui` and the charts in `web/src/lib/charts`, which `make dev` shows together at `/design`. Pages read live data from `live` in `web/src/lib/live.svelte.ts`, and send changes with `mutate` from `web/src/lib/api/client.ts`, which shows any error as a toast. A page only admins can open gets `adminOnly` in `web/src/lib/shell/nav.ts`.
 - **API routes:** register each route in `routes` in `internal/api/api.go` with the role it needs. A route that reads says whether it's for `anyone`, `viewers` or `admins`, and a route that changes something is always for admins. `TestRoutes` checks every route against that. Viewers never get logs, files or secrets, so a route that returns those is for admins, and a response field that can carry a secret, such as an environment variable or a command line, gets the tag `roost:"secret"`. The API leaves it empty for everyone but admins, so handlers don't check who's asking. In the web app, wrap admin-only controls in `AdminOnly`.
 - **API types:** change `internal/api/types.go` and run `make types`. Never edit `web/src/lib/api/types.ts` by hand.
 - **Database:** to change the schema, add the next numbered file to `internal/store/migrations`, such as `0002_add_device_notes.sql`. On startup, Roost copies the database to `roost.db.bak` and runs the new files in one transaction, so a failed upgrade leaves the database as it was. Never edit or renumber a migration once it's merged; add another one. A new table that keeps history also needs a line in `retention` in `internal/store/prune.go`, so its old rows get deleted.
@@ -44,6 +45,7 @@ The Go server doesn't reload on changes, so restart `make dev` after editing Go 
 - Unit tests never reach a real tailnet, SSH server or outside network. For HTTP, use `httptest.NewRecorder`, or `httptest.NewTestServer`, which runs on an in-memory network.
 - **Time:** don't add a clock interface. Code calls `time.Now`, timers and tickers directly, and a test that depends on time runs inside `synctest.Test` from `testing/synctest`. That gives the test a fake clock that jumps ahead whenever every goroutine is blocked, so a test of a 5-minute alert window takes microseconds.
 - **Tailscale and SSH:** code that needs them takes a small interface instead of the real client. The package that wraps the real client also ships a fake, in a test package named the way the standard library names `httptest` and `fstest` (for example `internal/tailnet/tailnettest`). Collector and alert tests run against these fakes. Fakes block on channels rather than sockets, so they work inside `synctest`.
+- **Web:** keep logic that doesn't need the page, such as formatting or chart geometry, in plain `.ts` modules, and test it in a `.test.ts` file next to it with `bun test`, as table tests with `test.each`.
 - Tests that need a real tailnet or SSH server go in files tagged `//go:build integration`, and run with `go test -tags integration ./...`. CI doesn't run them.
 
 ## Commits and pull requests

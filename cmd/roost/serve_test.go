@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -227,6 +228,49 @@ func TestServe_signIn(t *testing.T) {
 	self := netip.MustParseAddr("100.64.0.1")
 	if code, body := get(t, tn.Client(self), tailnettest.URL+"/api/me"); !strings.Contains(body, `"reason":"roost-machine"`) {
 		t.Errorf("GET /api/me from Roost's own node = %d %s, want anonymous", code, body)
+	}
+}
+
+// Stopping the server ends the live streams that browsers keep open, rather
+// than waiting for them until the shutdown times out.
+func TestServe_endsStreams(t *testing.T) {
+	t.Parallel()
+	tn := fakeTailnet(tailnet.StateRunning)
+	st, _ := tn.Status(t.Context())
+	st.Self.Owner = "alice@example.com"
+	tn.SetStatus(*st)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	log := newLogWriter()
+	done := make(chan error, 1)
+	go func() { done <- runServe(ctx, testConfig(t, config.Host), log, openFake(tn)) }()
+	log.waitFor(t, "roost is running")
+
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tailnettest.URL+"/api/stream", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := tn.Client(laptopIP).Do(req)
+	if err != nil {
+		t.Fatalf("GET /api/stream: %v", err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	body := bufio.NewReader(res.Body)
+	if line, err := body.ReadString('\n'); err != nil || line != "event: snapshot\n" {
+		t.Fatalf("GET /api/stream = %d, first line %q, error %v; want a snapshot event", res.StatusCode, line, err)
+	}
+	// Keep reading, as a browser does. The fake tailnet's connections have no
+	// buffer, so the server can't finish a response no one reads.
+	go func() { _, _ = io.Copy(io.Discard, body) }()
+
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("runServe() error = %v, want none; log:\n%s", err, log)
+		}
+	case <-time.After(shutdownTimeout / 2):
+		t.Fatalf("runServe() is still waiting for the stream to end; log:\n%s", log)
 	}
 }
 

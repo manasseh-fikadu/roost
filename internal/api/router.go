@@ -112,7 +112,12 @@ func (h *handler) allow(r route, next http.Handler) http.Handler {
 			next.ServeHTTP(w, req)
 			return
 		}
-		h.deny(w, req, http.StatusForbidden, denial(c, need, req.Method))
+		status := http.StatusForbidden
+		if c.reason == ReasonRoleLookupFailed {
+			// The caller may well have the level. The store couldn't say.
+			status = http.StatusServiceUnavailable
+		}
+		h.deny(w, req, status, denial(c, need, req.Method))
 	})
 }
 

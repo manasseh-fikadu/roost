@@ -6,7 +6,8 @@ The order of work is the checklist in issue #1. Issue #2 has the stack and layou
 
 - `make dev` runs Vite and the Go server, which serves Roost only on the tailnet and proxies the web UI to Vite (`--dev-ui`). Open the URL in the `roost is running` log line. `ROOST_TAILSCALE=host make dev` uses the machine's Tailscale instead of an embedded node, which needs a login the first time; in host mode, requests from the machine itself are anonymous, so open it from another device. Only admins get the UI through `--dev-ui`. The Go side doesn't reload, so restart after Go changes.
 - `make build` builds `./roost` with the UI embedded, using the `ui` build tag. Plain `go build`, `go test` and `go vet` leave the UI out, so they work without a web build.
-- `make test` runs `go test -race -shuffle=on ./...` and `svelte-check`.
+- `make test` runs `go test -race -shuffle=on ./...`, `bun test` for the web app's `.test.ts` files, and `svelte-check`.
+- `make dev` serves every UI component and chart at `/design`, a page production builds answer with a 404.
 - `make lint` runs golangci-lint (configured in `.golangci.yml`), shellcheck and prettier. Run it before committing Go, shell or web changes.
 - `make types` regenerates `web/src/lib/api/types.ts` from `internal/api/types.go` with tygo. Never edit the generated file by hand.
 - The web app uses Bun as its package manager (`cd web && bun add ...`).
