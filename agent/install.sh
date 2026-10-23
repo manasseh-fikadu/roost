@@ -108,7 +108,10 @@ Nice=10
 WantedBy=default.target
 EOF
   systemctl --user daemon-reload
-  systemctl --user enable --now "$NAME.service"
+  systemctl --user enable "$NAME.service"
+  # restart, not start, so that running this again replaces an agent that's
+  # already running with the new one.
+  systemctl --user restart "$NAME.service"
   echo "Installed systemd user service $NAME (logs: journalctl --user -u $NAME)."
   if command -v loginctl >/dev/null && [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null)" != "yes" ]; then
     echo "Tip: run 'sudo loginctl enable-linger $USER' to keep it running while you're logged out."
