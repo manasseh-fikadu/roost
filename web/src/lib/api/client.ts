@@ -1,11 +1,14 @@
 import { toast } from '#lib/toast.svelte.js';
 import type {
+	AgentSetup,
 	DeviceHistory,
 	DeviceSettings,
+	DeviceUsage,
 	ErrorBody,
 	Health,
 	Me,
-	SetDeviceSettings
+	SetDeviceSettings,
+	UsageHistory
 } from './types.js';
 
 /**
@@ -94,9 +97,35 @@ export function getMe(fetcher?: Fetch): Promise<Me> {
 /** How far back a device's history goes. */
 export type HistoryRange = '1h' | '6h' | '24h' | '7d';
 
-/** A device's round-trip times from the hub over the last range. */
+/** A device's metrics, and its round-trip times from the hub, over the last range. */
 export function getDeviceHistory(id: string, range: HistoryRange): Promise<DeviceHistory> {
 	return request('GET', `devices/${encodeURIComponent(id)}/history?range=${range}`);
+}
+
+/**
+ * What uses a device's CPU and memory now, or with `at`, in the stored
+ * minute nearest that time in Unix milliseconds.
+ */
+export function getDeviceUsage(id: string, at?: number): Promise<DeviceUsage> {
+	const query = at === undefined ? '' : `?at=${Math.round(at)}`;
+	return request('GET', `devices/${encodeURIComponent(id)}/usage${query}`);
+}
+
+/** Which groups of processes used a device's CPU and memory over the last range. */
+export function getUsageHistory(id: string, range: HistoryRange): Promise<UsageHistory> {
+	return request('GET', `devices/${encodeURIComponent(id)}/usage/history?range=${range}`);
+}
+
+/** The commands that install and remove the agent. Admins only. */
+export function getAgentSetup(): Promise<AgentSetup> {
+	return request('GET', 'agent');
+}
+
+/** Forgets what a device's agent reported, and says so in a toast. Admins only. */
+export function forgetAgent(id: string): Promise<void> {
+	return mutate('DELETE', `devices/${encodeURIComponent(id)}/agent`, undefined, {
+		success: 'Agent forgotten'
+	});
 }
 
 /** Replaces a device's settings, and says so in a toast. Admins only. */

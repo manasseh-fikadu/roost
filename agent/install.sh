@@ -2,10 +2,12 @@
 # SPDX-License-Identifier: MIT
 # Installs (or with --uninstall, removes) the Roost agent for the current user.
 # macOS: LaunchAgent. Linux: systemd user service. No root needed.
+# The hub serves this script, and its Agents page has the command to run it.
 set -euo pipefail
 
-SERVER_URL="__SERVER_URL__"
-TOKEN="__TOKEN__"
+SERVER_URL=__SERVER_URL__
+# The token isn't in the script, which anyone on the tailnet can download.
+TOKEN="${ROOST_AGENT_TOKEN:-}"
 NAME="roost-agent"
 LABEL="dev.roost.agent"
 CONF_DIR="$HOME/.config/$NAME"
@@ -42,6 +44,10 @@ if [ "${1:-}" = "--uninstall" ]; then
 fi
 
 command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
+if [ -z "$TOKEN" ]; then
+  echo "ROOST_AGENT_TOKEN isn't set. Copy the install command from the Agents page in Roost, which sets it." >&2
+  exit 1
+fi
 
 mkdir -p "$BIN_DIR" "$CONF_DIR"
 cat > "$BIN_DIR/agent.sh" <<'ROOST_AGENT_EOF'
@@ -56,7 +62,7 @@ chmod 755 "$BIN_DIR/agent.sh"
 
 echo "Testing connection to $SERVER_URL ..."
 if ! /bin/bash "$BIN_DIR/agent.sh" --once; then
-  echo "The first heartbeat failed. Check that this machine is on the tailnet and can reach $SERVER_URL." >&2
+  echo "The first heartbeat failed, so the agent isn't running. Fix what it says above, and run the install command again." >&2
   exit 1
 fi
 
@@ -102,7 +108,10 @@ Nice=10
 WantedBy=default.target
 EOF
   systemctl --user daemon-reload
-  systemctl --user enable --now "$NAME.service"
+  systemctl --user enable "$NAME.service"
+  # restart, not start, so that running this again replaces an agent that's
+  # already running with the new one.
+  systemctl --user restart "$NAME.service"
   echo "Installed systemd user service $NAME (logs: journalctl --user -u $NAME)."
   if command -v loginctl >/dev/null && [ "$(loginctl show-user "$USER" -p Linger --value 2>/dev/null)" != "yes" ]; then
     echo "Tip: run 'sudo loginctl enable-linger $USER' to keep it running while you're logged out."

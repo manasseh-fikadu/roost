@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"strings"
 )
@@ -19,6 +20,9 @@ const (
 	viewers
 	// admins can use a route at this level.
 	admins
+	// agentToken is the level of a route for agents: a caller can use it if
+	// they send the agents' token, and a role doesn't let anyone use it.
+	agentToken
 )
 
 func (l level) String() string {
@@ -29,6 +33,8 @@ func (l level) String() string {
 		return "viewers"
 	case admins:
 		return "admins"
+	case agentToken:
+		return "agent token"
 	default:
 		return "no level"
 	}
@@ -86,6 +92,16 @@ func (rt *router) write(pattern string, next http.HandlerFunc) {
 	rt.add(route{pattern, admins}, next)
 }
 
+// agent registers a route for agents, such as "POST /api/agent/heartbeat".
+// Anyone who sends the agents' token as a bearer token can use it, and no one
+// else.
+func (rt *router) agent(pattern string, next http.HandlerFunc) {
+	if !strings.Contains(pattern, " ") {
+		panic("api: agent route " + pattern + " needs a method")
+	}
+	rt.add(route{pattern, agentToken}, next)
+}
+
 // anyMethod registers a pattern without a method, such as "/" for the web UI,
 // for callers at level need or above. Anything but a GET, HEAD or OPTIONS
 // needs an admin.
@@ -106,6 +122,15 @@ func (rt *router) add(r route, next http.Handler) {
 // needs for it.
 func (h *handler) allow(r route, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if r.need == agentToken {
+			if !h.fromAgent(req) {
+				w.Header().Set("WWW-Authenticate", "Bearer")
+				h.deny(w, req, http.StatusUnauthorized, "only Roost's agents can do this, with the token from the install command")
+				return
+			}
+			next.ServeHTTP(w, req)
+			return
+		}
 		c := callerOf(req)
 		need := r.needs(req.Method)
 		if need != noLevel && c.level >= need {
@@ -119,6 +144,13 @@ func (h *handler) allow(r route, next http.Handler) http.Handler {
 		}
 		h.deny(w, req, status, denial(c, need, req.Method))
 	})
+}
+
+// fromAgent reports whether req carries the agents' token.
+func (h *handler) fromAgent(req *http.Request) bool {
+	token, ok := strings.CutPrefix(req.Header.Get("Authorization"), "Bearer ")
+	want := h.opts.AgentToken
+	return ok && want != "" && subtle.ConstantTimeCompare([]byte(token), []byte(want)) == 1
 }
 
 // denial says why c can't make a request with method that needs a level.

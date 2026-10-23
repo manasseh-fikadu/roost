@@ -1,6 +1,8 @@
 <script lang="ts">
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
-	import LineChart from '@lucide/svelte/icons/chart-line';
+	import BatteryCharging from '@lucide/svelte/icons/battery-charging';
+	import BatteryMedium from '@lucide/svelte/icons/battery-medium';
+	import Bot from '@lucide/svelte/icons/bot';
 	import Monitor from '@lucide/svelte/icons/monitor';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import { resolve } from '$app/paths';
@@ -8,9 +10,11 @@
 	import AdminOnly from '#lib/AdminOnly.svelte';
 	import type { Device } from '#lib/api/types.js';
 	import { deviceIcon } from '#lib/device.js';
+	import AgentInstall from '#lib/devices/AgentInstall.svelte';
+	import DeviceHistory from '#lib/devices/DeviceHistory.svelte';
 	import DeviceSettingsDialog from '#lib/devices/DeviceSettingsDialog.svelte';
 	import MetricTile from '#lib/devices/MetricTile.svelte';
-	import RttHistory from '#lib/devices/RttHistory.svelte';
+	import UsagePanel from '#lib/devices/UsagePanel.svelte';
 	import {
 		ago,
 		bytes,
@@ -23,6 +27,7 @@
 		ratio,
 		shortDate
 	} from '#lib/format.js';
+	import { historyRanges, type HistoryRange } from '#lib/history.js';
 	import { live } from '#lib/live.svelte.js';
 	import { linkLabel, tailnetIP } from '#lib/tailnet.js';
 	import Badge from '#lib/ui/Badge.svelte';
@@ -30,13 +35,36 @@
 	import Card from '#lib/ui/Card.svelte';
 	import DataRow from '#lib/ui/DataRow.svelte';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
+	import Segmented from '#lib/ui/Segmented.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import StatusPill from '#lib/ui/StatusPill.svelte';
+	import type { UsageMetric } from '#lib/usage.js';
 
 	const device = $derived(live.snapshot?.devices.find((d) => d.id === page.params.id));
 	const now = $derived(live.snapshot ? Date.parse(live.snapshot.generatedAt) : Date.now());
 
 	let editing = $state(false);
+	let range: HistoryRange = $state('24h');
+	let usageOpen = $state(false);
+	let usageMetric: UsageMetric = $state('cpu');
+	let usageAt = $state<number | null>(null);
+
+	/** Opens what's using the device's CPU or memory, now or at a time. */
+	function showUsage(metric: UsageMetric, at: number | null = null) {
+		usageMetric = metric;
+		usageAt = at;
+		usageOpen = true;
+	}
+
+	/** Whether the device's metrics are out of date, from an agent that stopped or a device that's off. */
+	function stale(d: Device): boolean {
+		return d.measuredBy === 'agent' && (!d.online || !!d.agent?.stale);
+	}
+
+	/** Whether the agent runs on the device's OS. */
+	function agentRuns(d: Device): boolean {
+		return ['linux', 'macos'].includes(d.os.toLowerCase());
+	}
 
 	const bannerClass = {
 		online: 'border-line bg-surface text-fg-muted',
@@ -56,12 +84,10 @@
 	}
 </script>
 
-{#snippet issue(n: number)}
+{#snippet agentsLink(text = 'Agents')}
 	<a
-		href="https://github.com/manasseh-fikadu/roost/issues/{n}"
-		target="_blank"
-		rel="noreferrer"
-		class="text-fg-muted underline decoration-line-heavy underline-offset-4 hover:text-fg">#{n}</a
+		href={resolve('/devices/agents')}
+		class="text-fg-muted underline decoration-line-heavy underline-offset-4 hover:text-fg">{text}</a
 	>
 {/snippet}
 
@@ -116,10 +142,20 @@
 			<span class="font-mono text-[12px] text-fg-subtle">Last seen {ago(device.lastSeen, now)}</span
 			>
 		{/if}
+		{#if stale(device) && device.agent}
+			<span class="font-mono text-[12px] text-fg-subtle"
+				>Metrics from {ago(device.agent.lastSeen, now)}</span
+			>
+		{/if}
 	</p>
 
 	{#if m}
-		<div class="mb-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+		<div
+			class={[
+				'mb-4 grid grid-cols-2 gap-3 transition-opacity md:grid-cols-3 xl:grid-cols-6',
+				stale(device) && 'opacity-60'
+			]}
+		>
 			<MetricTile
 				label="CPU"
 				value={percent(m.cpu, 1)}
@@ -127,6 +163,7 @@
 				warn={75}
 				crit={90}
 				sub={m.load ? `load ${m.load.map((l) => l.toFixed(2)).join(' ')}` : undefined}
+				onclick={() => showUsage('cpu')}
 			/>
 			<MetricTile
 				label="Memory"
@@ -135,6 +172,7 @@
 				warn={80}
 				crit={92}
 				sub="{bytes(m.memory?.used)} of {bytes(m.memory?.total)}"
+				onclick={() => showUsage('mem')}
 			/>
 			<MetricTile
 				label="Disk"
@@ -150,7 +188,22 @@
 				value={duration(m.uptime)}
 				sub={m.procs ? `${m.procs} processes` : undefined}
 			/>
-			{#if m.temp !== undefined}
+			{#if m.battery}
+				{@const b = m.battery}
+				<MetricTile
+					label="Battery"
+					value={percent(b.percent)}
+					sub={b.charging ? 'Charging' : b.onAc ? 'On power' : 'On battery'}
+				>
+					{#snippet icon()}
+						{#if b.charging}
+							<BatteryCharging class="size-5 text-green-fg" />
+						{:else}
+							<BatteryMedium class="size-5 text-fg-muted" />
+						{/if}
+					{/snippet}
+				</MetricTile>
+			{:else if m.temp !== undefined}
 				<MetricTile label="Temperature" value="{m.temp.toFixed(0)}°C" />
 			{:else if m.swap}
 				<MetricTile
@@ -164,27 +217,43 @@
 
 	<div class="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
 		<div class="min-w-0 space-y-4">
-			{#if !m}
+			{#if !device.measuredBy}
 				<Card
 					title="No agent on this machine"
-					description="Tailscale shows whether it's connected and how the hub reaches it."
+					description="Tailscale shows whether it's connected and how the hub reaches it. The agent adds CPU, memory, disk, battery and what's running."
 				>
-					<p class="px-4 py-3 text-[13px] text-fg-subtle">
-						The agent adds CPU, memory, disk, battery and temperature, and it comes with
-						{@render issue(24)}.
-					</p>
+					<div class="space-y-2 p-4 text-[13px] text-fg-muted">
+						{#if agentRuns(device)}
+							<AdminOnly>
+								<p>
+									Run this on {device.name}. It installs a small background service for your user,
+									without root.
+								</p>
+								<AgentInstall />
+								{#snippet fallback()}
+									<p>An admin can install the agent from the {@render agentsLink()} page.</p>
+								{/snippet}
+							</AdminOnly>
+						{:else}
+							<p>
+								The agent runs on macOS and Linux. On {osLabel(device.os)}, Roost shows what
+								Tailscale knows.
+							</p>
+						{/if}
+					</div>
 				</Card>
 			{/if}
 			<Card title="History">
-				{#if device.self}
-					<EmptyState title="Coming soon" icon={LineChart}>
-						CPU, memory and network history come with {@render issue(24)}.
-					</EmptyState>
-				{:else}
-					<div class="p-4">
-						<RttHistory deviceId={device.id} />
-					</div>
-				{/if}
+				{#snippet actions()}
+					<Segmented bind:value={range} options={historyRanges} label="Time range" />
+				{/snippet}
+				<div class="p-4">
+					<DeviceHistory
+						{device}
+						{range}
+						onSelect={device.measuredBy ? (ts) => showUsage('cpu', ts) : undefined}
+					/>
+				</div>
 			</Card>
 		</div>
 
@@ -223,6 +292,15 @@
 				</dl>
 			</Card>
 			<Card title="System">
+				{#snippet actions()}
+					{#if device.agent}
+						<span class="flex items-center gap-1 font-mono text-[11px] text-fg-subtle">
+							<Bot class="size-3" /> agent v{device.agent.version}
+						</span>
+					{:else if device.measuredBy === 'hub'}
+						<span class="font-mono text-[11px] text-fg-subtle">measured by the hub</span>
+					{/if}
+				{/snippet}
 				{#if info}
 					<dl>
 						<DataRow label="Hostname">{info.hostname || device.hostName}</DataRow>
@@ -236,6 +314,13 @@
 						<DataRow label="Cores">{info.cores || '—'}</DataRow>
 						{#if m}
 							<DataRow label="Last report">{ago(m.at, now)} · {dateTime(m.at)}</DataRow>
+						{/if}
+						{#if device.agent?.outdated}
+							<DataRow label="Agent">
+								<span class="text-amber-fg"
+									>update: run the {@render agentsLink('install command')} again</span
+								>
+							</DataRow>
 						{/if}
 					</dl>
 				{:else}
@@ -254,6 +339,15 @@
 	<AdminOnly>
 		<DeviceSettingsDialog {device} bind:open={editing} />
 	</AdminOnly>
+	{#if device.measuredBy}
+		<UsagePanel
+			{device}
+			bind:open={usageOpen}
+			bind:metric={usageMetric}
+			bind:at={usageAt}
+			bind:range
+		/>
+	{/if}
 {:else if live.snapshot}
 	<EmptyState title="No device here" icon={Monitor}>
 		It may have left the tailnet. <a

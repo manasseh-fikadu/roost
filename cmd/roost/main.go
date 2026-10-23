@@ -16,7 +16,7 @@ import (
 // version is set at build time with -ldflags "-X main.version=...".
 var version string
 
-const usage = `Usage: roost <command> [flags]
+const usageText = `Usage: roost <command> [flags]
 
 Commands:
   serve     Run the Roost hub
@@ -45,7 +45,7 @@ func main() {
 
 func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 	if len(args) == 0 {
-		fmt.Fprint(stderr, usage)
+		fmt.Fprint(stderr, usageText)
 		return errUsage
 	}
 	switch args[0] {
@@ -57,10 +57,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintln(stdout, buildVersion())
 		return nil
 	case "help", "-h", "-help", "--help":
-		fmt.Fprint(stdout, usage)
+		fmt.Fprint(stdout, usageText)
 		return nil
 	default:
-		fmt.Fprintf(stderr, "roost: unknown command %q\n\n%s", args[0], usage)
+		fmt.Fprintf(stderr, "roost: unknown command %q\n\n%s", args[0], usageText)
 		return errUsage
 	}
 }

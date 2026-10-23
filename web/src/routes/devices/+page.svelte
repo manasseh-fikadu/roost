@@ -1,5 +1,7 @@
 <script lang="ts">
+	import Bot from '@lucide/svelte/icons/bot';
 	import Monitor from '@lucide/svelte/icons/monitor';
+	import { resolve } from '$app/paths';
 	import type { Status } from '#lib/api/types.js';
 	import DevicesTable from '#lib/devices/DevicesTable.svelte';
 	import { plural } from '#lib/format.js';
@@ -11,6 +13,7 @@
 	import Segmented from '#lib/ui/Segmented.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import StatusDot from '#lib/ui/StatusDot.svelte';
+	import { buttonClass } from '#lib/ui/button.js';
 
 	type Filter = 'all' | Status;
 
@@ -40,6 +43,9 @@
 		: 'Connecting to the hub…'}
 >
 	{#snippet actions()}
+		<a href={resolve('/devices/agents')} class={buttonClass()}>
+			<Bot class="size-3.5" /> Agents
+		</a>
 		{#if live.snapshot}
 			<Segmented bind:value={filter} {options} label="Show devices">
 				{#snippet option(o)}
@@ -77,11 +83,9 @@
 	{/if}
 </Card>
 <p class="mt-4 text-[13px] text-fg-subtle">
-	Roost measures the machine it runs on. The agent, coming with
+	Roost measures the machine it runs on. Install the
 	<a
-		href="https://github.com/manasseh-fikadu/roost/issues/24"
-		target="_blank"
-		rel="noreferrer"
-		class="text-fg-muted underline decoration-line-heavy underline-offset-4 hover:text-fg">#24</a
-	>, adds CPU, memory and disk for the others.
+		href={resolve('/devices/agents')}
+		class="text-fg-muted underline decoration-line-heavy underline-offset-4 hover:text-fg">agent</a
+	> on the others to see their CPU, memory and disk.
 </p>

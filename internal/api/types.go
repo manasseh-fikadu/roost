@@ -243,12 +243,44 @@ type Device struct {
 	// ExitNode reports whether Roost's traffic to the internet goes through
 	// this node.
 	ExitNode bool `json:"exitNode,omitempty"`
+	// MeasuredBy says where Metrics and Info come from. It's empty if Roost
+	// doesn't measure the device.
+	MeasuredBy MeasuredBy `json:"measuredBy,omitempty"`
 	// Metrics are the device's latest metrics, if Roost measures it. Roost
 	// measures its own machine on Linux. Other machines need the agent.
 	Metrics *Metrics `json:"metrics,omitempty"`
 	// Info is what the machine is, if Roost measures it.
-	Info     *DeviceInfo    `json:"info,omitempty"`
+	Info *DeviceInfo `json:"info,omitempty"`
+	// Agent is the device's agent, if one has reported.
+	Agent    *Agent         `json:"agent,omitempty"`
 	Settings DeviceSettings `json:"settings"`
+}
+
+// MeasuredBy says how Roost measures a device.
+type MeasuredBy string
+
+// The ways Roost measures a device.
+const (
+	// MeasuredByHub means the device is the machine Roost runs on, which
+	// Roost measures itself.
+	MeasuredByHub MeasuredBy = "hub"
+	// MeasuredByAgent means the device's agent reports its metrics.
+	MeasuredByAgent MeasuredBy = "agent"
+)
+
+// Agent is a device's agent, which sends a heartbeat with the machine's
+// metrics every 15 seconds.
+type Agent struct {
+	// Version is the agent's version, such as 1.2.0.
+	Version string `json:"version"`
+	// LastSeen is when the agent's latest heartbeat arrived.
+	LastSeen time.Time `json:"lastSeen"`
+	// Stale reports whether the device is online, but the agent stopped
+	// sending heartbeats.
+	Stale bool `json:"stale,omitempty"`
+	// Outdated reports whether the agent is older than the one Roost serves.
+	// Running the install command again updates it.
+	Outdated bool `json:"outdated,omitempty"`
 }
 
 // Status is the state of something Roost watches, such as a device.
@@ -337,8 +369,18 @@ type Metrics struct {
 	NetTx *float64 `json:"netTx,omitempty"`
 	// Temp is the hottest sensor, in degrees Celsius.
 	Temp *float64 `json:"temp,omitempty"`
+	// Battery is missing if the machine has none.
+	Battery *Battery `json:"battery,omitempty"`
 	// Uptime is how long since the machine booted, in seconds.
 	Uptime int64 `json:"uptime,omitempty"`
+}
+
+// Battery is how charged a machine's battery is.
+type Battery struct {
+	Percent  float64 `json:"percent"`
+	Charging bool    `json:"charging"`
+	// OnAC reports whether the machine runs on mains power.
+	OnAC bool `json:"onAc"`
 }
 
 // Usage is how much of something is used, in bytes.
@@ -399,6 +441,15 @@ type DeviceHistory struct {
 	To   time.Time `json:"to"`
 	// Step is the time each point sums up, in milliseconds.
 	Step int64 `json:"step"`
+	// CPU is the average percentage of time the CPUs were busy, and Memory
+	// the average percentage of memory used, for each step in which Roost
+	// measured the device. A value is null if the device didn't report it.
+	CPU    []Point `json:"cpu"`
+	Memory []Point `json:"memory"`
+	// NetRx and NetTx are the average bytes per second received and sent,
+	// for the same steps.
+	NetRx []Point `json:"netRx"`
+	NetTx []Point `json:"netTx"`
 	// RTT is the average round trip from Roost's node in milliseconds, for
 	// each step in which the device was pinged. The value is null if no
 	// ping in the step got a reply.
@@ -411,4 +462,149 @@ type Point struct {
 	TS int64 `json:"ts"`
 	// V is the value, or null if there's none.
 	V *float64 `json:"v" tstype:"number | null,required"`
+}
+
+// AgentSetup is the response to GET /api/agent: how to install the agent.
+// Only admins can see it.
+type AgentSetup struct {
+	// Version is the version of the agent that Roost serves.
+	Version string `json:"version"`
+	// InstallCommand installs the agent on a macOS or Linux machine, or
+	// updates it, for the user who runs it. It holds the token that every
+	// agent sends until per-device enrollment (#8).
+	InstallCommand string `json:"installCommand" roost:"secret"`
+	// UninstallCommand removes the agent.
+	UninstallCommand string `json:"uninstallCommand"`
+}
+
+// DeviceUsage is the response to GET /api/devices/{id}/usage: what uses the
+// device's CPU and memory now. With ?at= and a time in Unix milliseconds,
+// it's the stored minute nearest that time instead.
+type DeviceUsage struct {
+	// Sample is missing if Roost has none.
+	Sample *UsageSample `json:"sample,omitempty"`
+	// Interval is how often the device sends a new sample, in seconds.
+	Interval int `json:"interval"`
+}
+
+// UsageSample is what used a device's CPU and memory at one moment, or over
+// a stored minute, in which case CPU is the minute's average.
+type UsageSample struct {
+	At time.Time `json:"at"`
+	// Cores is how many CPU cores the device has, if it said.
+	Cores int `json:"cores,omitempty"`
+	// Groups are the biggest groups of processes, by CPU and then memory.
+	Groups []UsageGroup `json:"groups"`
+	// Procs are the biggest processes, by CPU and then memory.
+	Procs []UsageProc `json:"procs"`
+	// Total sums up every process, including the ones not listed, if the
+	// device said.
+	Total *UsageTotal `json:"total,omitempty"`
+}
+
+// UsageKind is what a group of processes is.
+type UsageKind string
+
+// The kinds of UsageGroup.
+const (
+	// UsageKindContainer is a Docker or Podman container.
+	UsageKindContainer UsageKind = "container"
+	// UsageKindService is a systemd system service.
+	UsageKindService UsageKind = "service"
+	// UsageKindUserService is a systemd user service, or an app a desktop
+	// started.
+	UsageKindUserService UsageKind = "user-service"
+	// UsageKindSession is a user's login sessions, such as SSH.
+	UsageKindSession UsageKind = "session"
+	// UsageKindKernel is the kernel's own threads.
+	UsageKindKernel UsageKind = "kernel"
+	// UsageKindApp is a macOS app.
+	UsageKindApp UsageKind = "app"
+	// UsageKindOther is anything else, grouped by its program's name.
+	UsageKindOther UsageKind = "other"
+)
+
+// UsageGroup is the processes of one service, container, app or the like.
+type UsageGroup struct {
+	// Key is the group's kind and name, as "kind:name". It's the same from
+	// one sample to the next.
+	Key  string    `json:"key"`
+	Kind UsageKind `json:"kind"`
+	Name string    `json:"name"`
+	// CPU is the group's share of the machine's CPU time, all cores
+	// together, in percent, so the groups add up to the machine's CPU.
+	CPU float64 `json:"cpu"`
+	// Mem is the group's resident memory in bytes, summed over its
+	// processes.
+	Mem uint64 `json:"mem"`
+	// Procs is how many processes the group has.
+	Procs int `json:"procs"`
+	// Top names the group's busiest processes.
+	Top []string `json:"top"`
+}
+
+// UsageProc is one process.
+type UsageProc struct {
+	PID  int    `json:"pid"`
+	Name string `json:"name"`
+	// User is who runs it, if the device said.
+	User string `json:"user"`
+	// Cmd is the command line. Only admins get it, since command lines can
+	// hold passwords and tokens.
+	Cmd string `json:"cmd" roost:"secret"`
+	// CPU and Mem are as in UsageGroup.
+	CPU float64 `json:"cpu"`
+	Mem uint64  `json:"mem"`
+	// Group is the key of the group the process is in.
+	Group string `json:"group"`
+}
+
+// UsageTotal sums up every process on a device.
+type UsageTotal struct {
+	CPU   float64 `json:"cpu"`
+	Mem   uint64  `json:"mem"`
+	Procs int     `json:"procs"`
+}
+
+// UsageHistory is the response to GET /api/devices/{id}/usage/history?range=,
+// where the range is 1h, 6h, 24h or 7d: which groups of processes used the
+// device's CPU and memory.
+type UsageHistory struct {
+	From time.Time `json:"from"`
+	To   time.Time `json:"to"`
+	// Step is the time each point sums up, in milliseconds.
+	Step int64 `json:"step"`
+	// Minutes is how many minutes Roost stored in the range. It stores one a
+	// minute while it gets samples from the device.
+	Minutes int `json:"minutes"`
+	// Consumers are the biggest groups by average CPU, and by average
+	// memory, biggest CPU first.
+	Consumers []UsageConsumer `json:"consumers"`
+	// CPU and Mem chart the few biggest groups by each.
+	CPU []UsageSeries `json:"cpu"`
+	Mem []UsageSeries `json:"mem"`
+}
+
+// UsageConsumer is what a group of processes used over a range. A minute
+// in which the group was too small to store counts as zero.
+type UsageConsumer struct {
+	Key  string    `json:"key"`
+	Kind UsageKind `json:"kind"`
+	Name string    `json:"name"`
+	// CPUAvg and CPUPeak are the group's average and highest CPU of the
+	// minutes, in percent.
+	CPUAvg  float64 `json:"cpuAvg"`
+	CPUPeak float64 `json:"cpuPeak"`
+	// MemAvg and MemPeak are its average and most memory, in bytes.
+	MemAvg  uint64 `json:"memAvg"`
+	MemPeak uint64 `json:"memPeak"`
+}
+
+// UsageSeries is a group's CPU, in percent, or memory, in bytes, averaged
+// over each step that has stored minutes.
+type UsageSeries struct {
+	Key    string    `json:"key"`
+	Kind   UsageKind `json:"kind"`
+	Name   string    `json:"name"`
+	Points []Point   `json:"points"`
 }

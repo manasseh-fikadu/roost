@@ -43,6 +43,8 @@ If you log Roost in as yourself, its node has your access, and nothing more is n
   "grants": [
     // Everyone on the tailnet can open Roost.
     { "src": ["autogroup:member"], "dst": ["tag:roost"], "ip": ["tcp:443", "tcp:80"] },
+    // Tagged servers that run the agent can send it their metrics.
+    { "src": ["tag:server"], "dst": ["tag:roost"], "ip": ["tcp:443", "tcp:80"] },
     // Roost can reach every device, to ping it and to open SSH.
     { "src": ["tag:roost"], "dst": ["*"], "ip": ["tcp:22", "icmp:*"] },
   ],
@@ -53,7 +55,7 @@ The second grant matters even before you use SSH. Tailscale only tells a node ab
 
 ### The machine Roost runs on
 
-In embedded mode, Roost is its own node, so the machine it runs on shows up separately if it's on the tailnet too. Roost marks that device as the same machine when one of its tailnet IPs is on a local network interface. This works when the machine's Tailscale uses a TUN device, which is the default. In a container, or with userspace networking, Roost can't see those addresses, and the machine shows up like any other device. Roost doesn't compare host names, since its own node is named after Roost.
+In embedded mode, Roost is its own node, so the machine it runs on shows up separately if it's on the tailnet too. Roost marks that device as the same machine when one of its tailnet IPs is on a local network interface. This works when the machine's Tailscale uses a TUN device, which is the default. In a container, or with userspace networking, Roost can't see those addresses, and the machine shows up like any other device. Roost doesn't compare host names, since its own node is named after Roost. On Linux, Roost measures that machine itself, so it turns away an agent there.
 
 ## Host mode
 

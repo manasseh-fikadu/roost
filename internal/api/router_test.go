@@ -13,16 +13,18 @@ import (
 )
 
 // TestRoutes walks every route New registers. Each one must say who can use
-// it, a route that changes things must be for admins only, and each must let
-// exactly those callers through.
+// it, a route that changes things must be for admins only, unless it's for
+// agents, and each must let exactly those callers through.
 func TestRoutes(t *testing.T) {
 	t.Parallel()
 	const (
 		anyone = iota + 1
 		viewers
 		admins
+		agentToken
 	)
-	levels := map[string]int{"anyone": anyone, "viewers": viewers, "admins": admins}
+	const token = "test-agent-token"
+	levels := map[string]int{"anyone": anyone, "viewers": viewers, "admins": admins, "agent token": agentToken}
 	callers := []struct {
 		name  string
 		from  netip.Addr
@@ -38,7 +40,7 @@ func TestRoutes(t *testing.T) {
 	wildcard := regexp.MustCompile(`\{[^}]*\}`)
 
 	for _, devUI := range []bool{false, true} {
-		opts := withTailnet(t, testTailnet(), api.Options{})
+		opts := withTailnet(t, testTailnet(), api.Options{AgentToken: token})
 		if devUI {
 			opts.DevUI = &url.URL{Scheme: "http", Host: "127.0.0.1:5173"}
 		}
@@ -59,10 +61,31 @@ func TestRoutes(t *testing.T) {
 				// A pattern without a method matches all of them.
 				path = r.Pattern
 				methods = []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodDelete}
-			} else if method != http.MethodGet && need != admins {
+			} else if method != http.MethodGet && need != admins && need != agentToken {
 				t.Errorf("%s changes things, so it must be for admins, not %s", r.Pattern, r.Level)
 			}
 			target := wildcard.ReplaceAllString(path, "x")
+
+			if need == agentToken {
+				// Only the token counts, from anyone, whatever their role.
+				for _, c := range callers {
+					for _, auth := range []string{"", "Bearer wrong", "Bearer " + token} {
+						req := newRequest(t, method, target, c.from)
+						req.Header.Set(api.CSRFHeader, "1")
+						if auth != "" {
+							req.Header.Set("Authorization", auth)
+						}
+						want := http.StatusUnauthorized
+						if auth == "Bearer "+token {
+							want = http.StatusNoContent
+						}
+						if rec := serve(h, req); rec.Code != want {
+							t.Errorf("%s from %s with %q = %d, want %d", r.Pattern, c.name, auth, rec.Code, want)
+						}
+					}
+				}
+				continue
+			}
 
 			for _, m := range methods {
 				want := need

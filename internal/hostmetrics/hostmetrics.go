@@ -179,7 +179,7 @@ type reader struct {
 
 	prevCPU *cpuTimes
 	prevNet *netTotals
-	recent  []cpuPoint // CPU over the last SustainedWindow
+	recent  CPUWindow
 }
 
 type cpuTimes struct{ busy, total uint64 }
@@ -188,11 +188,6 @@ type netTotals struct {
 	iface  string
 	at     time.Time
 	rx, tx uint64
-}
-
-type cpuPoint struct {
-	at  time.Time
-	cpu float64
 }
 
 // sample measures the machine at now. It fails only if it can't read the
@@ -206,10 +201,10 @@ func (r *reader) sample(now time.Time) (Sample, error) {
 	if prev := r.prevCPU; prev != nil && cpu.total > prev.total && cpu.busy >= prev.busy {
 		pct := min(100, float64(cpu.busy-prev.busy)/float64(cpu.total-prev.total)*100)
 		s.CPU = &pct
-		r.recent = append(r.recent, cpuPoint{now, pct})
+		r.recent.Add(now, pct)
 	}
 	r.prevCPU = &cpu
-	s.CPUSustained = r.sustained(now)
+	s.CPUSustained = r.recent.Average(now)
 
 	mem, swap, err := r.memory()
 	if err != nil {
@@ -231,25 +226,6 @@ func (r *reader) sample(now time.Time) (Sample, error) {
 		}
 	}
 	return s, nil
-}
-
-// sustained returns the average CPU over the SustainedWindow before now, if
-// the samples cover most of it.
-func (r *reader) sustained(now time.Time) *float64 {
-	drop := 0
-	for drop < len(r.recent) && now.Sub(r.recent[drop].at) > SustainedWindow {
-		drop++
-	}
-	r.recent = r.recent[drop:]
-	if len(r.recent) < 3 || now.Sub(r.recent[0].at) < SustainedWindow*8/10 {
-		return nil
-	}
-	var sum float64
-	for _, p := range r.recent {
-		sum += p.cpu
-	}
-	avg := sum / float64(len(r.recent))
-	return &avg
 }
 
 func (r *reader) read(name string) (string, error) {
@@ -503,4 +479,40 @@ func findLine(text, prefix string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// CPUWindow holds the CPU readings of the last SustainedWindow, to tell a
+// busy moment from a busy stretch. The zero value is an empty window.
+type CPUWindow struct {
+	points []cpuPoint
+}
+
+type cpuPoint struct {
+	at  time.Time
+	cpu float64
+}
+
+// Add adds the percentage of time the CPUs were busy at a moment. Moments
+// must be added in order.
+func (w *CPUWindow) Add(at time.Time, cpu float64) {
+	w.points = append(w.points, cpuPoint{at, cpu})
+}
+
+// Average returns the average CPU over the SustainedWindow before now, if
+// the readings cover most of it. It forgets older readings.
+func (w *CPUWindow) Average(now time.Time) *float64 {
+	drop := 0
+	for drop < len(w.points) && now.Sub(w.points[drop].at) > SustainedWindow {
+		drop++
+	}
+	w.points = w.points[drop:]
+	if len(w.points) < 3 || now.Sub(w.points[0].at) < SustainedWindow*8/10 {
+		return nil
+	}
+	var sum float64
+	for _, p := range w.points {
+		sum += p.cpu
+	}
+	avg := sum / float64(len(w.points))
+	return &avg
 }
