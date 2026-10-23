@@ -78,21 +78,32 @@ func TestInstallScripts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, "http://localhost:"+port+"/api/agent/codes", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set(api.CSRFHeader, "1")
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
+	// call sends a request to the API as alice, from her laptop, and decodes
+	// the response into v, unless it's nil.
+	call := func(method, path string, v any) int {
+		t.Helper()
+		req, err := http.NewRequestWithContext(t.Context(), method, "http://localhost:"+port+path, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set(api.CSRFHeader, "1")
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = res.Body.Close() }()
+		if v != nil {
+			if err := json.NewDecoder(res.Body).Decode(v); err != nil {
+				t.Fatalf("%s %s: %v", method, path, err)
+			}
+		}
+		return res.StatusCode
 	}
 	var code api.AgentCode
-	err = json.NewDecoder(res.Body).Decode(&code)
-	_ = res.Body.Close()
-	if err != nil || res.StatusCode != http.StatusCreated {
-		t.Fatalf("POST /api/agent/codes = %d, %v", res.StatusCode, err)
+	if status := call(http.MethodPost, "/api/agent/codes", &code); status != http.StatusCreated {
+		t.Fatalf("POST /api/agent/codes = %d", status)
 	}
+	uninstall := "curl -fsSL http://localhost:" + port + "/api/agent/uninstall.sh | bash"
 
 	secret := func() string {
 		t.Helper()
@@ -140,7 +151,7 @@ func TestInstallScripts(t *testing.T) {
 		t.Errorf("systemctl calls = %q, %v; want the service restarted", calls, err)
 	}
 
-	out, err := run("curl -fsSL http://localhost:" + port + "/api/agent/uninstall.sh | bash")
+	out, err := run(uninstall)
 	if err != nil || !strings.Contains(out, "Roost forgot this machine's agent.") {
 		t.Fatalf("the uninstall command failed: %v\n%s", err, out)
 	}
@@ -152,6 +163,26 @@ func TestInstallScripts(t *testing.T) {
 	}
 	if _, ok := opts.Agents.Reports()["laptop"]; ok {
 		t.Error("Roost still has the laptop's report after uninstalling")
+	}
+
+	// Uninstalling left the code working on this machine, so the agent can
+	// go back on. Once an admin revokes it, the same command can't bring it
+	// back, and uninstalling says Roost doesn't know it anymore.
+	if out, err := run(code.InstallCommand); err != nil || !strings.Contains(out, "Done.") {
+		t.Fatalf("installing again after uninstalling failed: %v\n%s", err, out)
+	}
+	if status := call(http.MethodDelete, "/api/devices/laptop/agent", nil); status != http.StatusNoContent {
+		t.Fatalf("DELETE the laptop's agent = %d, want 204", status)
+	}
+	if out, err := run(code.InstallCommand); err == nil || !strings.Contains(out, "an admin revoked the agent it enrolled") {
+		t.Errorf("installing again after revoking: %v\n%s", err, out)
+	}
+	out, err = run(uninstall)
+	if err != nil || !strings.Contains(out, "Roost doesn't know this agent's secret: it was revoked") {
+		t.Errorf("uninstalling after revoking: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(confDir); !os.IsNotExist(err) {
+		t.Errorf("Stat(%s) after uninstalling a revoked agent: %v, want it gone", confDir, err)
 	}
 
 	// A code Roost doesn't know installs nothing, and says why.

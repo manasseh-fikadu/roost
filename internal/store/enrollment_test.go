@@ -100,6 +100,22 @@ func TestStore_Enroll(t *testing.T) {
 	if _, err := s.EnrolledNode(t.Context(), ""); !errors.Is(err, store.ErrUnknownSecret) {
 		t.Errorf("EnrolledNode(\"\") error = %v, want ErrUnknownSecret", err)
 	}
+
+	// After unenrolling, such as when the agent is uninstalled, the machine
+	// can still use its code. Revoking deletes the code too.
+	third := enroll("laptop", now.Add(2*time.Minute))
+	if ok, err := s.Revoke(t.Context(), "laptop"); !ok || err != nil {
+		t.Errorf("Revoke(laptop) = %v, %v, want true", ok, err)
+	}
+	if _, err := s.EnrolledNode(t.Context(), third); !errors.Is(err, store.ErrUnknownSecret) {
+		t.Errorf("EnrolledNode() after Revoke: error = %v, want ErrUnknownSecret", err)
+	}
+	if err := s.CheckEnrollmentCode(t.Context(), code, "laptop", now); !errors.Is(err, store.ErrUnknownCode) {
+		t.Errorf("CheckEnrollmentCode() after Revoke: error = %v, want ErrUnknownCode", err)
+	}
+	if ok, err := s.Revoke(t.Context(), "laptop"); ok || err != nil {
+		t.Errorf("Revoke(laptop) again = %v, %v, want false", ok, err)
+	}
 }
 
 func TestStore_prunesExpiredCodes(t *testing.T) {

@@ -19,16 +19,21 @@ fi
 # The agent's secret is in env, and goes through stdin (-K -) so it doesn't
 # show up in `ps`.
 if [ -r "$CONF_DIR/env" ] && command -v curl >/dev/null; then
-  if (
+  status=$(
     # shellcheck source=/dev/null
     . "$CONF_DIR/env"
     printf 'header = "Authorization: Bearer %s"\n' "${SECRET:-}" |
-      curl -fsS -m 10 -K - -o /dev/null -X DELETE -H 'X-Roost: agent' "${SERVER_URL:?}/api/agent/enrollment"
-  ); then
-    echo "Roost forgot this machine's agent."
-  else
-    echo "Couldn't tell Roost, so revoke the agent on its Agents page." >&2
-  fi
+      curl -sS -m 10 -K - -o /dev/null -w '%{http_code}' -X DELETE -H 'X-Roost: agent' \
+        "${SERVER_URL:?}/api/agent/enrollment"
+  ) || true
+  case "$status" in
+    2??) echo "Roost forgot this machine's agent." ;;
+    # An admin revoked the agent, or it's from before enrollment and has no
+    # secret of its own. Roost forgot a revoked agent already.
+    401) echo "Roost doesn't know this agent's secret: it was revoked, or it's from before enrollment. If Roost's Agents page still lists it, revoke it there." ;;
+    000 | "") echo "Couldn't reach Roost, so revoke the agent on its Agents page." >&2 ;;
+    *) echo "Roost answered HTTP $status, so revoke the agent on its Agents page." >&2 ;;
+  esac
 fi
 
 rm -rf "$BIN_DIR" "$CONF_DIR"

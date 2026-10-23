@@ -487,7 +487,7 @@ type AgentSetup struct {
 // installs the agent on a macOS or Linux machine, or updates it, for the user
 // who runs it. It holds a new enrollment code, which works on one machine:
 // the first that uses it. That machine can use it again until it expires,
-// such as after a failed install.
+// such as after a failed install, unless an admin revokes its agent.
 type AgentCode struct {
 	InstallCommand string `json:"installCommand" roost:"secret"`
 	// CreatedAt and ExpiresAt are by the hub's clock.

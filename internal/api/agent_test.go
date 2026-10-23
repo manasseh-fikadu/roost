@@ -1,12 +1,16 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
 	"os/exec"
 	"strings"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -145,6 +149,50 @@ func TestHeartbeat_unknownDevice(t *testing.T) {
 	if rec := sendBeat(t, api.New(opts), laptopIP, enrolled(t, st, "laptop"), laptopBeat); rec.Code != http.StatusNotFound {
 		t.Errorf("POST = %d %s, want 404", rec.Code, rec.Body)
 	}
+}
+
+// A heartbeat that was on its way when its agent was revoked doesn't bring
+// the agent's report back.
+func TestHeartbeat_revokedOnTheWay(t *testing.T) {
+	t.Parallel()
+	st := testStore(t)
+	opts := withStore(testTailnet(), st, api.Options{})
+	h := api.New(opts)
+	body := &gatedReader{r: strings.NewReader(laptopBeat), reading: make(chan struct{}), release: make(chan struct{})}
+	req := newRequestBody(t, http.MethodPost, "/api/agent/heartbeat", laptopIP, body)
+	req.Header.Set("Authorization", "Bearer "+enrolled(t, st, "laptop"))
+	done := make(chan *httptest.ResponseRecorder)
+	go func() { done <- serve(h, req) }()
+
+	// The router has taken the secret, and the handler is reading the
+	// heartbeat.
+	<-body.reading
+	if rec := send(t, h, http.MethodDelete, "/api/devices/laptop/agent", laptopIP, ""); rec.Code != http.StatusNoContent {
+		t.Errorf("DELETE the laptop's agent = %d %s, want 204", rec.Code, rec.Body)
+	}
+	close(body.release)
+	if rec := <-done; rec.Code != http.StatusUnauthorized {
+		t.Errorf("the heartbeat = %d %s, want 401", rec.Code, rec.Body)
+	}
+	if reports := opts.Agents.Reports(); len(reports) != 0 {
+		t.Errorf("reports = %v, want none after the revoke", reports)
+	}
+}
+
+// A gatedReader closes reading when it's first read, and then waits for
+// release before it reads from r.
+type gatedReader struct {
+	r                io.Reader
+	reading, release chan struct{}
+	once             sync.Once
+}
+
+func (g *gatedReader) Read(p []byte) (int, error) {
+	g.once.Do(func() {
+		close(g.reading)
+		<-g.release
+	})
+	return g.r.Read(p)
 }
 
 // A heartbeat shows up in the snapshot, and its processes in the device's
@@ -378,8 +426,10 @@ func TestEnroll(t *testing.T) {
 		code     string // "fresh", "expired", "laptop's" (used by the laptop) or "unknown"
 		measured bool
 		// missing leaves the laptop out of Roost's last status.
-		missing  bool
-		wantCode int
+		missing bool
+		// whoIsFails makes Tailscale fail to say who sent the request.
+		whoIsFails bool
+		wantCode   int
 	}{
 		{name: "a fresh code", from: laptopIP, code: "fresh", wantCode: http.StatusOK},
 		{name: "a tagged server", from: serverIP, code: "fresh", wantCode: http.StatusOK},
@@ -391,6 +441,8 @@ func TestEnroll(t *testing.T) {
 		{name: "the hub, which Roost measures", from: roostIP, code: "fresh", measured: true, wantCode: http.StatusConflict},
 		{name: "the hub, which Roost can't measure", from: roostIP, code: "fresh", wantCode: http.StatusOK},
 		{name: "a machine Roost hasn't seen yet", from: laptopIP, code: "fresh", missing: true, wantCode: http.StatusNotFound},
+		// The laptop could use its code again once Tailscale answers.
+		{name: "Tailscale fails", from: laptopIP, code: "laptop's", whoIsFails: true, wantCode: http.StatusServiceUnavailable},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -401,6 +453,11 @@ func TestEnroll(t *testing.T) {
 					Tailnet: opts.Snapshot, Store: st, Agents: opts.Agents,
 					Host: func() hostmetrics.Reading { return hostmetrics.Reading{} },
 				})
+			}
+			if tt.whoIsFails {
+				opts.WhoIs = func(context.Context, string) (*tailnet.Identity, error) {
+					return nil, errors.New("tailscaled went away")
+				}
 			}
 			if tt.missing {
 				full := opts.Snapshot
@@ -511,6 +568,17 @@ func TestInstallScript(t *testing.T) {
 			t.Errorf("%s: the script exits %d (%v) and says %q, want 1 and a message with %q", tt.name, code, err, out, tt.refusal)
 		}
 	}
+
+	// Without the machine, Roost can't tell that the laptop used the code,
+	// and asks it to try again rather than saying another machine did.
+	opts := withStore(testTailnet(), st, api.Options{})
+	opts.WhoIs = func(context.Context, string) (*tailnet.Identity, error) {
+		return nil, errors.New("tailscaled went away")
+	}
+	script := serve(api.New(opts), newRequest(t, http.MethodGet, "/api/agent/install/"+used, laptopIP)).Body.String()
+	if want := "Tailscale which machine this is, so run the command again"; !strings.Contains(script, want) || strings.Contains(script, "agent.sh") {
+		t.Errorf("the install script when Tailscale fails doesn't refuse with %q:\n%.300s", want, script)
+	}
 }
 
 // Uninstalling the agent unenrolls it, and Roost forgets what it reported.
@@ -519,7 +587,11 @@ func TestUnenroll(t *testing.T) {
 	st := testStore(t)
 	opts := withStore(testTailnet(), st, api.Options{})
 	h := api.New(opts)
-	secret := enrolled(t, st, "laptop")
+	code := newCode(t, st, time.Now())
+	secret, _, err := st.Enroll(t.Context(), code, "laptop", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if rec := sendBeat(t, h, laptopIP, secret, laptopBeat); rec.Code != http.StatusNoContent {
 		t.Fatalf("POST = %d %s", rec.Code, rec.Body)
 	}
@@ -538,6 +610,10 @@ func TestUnenroll(t *testing.T) {
 	if rec := sendBeat(t, h, laptopIP, secret, laptopBeat); rec.Code != http.StatusUnauthorized {
 		t.Errorf("a heartbeat after uninstalling = %d %s, want 401", rec.Code, rec.Body)
 	}
+	// The machine can install the agent again with the same command.
+	if rec := sendAs(t, h, http.MethodPost, "/api/agent/enroll", laptopIP, code, ""); rec.Code != http.StatusOK {
+		t.Errorf("enrolling again after uninstalling = %d %s, want 200", rec.Code, rec.Body)
+	}
 }
 
 func TestRevokeAgent(t *testing.T) {
@@ -545,7 +621,11 @@ func TestRevokeAgent(t *testing.T) {
 	st := testStore(t)
 	opts := withStore(testTailnet(), st, api.Options{})
 	h := api.New(opts)
-	secret := enrolled(t, st, "laptop")
+	code := newCode(t, st, time.Now())
+	secret, _, err := st.Enroll(t.Context(), code, "laptop", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
 	if rec := sendBeat(t, h, laptopIP, secret, laptopBeat); rec.Code != http.StatusNoContent {
 		t.Fatalf("POST = %d %s", rec.Code, rec.Body)
 	}
@@ -593,6 +673,10 @@ func TestRevokeAgent(t *testing.T) {
 	}
 	if rec := sendBeat(t, h, laptopIP, secret, laptopBeat); rec.Code != http.StatusUnauthorized {
 		t.Errorf("a heartbeat after revoking = %d %s, want 401", rec.Code, rec.Body)
+	}
+	// Running the install command again doesn't undo the revoke.
+	if rec := sendAs(t, h, http.MethodPost, "/api/agent/enroll", laptopIP, code, ""); rec.Code != http.StatusUnauthorized {
+		t.Errorf("enrolling again with the old code after revoking = %d %s, want 401", rec.Code, rec.Body)
 	}
 }
 

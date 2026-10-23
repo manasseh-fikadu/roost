@@ -174,13 +174,16 @@ func (h *handler) allow(r route, next http.Handler) http.Handler {
 // says. It returns the status and message to deny the request with, or 0.
 func (h *handler) checkMachine(req *http.Request, need level) (int, string) {
 	ctx, c, token := req.Context(), callerOf(req), bearer(req)
+	// Without the machine, a code it used would look like another machine's.
+	if c.reason == ReasonWhoIsFailed {
+		return http.StatusServiceUnavailable, whoIsFailed
+	}
 	switch need {
 	case agentSecret:
 		node, err := h.opts.Store.EnrolledNode(ctx, token)
 		switch {
 		case errors.Is(err, store.ErrUnknownSecret):
-			return http.StatusUnauthorized, "Roost doesn't know this agent's secret, which an admin may have revoked; " +
-				"to report again, run a new install command from Add agent on Roost's Agents page"
+			return http.StatusUnauthorized, unknownSecret
 		case err != nil:
 			h.log.Error("look up an agent's secret", "error", err)
 			return http.StatusServiceUnavailable, "Roost couldn't check this agent's secret"
@@ -195,14 +198,18 @@ func (h *handler) checkMachine(req *http.Request, need level) (int, string) {
 	default:
 		panic("api: checkMachine for a route at level " + need.String())
 	}
-	switch {
-	case c.reason == ReasonWhoIsFailed:
-		return http.StatusServiceUnavailable, "Roost couldn't ask Tailscale which machine this is"
-	case c.node == "":
+	if c.node == "" {
 		return http.StatusForbidden, "Tailscale doesn't know the machine this came from"
 	}
 	return 0, ""
 }
+
+// Why Roost refuses a request from a machine.
+const (
+	whoIsFailed   = "Roost couldn't ask Tailscale which machine this is"
+	unknownSecret = "Roost doesn't know this agent's secret, which an admin may have revoked; " +
+		"to report again, run a new install command from Add agent on Roost's Agents page"
+)
 
 // codeDenial returns the status and message to refuse an enrollment code
 // with, for an error from the store.
@@ -210,7 +217,8 @@ func (h *handler) codeDenial(err error) (int, string) {
 	const next = "get a new one from Add agent on Roost's Agents page"
 	switch {
 	case errors.Is(err, store.ErrUnknownCode):
-		return http.StatusUnauthorized, "Roost doesn't know the code in this install command, or it expired a while ago; " + next
+		return http.StatusUnauthorized, "Roost doesn't know the code in this install command: it expired a while ago, " +
+			"or an admin revoked the agent it enrolled; " + next
 	case errors.Is(err, store.ErrCodeExpired):
 		return http.StatusUnauthorized, "this install command expired, since each one works for an hour; " + next
 	case errors.Is(err, store.ErrCodeUsed):

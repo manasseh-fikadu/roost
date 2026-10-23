@@ -42,6 +42,21 @@ func (h *handler) heartbeat(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: "can't read the heartbeat: " + err.Error()})
 		return
 	}
+	// An admin may have revoked the agent while its heartbeat arrived. If the
+	// revoke landed between the router's check and Record, the agent would
+	// have a report again and no enrollment, so the secret is checked again
+	// while revokes wait.
+	h.agentsMu.RLock()
+	defer h.agentsMu.RUnlock()
+	switch _, err := h.opts.Store.EnrolledNode(r.Context(), bearer(r)); {
+	case errors.Is(err, store.ErrUnknownSecret):
+		w.Header().Set("WWW-Authenticate", "Bearer")
+		h.writeJSON(w, r, http.StatusUnauthorized, ErrorBody{Error: unknownSecret})
+		return
+	case err != nil:
+		h.fail(w, r, "look up an agent's secret", err)
+		return
+	}
 	report, err := h.opts.Agents.Record(r.Context(), historyID, hb, time.Now())
 	if err != nil {
 		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: err.Error()})
@@ -82,13 +97,20 @@ func (h *handler) newEnrollmentCode(w http.ResponseWriter, r *http.Request) {
 // script comes with a 200, since the install command pipes curl -f into
 // bash, so bash would see nothing at all of an error status.
 func (h *handler) installScript(w http.ResponseWriter, r *http.Request) {
-	code := r.PathValue("code")
-	script := agent.Install(h.appURL(r), code)
-	if err := h.opts.Store.CheckEnrollmentCode(r.Context(), code, callerOf(r).node, time.Now()); err != nil {
-		_, msg := h.codeDenial(err)
-		script = "#!/bin/sh\necho " + shellWord("Roost won't install the agent: "+msg+".") + " >&2\nexit 1\n"
+	c, code := callerOf(r), r.PathValue("code")
+	refusal := ""
+	if c.reason == ReasonWhoIsFailed {
+		// Without the machine, a code it used would look like another
+		// machine's.
+		refusal = whoIsFailed + ", so run the command again in a moment"
+	} else if err := h.opts.Store.CheckEnrollmentCode(r.Context(), code, c.node, time.Now()); err != nil {
+		_, refusal = h.codeDenial(err)
 	}
-	writeScript(w, script)
+	if refusal != "" {
+		writeScript(w, "#!/bin/sh\necho "+shellWord("Roost won't install the agent: "+refusal+".")+" >&2\nexit 1\n")
+		return
+	}
+	writeScript(w, agent.Install(h.appURL(r), code))
 }
 
 // uninstallScript answers GET /api/agent/uninstall.sh with the script that
@@ -103,7 +125,6 @@ func writeScript(w http.ResponseWriter, script string) {
 	w.Header().Set("Cache-Control", "no-store")
 	// A failed write means the client went away, and there's no one left to
 	// tell.
-	//nolint:gosec // G705: it's a shell script that browsers don't render, and the guard checked the host in its URL.
 	_, _ = w.Write([]byte(script))
 }
 
@@ -138,6 +159,8 @@ func (h *handler) enroll(w http.ResponseWriter, r *http.Request) {
 // what the agent reported.
 func (h *handler) unenroll(w http.ResponseWriter, r *http.Request) {
 	node := callerOf(r).node
+	h.agentsMu.Lock()
+	defer h.agentsMu.Unlock()
 	if _, err := h.opts.Store.Unenroll(r.Context(), node); err != nil {
 		h.fail(w, r, "unenroll an agent", err)
 		return
@@ -172,7 +195,11 @@ func (h *handler) revokeAgent(w http.ResponseWriter, r *http.Request) {
 		h.notFound(w, r)
 		return
 	}
-	revoked, err := h.opts.Store.Unenroll(r.Context(), h.nodesOf(historyID)...)
+	h.agentsMu.Lock()
+	defer h.agentsMu.Unlock()
+	// Unlike uninstalling, revoking deletes the code the agent enrolled with,
+	// so running its install command again doesn't undo the revoke.
+	revoked, err := h.opts.Store.Revoke(r.Context(), h.nodesOf(historyID)...)
 	if err != nil {
 		h.fail(w, r, "revoke an agent", err)
 		return

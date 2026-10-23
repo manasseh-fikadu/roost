@@ -176,8 +176,19 @@ func (s *Store) Enrollments(ctx context.Context) (map[string]Enrollment, error) 
 
 // Unenroll deletes the secrets of the agents on the machines with the node
 // IDs nodeIDs, so Roost refuses their heartbeats, and reports whether any
-// had one.
+// had one. A machine can still enroll again with the code it used until the
+// code expires, such as to install the agent again after uninstalling it.
 func (s *Store) Unenroll(ctx context.Context, nodeIDs ...string) (bool, error) {
+	return s.unenroll(ctx, "unenroll an agent", false, nodeIDs)
+}
+
+// Revoke is Unenroll, except that it also deletes the codes those machines
+// enrolled with, so an install command run before can't enroll them again.
+func (s *Store) Revoke(ctx context.Context, nodeIDs ...string) (bool, error) {
+	return s.unenroll(ctx, "revoke an agent", true, nodeIDs)
+}
+
+func (s *Store) unenroll(ctx context.Context, what string, codes bool, nodeIDs []string) (bool, error) {
 	var n int64
 	err := s.inTx(ctx, func(tx *sql.Tx) error {
 		for _, id := range nodeIDs {
@@ -188,11 +199,16 @@ func (s *Store) Unenroll(ctx context.Context, nodeIDs ...string) (bool, error) {
 			// SQLite always knows how many rows a DELETE affected.
 			affected, _ := res.RowsAffected()
 			n += affected
+			if codes {
+				if _, err := tx.ExecContext(ctx, "DELETE FROM enrollment_codes WHERE node_id = ?", id); err != nil {
+					return err
+				}
+			}
 		}
 		return nil
 	})
 	if err != nil {
-		return false, fmt.Errorf("unenroll an agent: %w", err)
+		return false, fmt.Errorf("%s: %w", what, err)
 	}
 	return n > 0, nil
 }

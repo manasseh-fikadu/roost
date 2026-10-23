@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"sync"
 	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/agents"
@@ -123,6 +124,10 @@ func (h *handler) routes(rt *router) {
 type handler struct {
 	opts Options
 	log  *slog.Logger
+	// agentsMu is held to write while an agent is revoked or unenrolled, and
+	// to read while a heartbeat is recorded, so a heartbeat that was on its
+	// way can't bring the agent's report back.
+	agentsMu sync.RWMutex
 }
 
 func (h *handler) health(w http.ResponseWriter, r *http.Request) {
