@@ -182,6 +182,15 @@ export interface Snapshot {
    * laptops, desktops, tablets, phones and others, each by name.
    */
   devices: Device[];
+  /**
+   * Checks are the checks admins set up, by group and name, and then a
+   * ping check for each peer, in the order of Devices.
+   */
+  checks: Check[];
+  /**
+   * Health sums up the checks.
+   */
+  health: HealthScore;
 }
 /**
  * Hub is the Roost server itself.
@@ -932,4 +941,279 @@ export interface UsageSeries {
   kind: UsageKind;
   name: string;
   points: Point[];
+}
+/**
+ * A Check probes something from the hub every so often: a URL, a TCP port or
+ * a host name that an admin set up, or a peer, which Roost pings.
+ */
+export interface Check {
+  /**
+   * ID is a ping check's "ping:" and its device's ID.
+   */
+  id: string;
+  name: string;
+  kind: CheckKind;
+  /**
+   * Target is what the check probes: a URL, host:port, host name, or a
+   * peer's IP address. Only admins get it, since a URL can hold a secret.
+   */
+  target: string;
+  /**
+   * Endpoint is the part of Target that holds no secret, for everyone: a
+   * URL's scheme, host and port, or else all of Target.
+   */
+  endpoint: string;
+  /**
+   * Group is the group the check is listed in. Ping checks are in
+   * "Tailnet".
+   */
+  group: string;
+  /**
+   * IntervalSec is how often the check runs, in seconds.
+   */
+  intervalSec: number /* int */;
+  /**
+   * TimeoutMs is how long the target has to answer, in milliseconds.
+   */
+  timeoutMs: number /* int */;
+  /**
+   * ExpectStatus is the status an HTTP check expects. If it's missing, any
+   * status below 400 passes.
+   */
+  expectStatus?: number /* int */;
+  /**
+   * Insecure reports whether an HTTP check skips checking the server's
+   * TLS certificate.
+   */
+  insecure?: boolean;
+  /**
+   * Paused reports whether an admin paused the check, so it only runs when
+   * they ask.
+   */
+  paused?: boolean;
+  /**
+   * DeviceID is the device a ping check pings. Roost makes a ping check for
+   * each peer, and they can't be changed.
+   */
+  deviceId?: string;
+  state: CheckState;
+  /**
+   * StateReason says why the check has its state, such as "HTTP 200 OK" or
+   * why it failed.
+   */
+  stateReason: string;
+  /**
+   * Last is the check's latest result, if it has one. GET
+   * /api/checks/recent has the ones before.
+   */
+  last?: CheckResult;
+  /**
+   * Failures is how many of its latest results failed in a row.
+   */
+  failures: number /* int */;
+  /**
+   * Uptime is the percentage of its results in the last day that passed,
+   * or null if it has none.
+   */
+  uptime: number | null;
+}
+/**
+ * CheckKind is what a check probes.
+ */
+/**
+ * CheckKindHTTP sends a GET request to a URL. It passes if the status is
+ * the one expected, or below 400 if none is. It doesn't follow
+ * redirects.
+ */
+export const CheckKindHTTP = "http";
+/**
+ * CheckKindTCP passes if a TCP connection to host:port opens.
+ */
+export const CheckKindTCP = "tcp";
+/**
+ * CheckKindDNS passes if a host name resolves, with the hub's resolver.
+ */
+export const CheckKindDNS = "dns";
+/**
+ * CheckKindPing is Roost's ping of a peer over the tailnet, every
+ * minute. It fails when the peer misses two pings in a row, as on the
+ * device's page, since a peer can miss one now and then.
+ */
+export const CheckKindPing = "ping";
+/**
+ * The kinds of Check.
+ */
+export type CheckKind = typeof CheckKindHTTP | typeof CheckKindTCP | typeof CheckKindDNS | typeof CheckKindPing;
+/**
+ * CheckState says whether a check passes.
+ */
+export const CheckStatePassing = "passing";
+export const CheckStateFailing = "failing";
+/**
+ * CheckStatePending means the check hasn't got a result yet.
+ */
+export const CheckStatePending = "pending";
+/**
+ * CheckStatePaused means an admin paused the check.
+ */
+export const CheckStatePaused = "paused";
+/**
+ * CheckStateUnavailable means the check can't run now, such as a ping
+ * check of a device that's offline.
+ */
+export const CheckStateUnavailable = "unavailable";
+/**
+ * The states of a Check.
+ */
+export type CheckState = typeof CheckStatePassing | typeof CheckStateFailing | typeof CheckStatePending | typeof CheckStatePaused | typeof CheckStateUnavailable;
+/**
+ * CheckResult is what happened when a check ran once.
+ */
+export interface CheckResult {
+  /**
+   * At is when it started.
+   */
+  at: string /* RFC 3339 */;
+  ok: boolean;
+  /**
+   * LatencyMs is how long the target took to answer, in milliseconds. It's
+   * missing if nothing answered.
+   */
+  latencyMs?: number /* float64 */;
+  /**
+   * Detail says what happened, such as "HTTP 200 OK", or why it failed.
+   */
+  detail: string;
+}
+/**
+ * RecentResults is the response to GET /api/checks/recent: the latest
+ * results of every check, up to 30 of each, so the app can draw them. The
+ * snapshots only have each check's last one.
+ */
+export interface RecentResults {
+  /**
+   * Checks holds each check's results, oldest first, by check ID.
+   */
+  checks: { [key: string]: CheckResult[]};
+}
+/**
+ * HealthScore sums up the checks: the share of the checks that run and
+ * pass.
+ */
+export interface HealthScore {
+  /**
+   * Score is the percentage of the live checks, the ones passing or
+   * failing, that pass, rounded. It's null if none are live.
+   */
+  score: number | null;
+  label: HealthLabel;
+  /**
+   * Passing and Failing count the live checks.
+   */
+  passing: number /* int */;
+  failing: number /* int */;
+  /**
+   * Unavailable counts the other checks: pending, paused or unavailable.
+   */
+  unavailable: number /* int */;
+  total: number /* int */;
+}
+/**
+ * HealthLabel puts a health score in words.
+ */
+/**
+ * HealthLabelHealthy is a score of 90 or more.
+ */
+export const HealthLabelHealthy = "healthy";
+/**
+ * HealthLabelDegraded is a score of 70 or more.
+ */
+export const HealthLabelDegraded = "degraded";
+/**
+ * HealthLabelCritical is a score below 70.
+ */
+export const HealthLabelCritical = "critical";
+/**
+ * HealthLabelUnknown means there's no score, since no check is live.
+ */
+export const HealthLabelUnknown = "unknown";
+/**
+ * The labels of a HealthScore.
+ */
+export type HealthLabel = typeof HealthLabelHealthy | typeof HealthLabelDegraded | typeof HealthLabelCritical | typeof HealthLabelUnknown;
+/**
+ * CheckInput is the body of POST /api/checks, which adds a check, and of PUT
+ * /api/checks/{id}, which replaces one. Both answer with the Check. A field
+ * that's left out gets its default.
+ */
+export interface CheckInput {
+  /**
+   * Name is required.
+   */
+  name: string;
+  /**
+   * Kind is http, tcp or dns. Roost makes the ping checks.
+   */
+  kind: CheckKind;
+  /**
+   * Target is a full http or https URL for an HTTP check, host:port for a
+   * TCP check, or a host name for a DNS check.
+   */
+  target: string;
+  /**
+   * Group is "Custom" if it's left out.
+   */
+  group?: string;
+  /**
+   * IntervalSec is from 10 seconds to a day, and 60 if it's left out.
+   */
+  intervalSec?: number /* int */;
+  /**
+   * TimeoutMs is from 200 ms to a minute, and shorter than the interval.
+   * It's 5000 if it's left out.
+   */
+  timeoutMs?: number /* int */;
+  expectStatus?: number /* int */;
+  insecure?: boolean;
+  paused?: boolean;
+}
+/**
+ * CheckHistory is the response to GET /api/checks/{id}/history?range=, where
+ * the range is 1h, 6h, 24h or 7d.
+ */
+export interface CheckHistory {
+  from: string /* RFC 3339 */;
+  to: string /* RFC 3339 */;
+  /**
+   * Step is the time each point sums up, in milliseconds.
+   */
+  step: number /* int64 */;
+  /**
+   * Latency is the average time the target took to answer, in
+   * milliseconds, for each step in which the check ran. The value is null
+   * if nothing answered.
+   */
+  latency: Point[];
+  /**
+   * Uptime is the percentage of the runs that passed, for the same steps.
+   */
+  uptime: Point[];
+}
+/**
+ * HealthHistory is the response to GET /api/health/history?range=, where the
+ * range is 1h, 6h, 24h or 7d. GET /api/health itself only says the hub is
+ * up.
+ */
+export interface HealthHistory {
+  from: string /* RFC 3339 */;
+  to: string /* RFC 3339 */;
+  /**
+   * Step is the time each point sums up, in milliseconds.
+   */
+  step: number /* int64 */;
+  /**
+   * Score is the average health score for each step that has one. Roost
+   * samples it every minute.
+   */
+  score: Point[];
 }

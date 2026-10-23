@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/agents"
+	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
@@ -27,6 +28,8 @@ const (
 	// metricsEvery is how often a device's metrics are stored for its
 	// history, give or take the time between its samples.
 	metricsEvery = 30 * time.Second
+	// healthEvery is how often the health score is stored for its history.
+	healthEvery = time.Minute
 )
 
 // FeedOptions configures NewFeed.
@@ -44,6 +47,9 @@ type FeedOptions struct {
 	HostChanged <-chan struct{}
 	// Agents holds what agents report. Nil means there are none.
 	Agents *agents.Registry
+	// Checks runs the checks, and keeps the pings of each peer. Nil means
+	// there are none.
+	Checks *checks.Runner
 	// Store holds the devices' settings and history. Required.
 	Store *store.Store
 	// Logger receives errors. Nil discards them.
@@ -55,8 +61,8 @@ type FeedOptions struct {
 // compressed once, for admins and once for everyone else, and every client
 // gets the same bytes.
 //
-// It also records each ping of a peer, and the devices' metrics every
-// metricsEvery, for their history.
+// It also records each ping of a peer, the devices' metrics every
+// metricsEvery and the health score every healthEvery, for their history.
 type Feed struct {
 	opts  FeedOptions
 	log   *slog.Logger
@@ -77,6 +83,7 @@ type Feed struct {
 	// the ID their history is kept under.
 	metricsAt  map[string]time.Time
 	metricsErr error
+	healthErr  error
 
 	mu  sync.Mutex
 	cur *published
@@ -110,14 +117,21 @@ func NewFeed(opts FeedOptions) *Feed {
 // Run builds a snapshot now, and then each time what Roost knows changes,
 // until ctx ends.
 func (f *Feed) Run(ctx context.Context) {
-	agentsChanged := f.agentsChanged()
+	agentsChanged, checksChanged := f.agentsChanged(), f.checksChanged()
 	heartbeat := time.NewTimer(feedHeartbeat)
 	defer heartbeat.Stop()
+	health := time.NewTicker(healthEvery)
+	defer health.Stop()
 	gap := time.NewTimer(0)
 	defer gap.Stop()
+	sampleHealth := false
 	for {
 		builtAt := time.Now()
-		f.publish(ctx)
+		p := f.publish(ctx)
+		if sampleHealth && p != nil {
+			f.recordHealth(ctx, p.snap)
+			sampleHealth = false
+		}
 		heartbeat.Reset(feedHeartbeat)
 		select {
 		case <-ctx.Done():
@@ -125,8 +139,11 @@ func (f *Feed) Run(ctx context.Context) {
 		case <-f.opts.TailnetChanged:
 		case <-f.opts.HostChanged:
 		case <-agentsChanged:
+		case <-checksChanged:
 		case <-f.poked:
 		case <-heartbeat.C:
+		case <-health.C:
+			sampleHealth = true
 		}
 		gap.Reset(time.Until(builtAt.Add(feedGap)))
 		select {
@@ -147,12 +164,20 @@ func (f *Feed) agentsChanged() <-chan struct{} {
 	return f.opts.Agents.Changes()
 }
 
+// checksChanged returns the channel that says the checks changed, or nil.
+func (f *Feed) checksChanged() <-chan struct{} {
+	if f.opts.Checks == nil {
+		return nil
+	}
+	return f.opts.Checks.Changes()
+}
+
 // measuresHub reports whether Roost measures the machine it runs on.
 func (f *Feed) measuresHub() bool { return f.opts.Host != nil }
 
 // drain takes the changes waiting to be heard of.
 func (f *Feed) drain() {
-	for _, ch := range []<-chan struct{}{f.opts.TailnetChanged, f.opts.HostChanged, f.agentsChanged(), f.poked} {
+	for _, ch := range []<-chan struct{}{f.opts.TailnetChanged, f.opts.HostChanged, f.agentsChanged(), f.checksChanged(), f.poked} {
 		select {
 		case <-ch:
 		default:
@@ -199,6 +224,10 @@ func (f *Feed) publish(ctx context.Context) *published {
 	f.recordMetrics(ctx, src, now)
 	src.settings = f.loadSettings(ctx)
 	src.enrolled = f.loadEnrollments(ctx)
+	if c := f.opts.Checks; c != nil {
+		c.ObservePings(src.tailnet)
+		src.checks, src.pings = c.Checks(), c.Pings()
+	}
 
 	snap := newSnapshot(src, now)
 	p := &published{snap: snap, next: make(chan struct{})}
@@ -356,6 +385,25 @@ func metricsRow(id string, s hostmetrics.Sample, b *agents.Battery) store.Metric
 		row.Battery = new(b.Percent)
 	}
 	return row
+}
+
+// recordHealth stores the health score of snap, if it has one.
+func (f *Feed) recordHealth(ctx context.Context, snap Snapshot) {
+	h := snap.Health
+	score, ok := scoreOf(h)
+	if !ok {
+		return
+	}
+	err := f.opts.Store.AddHealth(ctx, store.HealthSample{
+		At: snap.GeneratedAt, Score: score, Passing: h.Passing, Failing: h.Failing, Unavailable: h.Unavailable,
+	})
+	switch {
+	case err != nil && ctx.Err() == nil && f.healthErr == nil:
+		f.log.Warn("record the health score", "error", err)
+	case err == nil && f.healthErr != nil:
+		f.log.Info("recorded the health score again")
+	}
+	f.healthErr = err
 }
 
 // loadSettings returns the devices' settings, or the last ones it read if

@@ -20,6 +20,7 @@ import (
 
 	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/api"
+	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/config"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/store"
@@ -159,6 +160,13 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	}
 	recorder := usage.NewRecorder(st, logger)
 	wg.Go(func() { recorder.Run(ctx) })
+	// Checks dial through the node, which reaches the tailnet's addresses
+	// and names as well as the internet.
+	runner := checks.NewRunner(st, checks.Options{Dial: node.Dial, Logger: logger})
+	if err := runner.Load(ctx); err != nil {
+		return errors.Join(fmt.Errorf("load the checks: %w", err), res.ln.Close(), srvs.stop(ctx))
+	}
+	wg.Go(func() { runner.Run(ctx) })
 
 	poller := tailnet.NewPoller(node, logger)
 	wg.Go(func() { poller.Run(ctx) })
@@ -167,6 +175,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		Tailnet:        poller.Snapshot,
 		TailnetChanged: poller.Changes(),
 		Agents:         registry,
+		Checks:         runner,
 		Store:          st,
 		Logger:         logger,
 	}
@@ -199,6 +208,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		Store:    st,
 		Agents:   registry,
 		Usage:    recorder,
+		Checks:   runner,
 		AppURL:   res.url,
 		Stopping: stopping,
 		Logger:   logger,
