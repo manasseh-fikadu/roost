@@ -28,8 +28,6 @@ const (
 	RecentResults = 30
 	// UptimeSpan is the time an uptime covers.
 	UptimeSpan = 24 * time.Hour
-	// uptimeEvery is how often the uptimes are worked out again.
-	uptimeEvery = time.Minute
 	// startSpread is the time between the checks' first runs, so they don't
 	// all run as Roost starts.
 	startSpread = 400 * time.Millisecond
@@ -77,11 +75,10 @@ type Runner struct {
 	mu      sync.Mutex
 	checks  map[string]*entry
 	pings   map[string]*pinged
-	uptime  store.Uptime
 	stopped bool
-	// recordErr and uptimeErr are the latest errors from the store, so each
-	// is logged once until it works again.
-	recordErr, uptimeErr error
+	// recordErr is the latest error from storing a result, so it's logged
+	// once until storing works again.
+	recordErr error
 }
 
 // An entry is a check and what the runner knows of it.
@@ -97,6 +94,8 @@ type entry struct {
 	run, pending *run
 	recent       []Result
 	failures     int
+	// tally counts its results over the last UptimeSpan.
+	tally tally
 }
 
 // A run is one run of a check, which callers can wait for.
@@ -122,6 +121,8 @@ type pinged struct {
 	last   time.Time
 	recent []Result
 	misses int
+	// tally counts its pings over the last UptimeSpan.
+	tally tally
 }
 
 // NewRunner returns a Runner for the checks in st. Call Load before Run.
@@ -150,8 +151,9 @@ func NewRunner(st *store.Store, opts Options) *Runner {
 }
 
 // Load reads the checks from the store, with their latest results and the
-// latest pings of each peer, and works out their uptimes. It fails only if
-// it can't read the checks.
+// latest pings of each peer, and counts their results over the last
+// UptimeSpan. From then on, the runner counts them as they come. It fails
+// only if it can't read the checks.
 func (r *Runner) Load(ctx context.Context) error {
 	defs, err := r.st.Checks(ctx)
 	if err != nil {
@@ -166,6 +168,10 @@ func (r *Runner) Load(ctx context.Context) error {
 	pings, err := r.st.RecentPings(ctx, since, RecentResults)
 	if err != nil {
 		r.log.Warn("read the latest pings", "error", err)
+	}
+	checkTallies, pingTallies, err := r.st.Tallies(ctx, since, tallyStep)
+	if err != nil {
+		r.log.Warn("count the checks' results", "error", err)
 	}
 
 	r.mu.Lock()
@@ -187,8 +193,20 @@ func (r *Runner) Load(ctx context.Context) error {
 		}
 		r.pings[id] = p
 	}
+	for _, t := range checkTallies {
+		if e := r.checks[t.ID]; e != nil {
+			e.tally.add(t.Start, t.Total, t.OK)
+		}
+	}
+	for _, t := range pingTallies {
+		p := r.pings[t.ID]
+		if p == nil {
+			p = &pinged{}
+			r.pings[t.ID] = p
+		}
+		p.tally.add(t.Start, t.Total, t.OK)
+	}
 	r.mu.Unlock()
-	r.refreshUptime(ctx)
 	return nil
 }
 
@@ -238,8 +256,8 @@ func (r *Runner) poke() {
 	}
 }
 
-// Run runs each check when it's due, until ctx ends, and works out the
-// uptimes every minute. When it returns, no check is running.
+// Run runs each check when it's due, until ctx ends. When it returns, no
+// check is running.
 func (r *Runner) Run(ctx context.Context) {
 	var wg sync.WaitGroup
 	defer func() {
@@ -254,8 +272,6 @@ func (r *Runner) Run(ctx context.Context) {
 			}
 		}
 	}()
-	uptime := time.NewTicker(uptimeEvery)
-	defer uptime.Stop()
 	timer := time.NewTimer(0)
 	defer timer.Stop()
 	for {
@@ -265,8 +281,6 @@ func (r *Runner) Run(ctx context.Context) {
 			return
 		case <-r.wake:
 		case <-timer.C:
-		case <-uptime.C:
-			r.refreshUptime(ctx)
 		}
 	}
 }
@@ -361,6 +375,7 @@ func (r *Runner) finish(ctx context.Context, id string, run *run, res Result) (c
 	}
 	was = e.failures
 	e.add(res)
+	e.tally.count(res)
 	return true, was, e.failures
 }
 
@@ -380,25 +395,6 @@ func (r *Runner) record(ctx context.Context, res store.CheckResult) {
 		r.log.Info("recorded a check's result again")
 	}
 	r.recordErr = err
-}
-
-// refreshUptime works out the uptimes again. If it can't, it keeps the old
-// ones.
-func (r *Runner) refreshUptime(ctx context.Context) {
-	up, err := r.st.Uptime(ctx, time.Now().Add(-UptimeSpan))
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if err != nil {
-		if r.uptimeErr == nil && ctx.Err() == nil {
-			r.log.Warn("work out the checks' uptime", "error", err)
-		}
-		r.uptimeErr = err
-		return
-	}
-	if r.uptimeErr != nil {
-		r.log.Info("worked out the checks' uptime again")
-	}
-	r.uptime, r.uptimeErr = up, nil
 }
 
 // RunNow runs a check as soon as a slot is free, even if it's paused, and
@@ -520,11 +516,12 @@ type Status struct {
 
 // Checks returns what the runner knows of each check, by group and name.
 func (r *Runner) Checks() []Status {
+	now := time.Now()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	out := make([]Status, 0, len(r.checks))
 	for _, e := range r.checks {
-		out = append(out, r.status(e))
+		out = append(out, e.status(now))
 	}
 	slices.SortFunc(out, func(a, b Status) int {
 		return cmp.Or(
@@ -544,18 +541,11 @@ func (r *Runner) Check(id string) (Status, bool) {
 	if !ok {
 		return Status{}, false
 	}
-	return r.status(e), true
+	return e.status(time.Now()), true
 }
 
-func (r *Runner) status(e *entry) Status {
-	return Status{Check: e.check, Recent: e.recent, Failures: e.failures, Uptime: uptimeOf(r.uptime.Checks, e.check.ID)}
-}
-
-func uptimeOf(m map[string]float64, id string) *float64 {
-	if v, ok := m[id]; ok {
-		return &v
-	}
-	return nil
+func (e *entry) status(now time.Time) Status {
+	return Status{Check: e.check, Recent: e.recent, Failures: e.failures, Uptime: e.tally.uptime(now)}
 }
 
 // PingStatus is what the runner knows of a peer's pings.
@@ -571,11 +561,12 @@ type PingStatus struct {
 
 // Pings returns what the runner knows of each peer's pings, by device ID.
 func (r *Runner) Pings() map[string]PingStatus {
+	now := time.Now()
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	out := make(map[string]PingStatus, len(r.pings))
 	for id, p := range r.pings {
-		out[id] = PingStatus{Recent: p.recent, Misses: p.misses, Uptime: uptimeOf(r.uptime.Pings, id)}
+		out[id] = PingStatus{Recent: p.recent, Misses: p.misses, Uptime: p.tally.uptime(now)}
 	}
 	return out
 }
@@ -599,7 +590,9 @@ func (r *Runner) ObservePings(snap tailnet.Snapshot) {
 		if !rec.At.After(p.last) {
 			continue
 		}
-		p.add(pingResult(rec))
+		res := pingResult(rec)
+		p.add(res)
+		p.tally.count(res)
 		// The poller counts the misses, and starts again while the peer is
 		// offline.
 		p.misses = rec.Misses

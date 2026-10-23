@@ -181,13 +181,24 @@ func (s *Store) RecentCheckResults(ctx context.Context, since time.Time, n int) 
 	return out, nil
 }
 
+// pingDevices is a common table expression, devices(id), of the devices
+// that have pings. It finds each in pings_device_ts, one after the other,
+// so a query can read each device's pings since a time from the index,
+// rather than every ping in the table.
+const pingDevices = `devices(id) AS (
+	SELECT (SELECT MIN(device_id) FROM pings)
+	UNION ALL
+	SELECT (SELECT MIN(device_id) FROM pings WHERE device_id > devices.id) FROM devices WHERE devices.id IS NOT NULL
+)`
+
 // RecentPings returns the latest n pings of each device since a time, oldest
 // first, by device ID.
 func (s *Store) RecentPings(ctx context.Context, since time.Time, n int) (map[string][]Ping, error) {
 	rows, err := s.db.QueryContext(ctx, `
+		WITH RECURSIVE `+pingDevices+`
 		SELECT device_id, ts, rtt_ms FROM (
-			SELECT *, ROW_NUMBER() OVER (PARTITION BY device_id ORDER BY ts DESC) AS nth
-			FROM pings WHERE ts >= ?
+			SELECT p.*, ROW_NUMBER() OVER (PARTITION BY p.device_id ORDER BY p.ts DESC) AS nth
+			FROM devices JOIN pings p ON p.device_id = devices.id AND p.ts >= ?
 		) WHERE nth <= ? ORDER BY device_id, ts`,
 		since.UnixMilli(), n)
 	if err != nil {
@@ -213,49 +224,61 @@ func (s *Store) RecentPings(ctx context.Context, since time.Time, n int) (map[st
 	return out, nil
 }
 
-// Uptime is the percentage of each check's results since a time that
-// passed, by check ID, and of each device's pings that got a reply, by
-// device ID. A check or device with none since then is left out.
-type Uptime struct {
-	Checks, Pings map[string]float64
+// A Tally counts what happened in one span of time: how many times a check
+// ran and passed, or how many times a device was pinged and replied.
+type Tally struct {
+	// ID is the check's ID, or the device's.
+	ID string
+	// Start is when the span starts.
+	Start     time.Time
+	Total, OK int
 }
 
-// Uptime works out the uptime of every check and device since a time.
-func (s *Store) Uptime(ctx context.Context, since time.Time) (Uptime, error) {
-	out := Uptime{Checks: map[string]float64{}, Pings: map[string]float64{}}
-	for _, q := range []struct {
-		into  map[string]float64
-		query string
-	}{
-		{out.Checks, "SELECT check_id, AVG(ok) * 100 FROM check_results WHERE ts >= ? GROUP BY check_id"},
-		{out.Pings, "SELECT device_id, COUNT(rtt_ms) * 100.0 / COUNT(*) FROM pings WHERE ts >= ? GROUP BY device_id"},
-	} {
-		if err := readFloats(ctx, s.db, q.into, q.query, since.UnixMilli()); err != nil {
-			return Uptime{}, fmt.Errorf("work out the uptime: %w", err)
-		}
+// Tallies counts the results of every check, and the pings of every device,
+// since a time, in spans of the given size. Each span starts at a multiple
+// of size since the Unix epoch. It reads every stored ping, so it's for
+// starting up, not for every minute.
+func (s *Store) Tallies(ctx context.Context, since time.Time, size time.Duration) (checks, pings []Tally, err error) {
+	step := size.Milliseconds()
+	if step <= 0 {
+		return nil, nil, fmt.Errorf("span %v is under a millisecond", size)
 	}
-	return out, nil
+	checks, err = readTallies(ctx, s.db, `
+		SELECT check_id, ts / ?1 * ?1 AS span, COUNT(*), SUM(ok)
+		FROM check_results WHERE ts >= ?2 GROUP BY check_id, span`, step, since.UnixMilli())
+	if err != nil {
+		return nil, nil, fmt.Errorf("count the checks' results: %w", err)
+	}
+	pings, err = readTallies(ctx, s.db, `
+		WITH RECURSIVE `+pingDevices+`
+		SELECT p.device_id, p.ts / ?1 * ?1 AS span, COUNT(*), COUNT(p.rtt_ms)
+		FROM devices JOIN pings p ON p.device_id = devices.id AND p.ts >= ?2
+		GROUP BY p.device_id, span`, step, since.UnixMilli())
+	if err != nil {
+		return nil, nil, fmt.Errorf("count the pings: %w", err)
+	}
+	return checks, pings, nil
 }
 
-// readFloats reads the rows of an ID and a number that query returns into
-// m.
-func readFloats(ctx context.Context, q querier, m map[string]float64, query string, args ...any) error {
+func readTallies(ctx context.Context, q querier, query string, args ...any) ([]Tally, error) {
 	rows, err := q.QueryContext(ctx, query, args...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
+	var out []Tally
 	for rows.Next() {
 		var (
-			id string
-			v  float64
+			t     Tally
+			start int64
 		)
-		if err := rows.Scan(&id, &v); err != nil {
-			return err
+		if err := rows.Scan(&t.ID, &start, &t.Total, &t.OK); err != nil {
+			return nil, err
 		}
-		m[id] = v
+		t.Start = time.UnixMilli(start)
+		out = append(out, t)
 	}
-	return rows.Err()
+	return out, rows.Err()
 }
 
 // A CheckBucket sums up a check's results in one span of time.

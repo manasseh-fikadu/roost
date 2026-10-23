@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"errors"
+	"fmt"
 	"maps"
 	"path/filepath"
 	"slices"
@@ -176,7 +177,7 @@ func addCheck(t *testing.T, s *store.Store, name string) string {
 	return c.ID
 }
 
-func TestStore_RecentPingsAndUptime(t *testing.T) {
+func TestStore_RecentPingsAndTallies(t *testing.T) {
 	t.Parallel()
 	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
 	ctx := t.Context()
@@ -210,16 +211,30 @@ func TestStore_RecentPingsAndUptime(t *testing.T) {
 		t.Errorf("RecentPings(phone) = %+v, want its one ping", got)
 	}
 
-	up, err := s.Uptime(ctx, start)
+	// In 2-minute spans from the start.
+	checks, pings2, err := s.Tallies(ctx, start, 2*time.Minute)
 	if err != nil {
-		t.Fatalf("Uptime() error = %v", err)
+		t.Fatalf("Tallies() error = %v", err)
 	}
-	if want := map[string]float64{api: 75}; !maps.Equal(up.Checks, want) {
-		t.Errorf("Uptime().Checks = %v, want %v", up.Checks, want)
+	if got, want := tallies(checks, start), []string{api + " +0s 2/2", api + " +2m0s 1/2"}; !slices.Equal(got, want) {
+		t.Errorf("Tallies() checks = %q, want %q", got, want)
 	}
-	if want := map[string]float64{"laptop": 75, "phone": 100}; !maps.Equal(up.Pings, want) {
-		t.Errorf("Uptime().Pings = %v, want %v", up.Pings, want)
+	if got, want := tallies(pings2, start), []string{"laptop +0s 1/2", "laptop +2m0s 2/2", "phone +0s 1/1"}; !slices.Equal(got, want) {
+		t.Errorf("Tallies() pings = %q, want %q, without the ping before the start", got, want)
 	}
+	if _, _, err := s.Tallies(ctx, start, 0); err == nil {
+		t.Error("Tallies() with spans under a millisecond didn't fail")
+	}
+}
+
+// tallies writes each tally as "ID +offset ok/total", sorted.
+func tallies(ts []store.Tally, start time.Time) []string {
+	out := make([]string, len(ts))
+	for i, t := range ts {
+		out[i] = fmt.Sprintf("%s +%v %d/%d", t.ID, t.Start.Sub(start), t.OK, t.Total)
+	}
+	slices.Sort(out)
+	return out
 }
 
 func TestStore_HealthHistory(t *testing.T) {

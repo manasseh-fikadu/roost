@@ -329,8 +329,11 @@ func TestRunner_runsEachCheckWhenItsDue(t *testing.T) {
 			t.Errorf("the store has %d results of the 10-second check, want 6", len(got))
 		}
 		s, _ := r.Check(slow.ID)
-		if s.Failures != 1 {
-			t.Errorf("the failing check has %d failures in a row, want 1", s.Failures)
+		if s.Failures != 1 || s.Uptime == nil || *s.Uptime != 0 {
+			t.Errorf("the failing check has %d failures in a row and uptime %v, want 1 and 0%%", s.Failures, s.Uptime)
+		}
+		if s, _ := r.Check(fast.ID); s.Uptime == nil || *s.Uptime != 100 {
+			t.Errorf("the passing check has uptime %v, want 100%%", s.Uptime)
 		}
 
 		// Only the latest results are kept in memory.
@@ -616,6 +619,46 @@ func TestRunner_ObservePings(t *testing.T) {
 		}})
 		if got := r.Pings(); len(got) != 2 || len(got["laptop"].Recent) != 2 || len(got["phone"].Recent) != 2 {
 			t.Errorf("a day later, Pings() = %+v, want the laptop's and phone's", got)
+		}
+	})
+}
+
+// The runner counts each device's pings over the last day, a step of 5
+// minutes at a time, for its uptime.
+func TestRunner_pingUptime(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		r := newRunner(t, newStore(t), newFakeNet())
+		uptime := func() any {
+			if u := r.Pings()["laptop"].Uptime; u != nil {
+				return *u
+			}
+			return nil
+		}
+		ping := func(replied bool) {
+			rec := tailnet.PingRecord{At: time.Now(), Err: tailnet.ErrNoReply}
+			if replied {
+				rec = tailnet.PingRecord{At: time.Now(), Result: &tailnet.PingResult{Latency: time.Millisecond}}
+			}
+			r.ObservePings(tailnet.Snapshot{Pings: map[string]tailnet.PingRecord{"laptop": rec}})
+		}
+
+		for _, replied := range []bool{true, true, true, false} {
+			ping(replied)
+			time.Sleep(time.Minute)
+		}
+		if got := uptime(); got != 75.0 {
+			t.Errorf("after 4 pings, 3 answered, the uptime = %v, want 75", got)
+		}
+		// A day after the first ping, its step counts this one instead.
+		time.Sleep(checks.UptimeSpan - 4*time.Minute)
+		ping(false)
+		if got := uptime(); got != 0.0 {
+			t.Errorf("a day later, after a missed ping, the uptime = %v, want 0", got)
+		}
+		time.Sleep(checks.UptimeSpan + 10*time.Minute)
+		if got := uptime(); got != nil {
+			t.Errorf("after a day without pings, the uptime = %v, want none", got)
 		}
 	})
 }
