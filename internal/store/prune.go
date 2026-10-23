@@ -29,6 +29,8 @@ var retention = []struct {
 	// minute keeps its biggest groups, for history.
 	{"usage_samples", 24 * time.Hour,
 		"UPDATE usage_samples SET detail = NULL WHERE ts < ? AND detail IS NOT NULL AND ts / 60000 % 10 != 0"},
+	// An enrollment code goes once it expires.
+	{"enrollment_codes", 0, "DELETE FROM enrollment_codes WHERE expires_at < ?"},
 }
 
 // pruneHourly deletes expired rows now and then once every pruneInterval, until
