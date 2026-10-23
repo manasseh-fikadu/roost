@@ -158,6 +158,11 @@ export function dateTime(t: Time | null | undefined): string {
 	});
 }
 
+/** A time of day to the minute, such as 9:47 PM. */
+export function timeOfDay(t: Time): string {
+	return new Date(millis(t)).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+}
+
 const osNames: Record<string, string> = {
 	linux: 'Linux',
 	macos: 'macOS',

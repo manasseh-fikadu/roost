@@ -8,9 +8,10 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import AdminOnly from '#lib/AdminOnly.svelte';
+	import { agentRuns } from '#lib/agent.js';
 	import type { Device } from '#lib/api/types.js';
 	import { deviceIcon } from '#lib/device.js';
-	import AgentInstall from '#lib/devices/AgentInstall.svelte';
+	import AddAgent from '#lib/devices/AddAgent.svelte';
 	import DeviceHistory from '#lib/devices/DeviceHistory.svelte';
 	import DeviceSettingsDialog from '#lib/devices/DeviceSettingsDialog.svelte';
 	import MetricTile from '#lib/devices/MetricTile.svelte';
@@ -59,11 +60,6 @@
 	/** Whether the device's metrics are out of date, from an agent that stopped or a device that's off. */
 	function stale(d: Device): boolean {
 		return d.measuredBy === 'agent' && (!d.online || !!d.agent?.stale);
-	}
-
-	/** Whether the agent runs on the device's OS. */
-	function agentRuns(d: Device): boolean {
-		return ['linux', 'macos'].includes(d.os.toLowerCase());
 	}
 
 	const bannerClass = {
@@ -217,19 +213,33 @@
 
 	<div class="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
 		<div class="min-w-0 space-y-4">
-			{#if !device.measuredBy}
+			{#if device.agent && !device.measuredBy}
+				<Card
+					title="Waiting for the agent"
+					description="The agent enrolled {ago(
+						device.agent.enrolledAt,
+						now
+					)}, and its first heartbeat hasn't come yet."
+				>
+					<p class="p-4 text-[13px] text-fg-muted">
+						On {device.name}, its log says why: on macOS,
+						<code class="font-mono text-[12px]">~/Library/Logs/roost-agent.log</code>, and on Linux,
+						<code class="font-mono text-[12px]">journalctl --user -u roost-agent</code>.
+					</p>
+				</Card>
+			{:else if !device.measuredBy}
 				<Card
 					title="No agent on this machine"
 					description="Tailscale shows whether it's connected and how the hub reaches it. The agent adds CPU, memory, disk, battery and what's running."
 				>
-					<div class="space-y-2 p-4 text-[13px] text-fg-muted">
-						{#if agentRuns(device)}
+					<div class="space-y-3 p-4 text-[13px] text-fg-muted">
+						{#if agentRuns(device.os)}
 							<AdminOnly>
 								<p>
-									Run this on {device.name}. It installs a small background service for your user,
-									without root.
+									Add agent gives you a command to run on {device.name}. It installs a small
+									background service for your user, without root.
 								</p>
-								<AgentInstall />
+								<AddAgent {device} variant="primary" />
 								{#snippet fallback()}
 									<p>An admin can install the agent from the {@render agentsLink()} page.</p>
 								{/snippet}
@@ -293,7 +303,7 @@
 			</Card>
 			<Card title="System">
 				{#snippet actions()}
-					{#if device.agent}
+					{#if device.agent?.version}
 						<span class="flex items-center gap-1 font-mono text-[11px] text-fg-subtle">
 							<Bot class="size-3" /> agent v{device.agent.version}
 						</span>
@@ -315,11 +325,21 @@
 						{#if m}
 							<DataRow label="Last report">{ago(m.at, now)} · {dateTime(m.at)}</DataRow>
 						{/if}
-						{#if device.agent?.outdated}
+						{#if device.agent && (device.agent.outdated || !device.agent.enrolledAt)}
+							{@const enrolled = !!device.agent.enrolledAt}
 							<DataRow label="Agent">
-								<span class="text-amber-fg"
-									>update: run the {@render agentsLink('install command')} again</span
-								>
+								<span class="flex items-center justify-end gap-2">
+									<span class="text-amber-fg">{enrolled ? 'Update available' : 'Not enrolled'}</span
+									>
+									<AdminOnly>
+										<AddAgent
+											{device}
+											label={enrolled ? 'Update' : 'Re-enroll'}
+											size="xs"
+											variant="ghost"
+										/>
+									</AdminOnly>
+								</span>
 							</DataRow>
 						{/if}
 					</dl>

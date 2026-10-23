@@ -1,5 +1,6 @@
 import { toast } from '#lib/toast.svelte.js';
 import type {
+	AgentCode,
 	AgentSetup,
 	DeviceHistory,
 	DeviceSettings,
@@ -116,15 +117,26 @@ export function getUsageHistory(id: string, range: HistoryRange): Promise<UsageH
 	return request('GET', `devices/${encodeURIComponent(id)}/usage/history?range=${range}`);
 }
 
-/** The commands that install and remove the agent. Admins only. */
+/** The agent's version and the command that removes it. Admins only. */
 export function getAgentSetup(): Promise<AgentSetup> {
 	return request('GET', 'agent');
 }
 
-/** Forgets what a device's agent reported, and says so in a toast. Admins only. */
-export function forgetAgent(id: string): Promise<void> {
+/**
+ * A new command that installs the agent on one machine, with an enrollment
+ * code in it. Admins only.
+ */
+export function newAgentCode(): Promise<AgentCode> {
+	return request('POST', 'agent/codes');
+}
+
+/**
+ * Revokes a device's agent, so Roost refuses its heartbeats and forgets what
+ * it reported, and says so in a toast. Admins only.
+ */
+export function revokeAgent(id: string): Promise<void> {
 	return mutate('DELETE', `devices/${encodeURIComponent(id)}/agent`, undefined, {
-		success: 'Agent forgotten'
+		success: 'Agent revoked'
 	});
 }
 
