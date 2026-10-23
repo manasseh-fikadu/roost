@@ -33,6 +33,9 @@ const (
 	gapAfter = 5 * time.Minute
 	// minInterval is the shortest interval a device reports.
 	minInterval = 5 * time.Second
+	// stopTimeout is how long Run takes, at most, to store the minutes so
+	// far when it stops.
+	stopTimeout = 5 * time.Second
 )
 
 // A Recorder keeps each device's latest Sample, and stores a sum of each
@@ -50,11 +53,16 @@ type Recorder struct {
 
 // minuteSum is a device's samples so far in a minute.
 type minuteSum struct {
-	since  time.Time
-	n      int
-	last   Sample
-	groups map[string]*sum[Group]
-	procs  map[procID]*sum[Proc]
+	since time.Time
+	n     int
+	last  Sample
+	// total is the latest sample's totals, totals counts the samples that
+	// had them, and totalCPU adds up their CPU.
+	total    *Totals
+	totalCPU float64
+	totals   int
+	groups   map[string]*sum[Group]
+	procs    map[procID]*sum[Proc]
 }
 
 type procID struct {
@@ -80,29 +88,39 @@ func NewRecorder(st *store.Store, log *slog.Logger) *Recorder {
 }
 
 // Run stores the minutes of devices that stopped sending samples, until ctx
-// ends.
+// ends. Then it stores every device's minute so far, so a restart doesn't
+// lose it.
 func (r *Recorder) Run(ctx context.Context) {
 	t := time.NewTicker(minute)
 	defer t.Stop()
 	for {
 		select {
 		case <-ctx.Done():
+			stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), stopTimeout)
+			r.saveWhere(stopCtx, func(*minuteSum) bool { return true })
+			cancel()
 			return
 		case <-t.C:
 		}
 		now := time.Now()
-		r.mu.Lock()
-		idle := map[string]*minuteSum{}
-		for id, m := range r.minutes {
-			if now.Sub(m.last.At) > idleAfter {
-				idle[id] = m
-				delete(r.minutes, id)
-			}
+		r.saveWhere(ctx, func(m *minuteSum) bool { return now.Sub(m.last.At) > idleAfter })
+	}
+}
+
+// saveWhere takes the minutes that done reports true for out of r.minutes,
+// and stores them.
+func (r *Recorder) saveWhere(ctx context.Context, done func(*minuteSum) bool) {
+	r.mu.Lock()
+	taken := map[string]*minuteSum{}
+	for id, m := range r.minutes {
+		if done(m) {
+			taken[id] = m
+			delete(r.minutes, id)
 		}
-		r.mu.Unlock()
-		for id, m := range idle {
-			r.save(ctx, id, m)
-		}
+	}
+	r.mu.Unlock()
+	for id, m := range taken {
+		r.save(ctx, id, m)
 	}
 }
 
@@ -187,6 +205,11 @@ func (r *Recorder) save(ctx context.Context, deviceID string, m *minuteSum) {
 func (m *minuteSum) add(s Sample) {
 	m.n++
 	m.last = s
+	if s.Total != nil {
+		m.total = s.Total
+		m.totalCPU += s.Total.CPU
+		m.totals++
+	}
 	for _, g := range s.Groups {
 		e := m.groups[g.Key]
 		if e == nil {
@@ -208,9 +231,9 @@ func (m *minuteSum) add(s Sample) {
 	}
 }
 
-// row sums up the minute: CPU is averaged over its samples, and memory is
-// what the last sample said. Something the last sample didn't list used no
-// memory, as far as it's known.
+// row sums up the minute: CPU is averaged over its samples, and memory and
+// the process count are what the last sample said. Something the last
+// sample didn't list used no memory, as far as it's known.
 func (m *minuteSum) row(deviceID string) (store.UsageRow, error) {
 	end := m.last.At
 	groups := make([]Group, 0, len(m.groups))
@@ -253,8 +276,10 @@ func (m *minuteSum) row(deviceID string) (store.UsageRow, error) {
 	for i, p := range procs {
 		d.Procs[i] = procDetail(p)
 	}
-	if t := m.last.Total; t != nil {
-		d.Total = &totalsDetail{*t}
+	if m.total != nil {
+		t := *m.total
+		t.CPU = round2(m.totalCPU / float64(m.totals))
+		d.Total = &totalsDetail{t}
 	}
 	compressed, err := deflate(d)
 	if err != nil {

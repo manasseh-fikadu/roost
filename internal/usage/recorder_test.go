@@ -53,20 +53,30 @@ func TestRecorder(t *testing.T) {
 		}
 		want := sampleAt(start.Add(45*time.Second), 25, 4000)
 		want.Procs[0].Cmd = strings.Repeat("x", 200)
-		// The total is the last sample's.
-		want.Total.CPU = 40
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("At() =\n%+v\nwant the minute's average CPU and its last memory:\n%+v", got, want)
 		}
 
 		// The next minute stops after one sample. Run stores it after a while.
 		ctx, cancel := context.WithCancel(t.Context())
-		go rec.Run(ctx)
+		stopped := make(chan struct{})
+		go func() {
+			rec.Run(ctx)
+			close(stopped)
+		}()
 		time.Sleep(4 * time.Minute)
 		synctest.Wait()
-		cancel()
 		if got, ok, err := rec.At(t.Context(), "laptop", start.Add(time.Minute), time.Second); err != nil || !ok || got.Groups[0].CPU != 50 {
 			t.Errorf("At() the second minute = %+v, %v, %v, want the sample at 1m", got, ok, err)
+		}
+
+		// When Run stops, it stores the minute so far.
+		last := time.Now()
+		rec.Record(t.Context(), "laptop", sampleAt(last, 60, 1000))
+		cancel()
+		<-stopped
+		if got, ok, err := rec.At(t.Context(), "laptop", last, time.Second); err != nil || !ok || got.Groups[0].CPU != 60 {
+			t.Errorf("At() the minute Run stopped in = %+v, %v, %v, want the sample at %v", got, ok, err, last)
 		}
 
 		rec.Forget("laptop")
