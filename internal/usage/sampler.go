@@ -39,8 +39,6 @@ type Sampler struct {
 	fsys     fs.FS
 	pageSize uint64
 
-	// statics holds what doesn't change while a process lives, by PID.
-	statics map[int]static
 	// prev holds each process's CPU time at the previous sample, by PID.
 	prev map[int]procTicks
 	// prevTotal is the CPU time of all cores at the previous sample.
@@ -51,10 +49,8 @@ type Sampler struct {
 	usersAt time.Time
 }
 
-type static struct {
-	// start is when the process started, in clock ticks since boot. A PID
-	// with another start time is another process.
-	start   string
+// procInfo is what a sample reads of a process besides its stat file.
+type procInfo struct {
 	kthread bool
 	cgroup  string
 	cmd     string
@@ -63,6 +59,8 @@ type static struct {
 }
 
 type procTicks struct {
+	// start is when the process started, in clock ticks since boot. A PID
+	// with another start time is another process.
 	start string
 	ticks uint64
 }
@@ -70,7 +68,7 @@ type procTicks struct {
 // NewSampler returns a Sampler of the machine whose root directory is fsys,
 // such as os.DirFS("/").
 func NewSampler(fsys fs.FS) *Sampler {
-	return &Sampler{fsys: fsys, pageSize: uint64(os.Getpagesize()), statics: map[int]static{}} //nolint:gosec // G115: the page size is positive.
+	return &Sampler{fsys: fsys, pageSize: uint64(os.Getpagesize())} //nolint:gosec // G115: the page size is positive.
 }
 
 // Run samples the processes every HubInterval and passes each sample to
@@ -138,7 +136,7 @@ func (s *Sampler) Sample(now time.Time) (Sample, bool, error) {
 		if before, ok := s.prev[pid]; ok && before.start == st.start {
 			used -= min(before.ticks, st.ticks)
 		}
-		info := s.static(pid, st, now)
+		info := s.info(pid, st, now)
 		name := st.comm
 		// comm is cut at 15 bytes, and some programs rename their main
 		// thread. The program's file name is the better name then.
@@ -154,11 +152,6 @@ func (s *Sampler) Sample(now time.Time) (Sample, bool, error) {
 			p.cpu = min(100, float64(used)/float64(elapsed)*100)
 		}
 		procs = append(procs, p)
-	}
-	for pid := range s.statics {
-		if _, ok := ticks[pid]; !ok {
-			delete(s.statics, pid)
-		}
 	}
 	s.prev, s.prevTotal, s.sampled = ticks, total, true
 	if first {
@@ -241,14 +234,12 @@ func (s *Sampler) stat(pid int) (procStat, bool) {
 	}, true
 }
 
-// static returns what doesn't change while process pid lives, reading it
-// the first time.
-func (s *Sampler) static(pid int, st procStat, now time.Time) static {
-	if info, ok := s.statics[pid]; ok && info.start == st.start {
-		return info
-	}
+// info reads what a sample needs of process pid besides its stat file. It
+// reads it every time, as the agent does, since exec, setproctitle, setuid
+// and moving to another cgroup all change it while the process runs.
+func (s *Sampler) info(pid int, st procStat, now time.Time) procInfo {
 	dir := "proc/" + strconv.Itoa(pid) + "/"
-	info := static{start: st.start, kthread: st.flags&pfKthread != 0, uid: -1}
+	info := procInfo{kthread: st.flags&pfKthread != 0, uid: -1}
 	if !info.kthread {
 		cmdline, _ := fs.ReadFile(s.fsys, dir+"cmdline")
 		info.cmd = cut(strings.TrimRight(strings.ReplaceAll(string(cmdline), "\x00", " "), " "), maxCmd)
@@ -263,7 +254,6 @@ func (s *Sampler) static(pid int, st procStat, now time.Time) static {
 	if info.cmd == "" {
 		info.cmd = "[" + st.comm + "]"
 	}
-	s.statics[pid] = info
 	return info
 }
 

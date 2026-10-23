@@ -117,6 +117,57 @@ func TestSampler(t *testing.T) {
 	}
 }
 
+// A process can exec, change its command line or user, or move to another
+// cgroup, all with the same PID. Each sample shows it as it is then.
+func TestSampler_changes(t *testing.T) {
+	t.Parallel()
+	// An sshd child, before pam_systemd moves it into alice's session.
+	child := fakeProc{pid: 100, comm: "sshd", start: 50, rssPages: 1, uid: 0,
+		cgroup: "/system.slice/ssh.service", cmd: "sshd: alice [priv]"}
+	// A container's entrypoint, before it runs exec gosu postgres postgres.
+	entry := fakeProc{pid: 200, comm: "docker-entrypoi", start: 60, rssPages: 1, uid: 0,
+		cgroup: "/system.slice/docker-" + strings.Repeat("0123456789abcdef", 4) + ".scope", cmd: "/bin/sh /usr/local/bin/docker-entrypoint.sh postgres"}
+	fsys := fakeMachine(1000, child, entry)
+	s := usage.NewSampler(fsys)
+	sample := func(at time.Time) []usage.Proc {
+		t.Helper()
+		got, ok, err := s.Sample(at)
+		if !ok || err != nil {
+			t.Fatalf("Sample() = %v, %v", ok, err)
+		}
+		return got.Procs
+	}
+	if _, ok, err := s.Sample(time.Unix(0, 0)); ok || err != nil {
+		t.Fatalf("first Sample() = %v, %v, want only readings for the next", ok, err)
+	}
+	page := uint64(os.Getpagesize()) //nolint:gosec // G115: the page size is positive.
+	before := sample(time.Unix(5, 0))
+
+	child.uid, child.cgroup, child.cmd = 1000, "/user.slice/user-1000.slice/session-3.scope", "sshd: alice@pts/0"
+	entry.comm, entry.uid, entry.cmd = "postgres", 999, "postgres"
+	clear(fsys)
+	maps.Copy(fsys, fakeMachine(2000, child, entry))
+	after := sample(time.Unix(10, 0))
+
+	container := "container:0123456789ab"
+	want := [][]usage.Proc{
+		{
+			{PID: 100, Name: "sshd", User: "root", Cmd: "sshd: alice [priv]", Mem: page, Group: "service:ssh"},
+			{PID: 200, Name: "docker-entrypoi", User: "root", Cmd: "/bin/sh /usr/local/bin/docker-entrypoint.sh postgres", Mem: page, Group: container},
+		},
+		{
+			{PID: 100, Name: "sshd", User: "alice", Cmd: "sshd: alice@pts/0", Mem: page, Group: "session:Login sessions (alice)"},
+			// 999 isn't in /etc/passwd.
+			{PID: 200, Name: "postgres", User: "999", Cmd: "postgres", Mem: page, Group: container},
+		},
+	}
+	for i, got := range [][]usage.Proc{before, after} {
+		if !reflect.DeepEqual(got, want[i]) {
+			t.Errorf("sample %d: Procs =\n%+v\nwant\n%+v", i+1, got, want[i])
+		}
+	}
+}
+
 func TestParseAgent(t *testing.T) {
 	t.Parallel()
 	at := time.Unix(1_800_000_000, 0)
