@@ -78,12 +78,15 @@
 	const now = $derived(live.snapshot ? Date.parse(live.snapshot.generatedAt) : Date.now());
 	const madeAt = $derived(code ? Date.parse(code.createdAt) : NaN);
 	const expired = $derived(code !== null && now >= Date.parse(code.expiresAt));
-	/** The device that enrolled with the code, once one has. */
-	const enrolled = $derived(
-		live.snapshot?.devices.find(
-			(d) => d.agent?.enrolledAt && Date.parse(d.agent.enrolledAt) >= madeAt
-		)
-	);
+	/**
+	 * The device that enrolled with the code, once one has: `device` if it
+	 * was, since the machine Roost runs on can show up as two devices.
+	 */
+	const enrolled = $derived.by(() => {
+		const isNew = (d: Device) => !!d.agent?.enrolledAt && Date.parse(d.agent.enrolledAt) >= madeAt;
+		const devices = live.snapshot?.devices ?? [];
+		return devices.find((d) => d.id === device?.id && isNew(d)) ?? devices.find(isNew);
+	});
 	const reporting = $derived(
 		!!enrolled?.agent?.lastSeen && Date.parse(enrolled.agent.lastSeen) >= madeAt
 	);
