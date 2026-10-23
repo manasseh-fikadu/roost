@@ -1103,7 +1103,8 @@ export interface RecentResults {
 export interface HealthScore {
   /**
    * Score is the percentage of the live checks, the ones passing or
-   * failing, that pass, rounded. It's null if none are live.
+   * failing, that pass, rounded down, so it's 100 only if all of them
+   * pass. It's null if none are live.
    */
   score: number | null;
   label: HealthLabel;

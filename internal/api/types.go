@@ -744,7 +744,8 @@ type RecentResults struct {
 // pass.
 type HealthScore struct {
 	// Score is the percentage of the live checks, the ones passing or
-	// failing, that pass, rounded. It's null if none are live.
+	// failing, that pass, rounded down, so it's 100 only if all of them
+	// pass. It's null if none are live.
 	Score *int        `json:"score" tstype:"number | null,required"`
 	Label HealthLabel `json:"label"`
 	// Passing and Failing count the live checks.
