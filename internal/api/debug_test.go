@@ -11,6 +11,7 @@ import (
 
 	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/api"
+	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
 	"github.com/manasseh-fikadu/roost/internal/usage"
@@ -42,7 +43,10 @@ func TestNew_debugTailnet(t *testing.T) {
 		synctest.Wait()
 
 		feed := api.NewFeed(api.FeedOptions{Tailnet: poller.Snapshot, Store: st})
-		h := api.New(api.Options{WhoIs: tn.WhoIs, Snapshot: poller.Snapshot, Feed: feed, Store: st, Agents: agents.NewRegistry(st, nil), Usage: usage.NewRecorder(st, nil)})
+		h := api.New(api.Options{
+			WhoIs: tn.WhoIs, Snapshot: poller.Snapshot, Feed: feed, Store: st, Agents: agents.NewRegistry(st, nil),
+			Usage: usage.NewRecorder(st, nil), Checks: checks.NewRunner(st, checks.Options{Dial: tn.Dial}),
+		})
 		rec := serve(h, newRequest(t, http.MethodGet, "/api/debug/tailnet", laptop))
 
 		if rec.Code != http.StatusOK {

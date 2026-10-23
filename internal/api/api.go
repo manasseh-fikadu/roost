@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/agents"
+	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/usage"
@@ -44,6 +45,8 @@ type Options struct {
 	Agents *agents.Registry
 	// Usage keeps what uses each device's CPU and memory. Required.
 	Usage *usage.Recorder
+	// Checks runs the checks. Required.
+	Checks *checks.Runner
 	// AppURL is where the app is on the tailnet, such as
 	// https://roost.example.ts.net, which the agent sends its heartbeats to.
 	// If it's empty, it's worked out from each request.
@@ -68,8 +71,9 @@ func New(opts Options) http.Handler {
 }
 
 func newHandler(opts Options) *handler {
-	if opts.WhoIs == nil || opts.Snapshot == nil || opts.Feed == nil || opts.Store == nil || opts.Agents == nil || opts.Usage == nil {
-		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents and Usage are required")
+	if opts.WhoIs == nil || opts.Snapshot == nil || opts.Feed == nil || opts.Store == nil || opts.Agents == nil ||
+		opts.Usage == nil || opts.Checks == nil {
+		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents, Usage and Checks are required")
 	}
 	h := &handler{opts: opts, log: opts.Logger}
 	if h.log == nil {
@@ -91,6 +95,14 @@ func (h *handler) routes(rt *router) {
 	rt.read("GET /api/devices/{id}/usage/history", viewers, h.usageHistory)
 	rt.write("PUT /api/devices/{id}/settings", h.setDeviceSettings)
 	rt.write("DELETE /api/devices/{id}/agent", h.revokeAgent)
+
+	rt.read("GET /api/checks/recent", viewers, h.recentResults)
+	rt.read("GET /api/checks/{id}/history", viewers, h.checkHistory)
+	rt.write("POST /api/checks", h.addCheck)
+	rt.write("PUT /api/checks/{id}", h.changeCheck)
+	rt.write("DELETE /api/checks/{id}", h.deleteCheck)
+	rt.write("POST /api/checks/{id}/run", h.runCheck)
+	rt.read("GET /api/health/history", viewers, h.healthHistory)
 
 	rt.read("GET /api/agent", admins, h.agentSetup)
 	rt.write("POST /api/agent/codes", h.newEnrollmentCode)

@@ -3,7 +3,7 @@
 	import Bell from '@lucide/svelte/icons/bell';
 	import { resolve } from '$app/paths';
 	import type { CollectorState } from '#lib/api/types.js';
-	import HealthRing from '#lib/charts/HealthRing.svelte';
+	import HealthCard from '#lib/checks/HealthCard.svelte';
 	import DevicesTable from '#lib/devices/DevicesTable.svelte';
 	import { plural } from '#lib/format.js';
 	import { live } from '#lib/live.svelte.js';
@@ -82,17 +82,7 @@
 		{/if}
 	</Card>
 	<div class="space-y-4">
-		<Card title="Network health">
-			<div class="flex items-center gap-4 p-5">
-				<HealthRing score={null} />
-				<div class="min-w-0">
-					<p class="text-[15px] font-medium text-fg-muted">No checks yet</p>
-					<p class="mt-0.5 text-[13px] text-fg-subtle">
-						The score comes from your checks, with #25.
-					</p>
-				</div>
-			</div>
-		</Card>
+		<HealthCard health={live.snapshot?.health ?? null} />
 		<Card title="Alerts">
 			<EmptyState title="No alerts" icon={Bell}>Roost starts raising alerts with #26.</EmptyState>
 		</Card>

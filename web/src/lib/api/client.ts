@@ -2,12 +2,18 @@ import { toast } from '#lib/toast.svelte.js';
 import type {
 	AgentCode,
 	AgentSetup,
+	Check,
+	CheckHistory,
+	CheckInput,
+	CheckResult,
 	DeviceHistory,
 	DeviceSettings,
 	DeviceUsage,
 	ErrorBody,
 	Health,
+	HealthHistory,
 	Me,
+	RecentResults,
 	SetDeviceSettings,
 	UsageHistory
 } from './types.js';
@@ -148,4 +154,43 @@ export function putDeviceSettings(
 	return mutate('PUT', `devices/${encodeURIComponent(id)}/settings`, settings, {
 		success: 'Saved'
 	});
+}
+
+function checkPath(id: string): string {
+	return `checks/${encodeURIComponent(id)}`;
+}
+
+/** The latest results of every check. */
+export function getRecentResults(): Promise<RecentResults> {
+	return request('GET', 'checks/recent');
+}
+
+/** A check's latency and uptime over the last range. */
+export function getCheckHistory(id: string, range: HistoryRange): Promise<CheckHistory> {
+	return request('GET', `${checkPath(id)}/history?range=${range}`);
+}
+
+/** The health score over the last range. */
+export function getHealthHistory(range: HistoryRange): Promise<HealthHistory> {
+	return request('GET', `health/history?range=${range}`);
+}
+
+/** Adds a check, and says so in a toast. Admins only. */
+export function addCheck(input: CheckInput): Promise<Check> {
+	return mutate('POST', 'checks', input, { success: 'Check added' });
+}
+
+/** Replaces a check, and says so in a toast. Admins only. */
+export function putCheck(id: string, input: CheckInput, success = 'Saved'): Promise<Check> {
+	return mutate('PUT', checkPath(id), input, { success });
+}
+
+/** Deletes a check and its history, and says so in a toast. Admins only. */
+export function deleteCheck(id: string): Promise<void> {
+	return mutate('DELETE', checkPath(id), undefined, { success: 'Check deleted' });
+}
+
+/** Runs a check now and returns its result. Admins only. */
+export function runCheck(id: string): Promise<CheckResult> {
+	return mutate('POST', `${checkPath(id)}/run`);
 }

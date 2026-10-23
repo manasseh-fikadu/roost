@@ -11,6 +11,7 @@ import (
 
 	"github.com/manasseh-fikadu/roost/agent"
 	"github.com/manasseh-fikadu/roost/internal/agents"
+	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
@@ -45,6 +46,10 @@ type sources struct {
 	// enrolled holds the enrollments of the agents, by the ID of the node
 	// each runs on.
 	enrolled map[string]store.Enrollment
+	// checks are the checks admins set up, by group and name.
+	checks []checks.Status
+	// pings holds the latest pings of each peer, by device ID.
+	pings map[string]checks.PingStatus
 }
 
 // newSnapshot builds a Snapshot of what Roost knows at now.
@@ -68,6 +73,8 @@ func newSnapshot(src sources, now time.Time) Snapshot {
 
 	st := s.Status
 	if st == nil {
+		out.Checks = newChecks(src, nil)
+		out.Health = newHealthScore(out.Checks)
 		return out
 	}
 	out.Hub.DNSName, out.Hub.Tailnet = st.Self.DNSName, st.Tailnet
@@ -114,6 +121,8 @@ func newSnapshot(src sources, now time.Time) Snapshot {
 			cmp.Compare(a.DNSName, b.DNSName),
 		)
 	})
+	out.Checks = newChecks(src, out.Devices)
+	out.Health = newHealthScore(out.Checks)
 	return out
 }
 

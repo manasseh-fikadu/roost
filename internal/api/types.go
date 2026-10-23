@@ -132,6 +132,11 @@ type Snapshot struct {
 	// Devices are the nodes on the tailnet: Roost's own first, then servers,
 	// laptops, desktops, tablets, phones and others, each by name.
 	Devices []Device `json:"devices"`
+	// Checks are the checks admins set up, by group and name, and then a
+	// ping check for each peer, in the order of Devices.
+	Checks []Check `json:"checks"`
+	// Health sums up the checks.
+	Health HealthScore `json:"health"`
 }
 
 // Hub is the Roost server itself.
@@ -632,4 +637,187 @@ type UsageSeries struct {
 	Kind   UsageKind `json:"kind"`
 	Name   string    `json:"name"`
 	Points []Point   `json:"points"`
+}
+
+// A Check probes something from the hub every so often: a URL, a TCP port or
+// a host name that an admin set up, or a peer, which Roost pings.
+type Check struct {
+	// ID is a ping check's "ping:" and its device's ID.
+	ID   string    `json:"id"`
+	Name string    `json:"name"`
+	Kind CheckKind `json:"kind"`
+	// Target is what the check probes: a URL, host:port, host name, or a
+	// peer's IP address. Only admins get it, since a URL can hold a secret.
+	Target string `json:"target" roost:"secret"`
+	// Endpoint is the part of Target that holds no secret, for everyone: a
+	// URL's scheme, host and port, or else all of Target.
+	Endpoint string `json:"endpoint"`
+	// Group is the group the check is listed in. Ping checks are in
+	// "Tailnet".
+	Group string `json:"group"`
+	// IntervalSec is how often the check runs, in seconds.
+	IntervalSec int `json:"intervalSec"`
+	// TimeoutMs is how long the target has to answer, in milliseconds.
+	TimeoutMs int `json:"timeoutMs"`
+	// ExpectStatus is the status an HTTP check expects. If it's missing, any
+	// status below 400 passes.
+	ExpectStatus int `json:"expectStatus,omitempty"`
+	// Insecure reports whether an HTTP check skips checking the server's
+	// TLS certificate.
+	Insecure bool `json:"insecure,omitempty"`
+	// Paused reports whether an admin paused the check, so it only runs when
+	// they ask.
+	Paused bool `json:"paused,omitempty"`
+	// DeviceID is the device a ping check pings. Roost makes a ping check for
+	// each peer, and they can't be changed.
+	DeviceID string     `json:"deviceId,omitempty"`
+	State    CheckState `json:"state"`
+	// StateReason says why the check has its state, such as "HTTP 200 OK" or
+	// why it failed.
+	StateReason string `json:"stateReason"`
+	// Last is the check's latest result, if it has one. GET
+	// /api/checks/recent has the ones before.
+	Last *CheckResult `json:"last,omitempty"`
+	// Failures is how many of its latest results failed in a row.
+	Failures int `json:"failures"`
+	// Uptime is the percentage of its results in the last day that passed,
+	// or null if it has none.
+	Uptime *float64 `json:"uptime" tstype:"number | null,required"`
+}
+
+// CheckKind is what a check probes.
+type CheckKind string
+
+// The kinds of Check.
+const (
+	// CheckKindHTTP sends a GET request to a URL. It passes if the status is
+	// the one expected, or below 400 if none is. It doesn't follow
+	// redirects.
+	CheckKindHTTP CheckKind = "http"
+	// CheckKindTCP passes if a TCP connection to host:port opens.
+	CheckKindTCP CheckKind = "tcp"
+	// CheckKindDNS passes if a host name resolves, with the hub's resolver.
+	CheckKindDNS CheckKind = "dns"
+	// CheckKindPing is Roost's ping of a peer over the tailnet, every
+	// minute. It fails when the peer misses two pings in a row, as on the
+	// device's page, since a peer can miss one now and then.
+	CheckKindPing CheckKind = "ping"
+)
+
+// CheckState says whether a check passes.
+type CheckState string
+
+// The states of a Check.
+const (
+	CheckStatePassing CheckState = "passing"
+	CheckStateFailing CheckState = "failing"
+	// CheckStatePending means the check hasn't got a result yet.
+	CheckStatePending CheckState = "pending"
+	// CheckStatePaused means an admin paused the check.
+	CheckStatePaused CheckState = "paused"
+	// CheckStateUnavailable means the check can't run now, such as a ping
+	// check of a device that's offline.
+	CheckStateUnavailable CheckState = "unavailable"
+)
+
+// CheckResult is what happened when a check ran once.
+type CheckResult struct {
+	// At is when it started.
+	At time.Time `json:"at"`
+	OK bool      `json:"ok"`
+	// LatencyMs is how long the target took to answer, in milliseconds. It's
+	// missing if nothing answered.
+	LatencyMs *float64 `json:"latencyMs,omitempty"`
+	// Detail says what happened, such as "HTTP 200 OK", or why it failed.
+	Detail string `json:"detail"`
+}
+
+// RecentResults is the response to GET /api/checks/recent: the latest
+// results of every check, up to 30 of each, so the app can draw them. The
+// snapshots only have each check's last one.
+type RecentResults struct {
+	// Checks holds each check's results, oldest first, by check ID.
+	Checks map[string][]CheckResult `json:"checks"`
+}
+
+// HealthScore sums up the checks: the share of the checks that run and
+// pass.
+type HealthScore struct {
+	// Score is the percentage of the live checks, the ones passing or
+	// failing, that pass, rounded down, so it's 100 only if all of them
+	// pass. It's null if none are live.
+	Score *int        `json:"score" tstype:"number | null,required"`
+	Label HealthLabel `json:"label"`
+	// Passing and Failing count the live checks.
+	Passing int `json:"passing"`
+	Failing int `json:"failing"`
+	// Unavailable counts the other checks: pending, paused or unavailable.
+	Unavailable int `json:"unavailable"`
+	Total       int `json:"total"`
+}
+
+// HealthLabel puts a health score in words.
+type HealthLabel string
+
+// The labels of a HealthScore.
+const (
+	// HealthLabelHealthy is a score of 90 or more.
+	HealthLabelHealthy HealthLabel = "healthy"
+	// HealthLabelDegraded is a score of 70 or more.
+	HealthLabelDegraded HealthLabel = "degraded"
+	// HealthLabelCritical is a score below 70.
+	HealthLabelCritical HealthLabel = "critical"
+	// HealthLabelUnknown means there's no score, since no check is live.
+	HealthLabelUnknown HealthLabel = "unknown"
+)
+
+// CheckInput is the body of POST /api/checks, which adds a check, and of PUT
+// /api/checks/{id}, which replaces one. Both answer with the Check. A field
+// that's left out gets its default.
+type CheckInput struct {
+	// Name is required.
+	Name string `json:"name"`
+	// Kind is http, tcp or dns. Roost makes the ping checks.
+	Kind CheckKind `json:"kind"`
+	// Target is a full http or https URL for an HTTP check, host:port for a
+	// TCP check, or a host name for a DNS check.
+	Target string `json:"target"`
+	// Group is "Custom" if it's left out.
+	Group string `json:"group,omitempty"`
+	// IntervalSec is from 10 seconds to a day, and 60 if it's left out.
+	IntervalSec int `json:"intervalSec,omitempty"`
+	// TimeoutMs is from 200 ms to a minute, and shorter than the interval.
+	// It's 5000 if it's left out.
+	TimeoutMs    int  `json:"timeoutMs,omitempty"`
+	ExpectStatus int  `json:"expectStatus,omitempty"`
+	Insecure     bool `json:"insecure,omitempty"`
+	Paused       bool `json:"paused,omitempty"`
+}
+
+// CheckHistory is the response to GET /api/checks/{id}/history?range=, where
+// the range is 1h, 6h, 24h or 7d.
+type CheckHistory struct {
+	From time.Time `json:"from"`
+	To   time.Time `json:"to"`
+	// Step is the time each point sums up, in milliseconds.
+	Step int64 `json:"step"`
+	// Latency is the average time the target took to answer, in
+	// milliseconds, for each step in which the check ran. The value is null
+	// if nothing answered.
+	Latency []Point `json:"latency"`
+	// Uptime is the percentage of the runs that passed, for the same steps.
+	Uptime []Point `json:"uptime"`
+}
+
+// HealthHistory is the response to GET /api/health/history?range=, where the
+// range is 1h, 6h, 24h or 7d. GET /api/health itself only says the hub is
+// up.
+type HealthHistory struct {
+	From time.Time `json:"from"`
+	To   time.Time `json:"to"`
+	// Step is the time each point sums up, in milliseconds.
+	Step int64 `json:"step"`
+	// Score is the average health score for each step that has one. Roost
+	// samples it every minute.
+	Score []Point `json:"score"`
 }

@@ -29,6 +29,10 @@ var retention = []struct {
 	// minute keeps its biggest groups, for history.
 	{"usage_samples", 24 * time.Hour,
 		"UPDATE usage_samples SET detail = NULL WHERE ts < ? AND detail IS NOT NULL AND ts / 60000 % 10 != 0"},
+	// The checks' results and the health score go back a week too, as far
+	// as the Checks page shows.
+	{"check_results", 7 * 24 * time.Hour, "DELETE FROM check_results WHERE ts < ?"},
+	{"health", 7 * 24 * time.Hour, "DELETE FROM health WHERE ts < ?"},
 	// An enrollment code goes once it expires.
 	{"enrollment_codes", 0, "DELETE FROM enrollment_codes WHERE expires_at < ?"},
 }

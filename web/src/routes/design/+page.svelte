@@ -5,9 +5,11 @@
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import { mutate } from '#lib/api/client.js';
+	import type { CheckResult } from '#lib/api/types.js';
 	import AreaChart from '#lib/charts/AreaChart.svelte';
 	import HealthRing from '#lib/charts/HealthRing.svelte';
 	import Sparkline from '#lib/charts/Sparkline.svelte';
+	import UptimeBars from '#lib/charts/UptimeBars.svelte';
 	import type { Point } from '#lib/charts/path.js';
 	import type { Status, Tone } from '#lib/status.js';
 	import { toast } from '#lib/toast.svelte.js';
@@ -55,6 +57,18 @@
 		ts: now - (59 - i) * 60_000,
 		v: quiet(i) ? null : 48 + 4 * Math.sin(i / 11)
 	}));
+
+	// Half an hour of made-up results of a check, a minute apart, with two
+	// that failed.
+	const results: CheckResult[] = Array.from({ length: 30 }, (_, i) => {
+		const ok = i !== 12 && i !== 25;
+		return {
+			at: new Date(now - (29 - i) * 60_000).toISOString(),
+			ok,
+			latencyMs: ok ? 18 + (i % 5) * 3 : undefined,
+			detail: ok ? 'HTTP 200 OK' : 'dial tcp: connect: connection refused'
+		};
+	});
 
 	let name = $state('');
 	let kind = $state('');
@@ -218,7 +232,7 @@
 				bind:value={tab}
 				tabs={[
 					{ value: 'cpu', label: 'CPU and memory' },
-					{ value: 'small', label: 'Sparklines and rings', count: 3 }
+					{ value: 'small', label: 'Sparklines, bars and rings', count: 4 }
 				]}
 			>
 				<TabPanel value="cpu">
@@ -248,6 +262,8 @@
 								color="var(--color-purple-fg)"
 								fill={false}
 							/>
+							<UptimeBars results={results.slice(0, 20)} />
+							<UptimeBars {results} class="w-56" />
 						</div>
 						<div class="flex gap-3">
 							<HealthRing score={100} />

@@ -18,8 +18,10 @@ const (
 	ConnectivityInterval = 10 * time.Minute
 )
 
+// PingTimeout is how long a Poller waits for a peer to answer a ping.
+const PingTimeout = 5 * time.Second
+
 const (
-	pingTimeout         = 5 * time.Second
 	connectivityTimeout = 45 * time.Second
 	// maxPings is how many peers are pinged at once.
 	maxPings = 16
@@ -202,7 +204,7 @@ func (p *Poller) pingPeers(ctx context.Context) time.Duration {
 		wg.Go(func() {
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			pingCtx, cancel := context.WithTimeout(ctx, pingTimeout)
+			pingCtx, cancel := context.WithTimeout(ctx, PingTimeout)
 			defer cancel()
 			res, err := p.tn.Ping(pingCtx, ip)
 			if err != nil && pingCtx.Err() != nil {
@@ -267,7 +269,7 @@ func pingAddr(d Device) (netip.Addr, bool) {
 }
 
 // ErrNoReply is the error of a ping that the peer didn't answer in time.
-var ErrNoReply = fmt.Errorf("no reply within %v", pingTimeout)
+var ErrNoReply = fmt.Errorf("no reply within %v", PingTimeout)
 
 // checkConnectivity runs a connectivity check and returns when to do it again.
 func (p *Poller) checkConnectivity(ctx context.Context) time.Duration {
