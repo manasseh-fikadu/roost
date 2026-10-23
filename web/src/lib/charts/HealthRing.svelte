@@ -1,5 +1,7 @@
 <!-- A score out of 100 as a ring that fills, green at 90 and up, amber at 70, red below. -->
 <script lang="ts">
+	import { scoreColor } from '#lib/checks.js';
+
 	interface Props {
 		/** The score, or null if there isn't one yet. */
 		score: number | null;
@@ -12,15 +14,7 @@
 	const stroke = 4;
 	const r = $derived((size - stroke) / 2);
 	const circumference = $derived(2 * Math.PI * r);
-	const color = $derived(
-		score === null
-			? 'var(--color-line-heavy)'
-			: score >= 90
-				? 'var(--color-green-fg)'
-				: score >= 70
-					? 'var(--color-amber)'
-					: 'var(--color-red-fg)'
-	);
+	const color = $derived(scoreColor(score));
 </script>
 
 <div
