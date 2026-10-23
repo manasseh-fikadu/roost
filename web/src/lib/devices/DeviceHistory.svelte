@@ -40,9 +40,12 @@
 
 	let history = $state<DeviceHistory | null>(null);
 	let failed = $state(false);
+	// Every snapshot passes in a new `device`, so the effect reads only its
+	// ID, and loads again only for another device or range.
+	const deviceId = $derived(device.id);
 
 	$effect(() => {
-		const id = device.id;
+		const id = deviceId;
 		const r = range;
 		let current = true;
 		history = null;

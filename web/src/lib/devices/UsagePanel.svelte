@@ -54,6 +54,10 @@
 	let now = $state(Date.now());
 	let top: HTMLElement | undefined = $state();
 
+	// Every snapshot passes in a new `device`, so the effects below read only
+	// its ID, and don't start again on each one.
+	const deviceId = $derived(device.id);
+
 	function message(err: unknown): string {
 		return err instanceof Error ? err.message : String(err);
 	}
@@ -64,7 +68,7 @@
 		if (!open) {
 			return;
 		}
-		const id = device.id;
+		const id = deviceId;
 		const when = at;
 		let current = true;
 		let timer: ReturnType<typeof setTimeout> | undefined;
@@ -102,7 +106,7 @@
 		if (!open) {
 			return;
 		}
-		const id = device.id;
+		const id = deviceId;
 		const r = range;
 		let current = true;
 		history = null;
