@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/api"
 )
@@ -21,10 +22,13 @@ func TestRoutes(t *testing.T) {
 		anyone = iota + 1
 		viewers
 		admins
-		agentToken
+		agentSecret
+		enrollCode
 	)
-	const token = "test-agent-token"
-	levels := map[string]int{"anyone": anyone, "viewers": viewers, "admins": admins, "agent token": agentToken}
+	levels := map[string]int{
+		"anyone": anyone, "viewers": viewers, "admins": admins,
+		"agent secret": agentSecret, "enrollment code": enrollCode,
+	}
 	callers := []struct {
 		name  string
 		from  netip.Addr
@@ -40,7 +44,8 @@ func TestRoutes(t *testing.T) {
 	wildcard := regexp.MustCompile(`\{[^}]*\}`)
 
 	for _, devUI := range []bool{false, true} {
-		opts := withTailnet(t, testTailnet(), api.Options{AgentToken: token})
+		st := testStore(t)
+		opts := withStore(testTailnet(), st, api.Options{})
 		if devUI {
 			opts.DevUI = &url.URL{Scheme: "http", Host: "127.0.0.1:5173"}
 		}
@@ -48,6 +53,9 @@ func TestRoutes(t *testing.T) {
 		if !slices.ContainsFunc(routes, func(r api.Route) bool { return r.Pattern == "GET /api/me" }) {
 			t.Fatalf("StubRoutes() = %v, want GET /api/me among them", routes)
 		}
+		// The laptop's agent has a secret, and a code no machine has used
+		// yet is good for any.
+		tokens := map[int]string{agentSecret: enrolled(t, st, "laptop"), enrollCode: newCode(t, st, time.Now())}
 
 		for _, r := range routes {
 			need, ok := levels[r.Level]
@@ -61,13 +69,15 @@ func TestRoutes(t *testing.T) {
 				// A pattern without a method matches all of them.
 				path = r.Pattern
 				methods = []string{http.MethodGet, http.MethodHead, http.MethodPost, http.MethodPut, http.MethodDelete}
-			} else if method != http.MethodGet && need != admins && need != agentToken {
+			} else if method != http.MethodGet && need != admins && need != agentSecret && need != enrollCode {
 				t.Errorf("%s changes things, so it must be for admins, not %s", r.Pattern, r.Level)
 			}
 			target := wildcard.ReplaceAllString(path, "x")
 
-			if need == agentToken {
-				// Only the token counts, from anyone, whatever their role.
+			if token, ok := tokens[need]; ok {
+				// Only the token counts, whatever the caller's role, and only
+				// from a machine Tailscale knows. An agent's secret counts
+				// only from the machine it enrolled on.
 				for _, c := range callers {
 					for _, auth := range []string{"", "Bearer wrong", "Bearer " + token} {
 						req := newRequest(t, method, target, c.from)
@@ -76,7 +86,11 @@ func TestRoutes(t *testing.T) {
 							req.Header.Set("Authorization", auth)
 						}
 						want := http.StatusUnauthorized
-						if auth == "Bearer "+token {
+						switch {
+						case auth != "Bearer "+token:
+						case c.from == strangerIP, need == agentSecret && c.from != laptopIP:
+							want = http.StatusForbidden
+						default:
 							want = http.StatusNoContent
 						}
 						if rec := serve(h, req); rec.Code != want {

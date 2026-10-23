@@ -152,10 +152,6 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	if err := addFirstAdmins(ctx, st, node, cfg.Admins, logger); err != nil {
 		return errors.Join(err, res.ln.Close(), srvs.stop(ctx))
 	}
-	agentToken, err := st.AgentToken(ctx)
-	if err != nil {
-		return errors.Join(err, res.ln.Close(), srvs.stop(ctx))
-	}
 	registry := agents.NewRegistry(st, logger)
 	if err := registry.Load(ctx); err != nil {
 		// The agents report again within seconds.
@@ -194,19 +190,18 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	wg.Go(func() { feed.Run(ctx) })
 	stopping := make(chan struct{})
 	app := srvs.start(api.New(api.Options{
-		Version:    buildVersion(),
-		UI:         ui,
-		DevUI:      devUI,
-		WhoIs:      node.WhoIs,
-		Snapshot:   poller.Snapshot,
-		Feed:       feed,
-		Store:      st,
-		Agents:     registry,
-		Usage:      recorder,
-		AgentToken: agentToken,
-		AppURL:     res.url,
-		Stopping:   stopping,
-		Logger:     logger,
+		Version:  buildVersion(),
+		UI:       ui,
+		DevUI:    devUI,
+		WhoIs:    node.WhoIs,
+		Snapshot: poller.Snapshot,
+		Feed:     feed,
+		Store:    st,
+		Agents:   registry,
+		Usage:    recorder,
+		AppURL:   res.url,
+		Stopping: stopping,
+		Logger:   logger,
 	}), res.ln)
 	// Shutdown waits for every response to finish, and live streams don't
 	// until they're told to.

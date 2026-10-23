@@ -43,9 +43,6 @@ type Options struct {
 	Agents *agents.Registry
 	// Usage keeps what uses each device's CPU and memory. Required.
 	Usage *usage.Recorder
-	// AgentToken is the token agents send with each heartbeat. If it's
-	// empty, Roost takes no heartbeats.
-	AgentToken string
 	// AppURL is where the app is on the tailnet, such as
 	// https://roost.example.ts.net, which the agent sends its heartbeats to.
 	// If it's empty, it's worked out from each request.
@@ -92,12 +89,17 @@ func (h *handler) routes(rt *router) {
 	rt.read("GET /api/devices/{id}/usage", viewers, h.deviceUsage)
 	rt.read("GET /api/devices/{id}/usage/history", viewers, h.usageHistory)
 	rt.write("PUT /api/devices/{id}/settings", h.setDeviceSettings)
-	rt.write("DELETE /api/devices/{id}/agent", h.forgetAgent)
+	rt.write("DELETE /api/devices/{id}/agent", h.revokeAgent)
 
 	rt.read("GET /api/agent", admins, h.agentSetup)
-	// The script holds no secret: the install command passes it the token.
-	rt.read("GET /api/agent/install.sh", anyone, h.installScript)
+	rt.write("POST /api/agent/codes", h.newEnrollmentCode)
+	// installScript checks the code, and answers a bad one with a script
+	// that says why.
+	rt.read("GET /api/agent/install/{code}", anyone, h.installScript)
+	rt.read("GET /api/agent/uninstall.sh", anyone, h.uninstallScript)
+	rt.enroll("POST /api/agent/enroll", h.enroll)
 	rt.agent("POST /api/agent/heartbeat", h.heartbeat)
+	rt.agent("DELETE /api/agent/enrollment", h.unenroll)
 
 	rt.read("GET /api/access", admins, h.access)
 	rt.write("PATCH /api/access", h.changeAccess)

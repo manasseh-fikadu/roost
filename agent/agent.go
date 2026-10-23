@@ -16,19 +16,31 @@ var (
 	script string
 	//go:embed install.sh
 	installer string
+	//go:embed uninstall.sh
+	uninstaller string
+	//go:embed layout.sh
+	layout string
 )
 
-// Version is the version of the agent that the hub serves, such as 1.2.0.
+// Version is the version of the agent that the hub serves, such as 1.3.0.
 var Version = regexp.MustCompile(`(?m)^AGENT_VERSION="([^"]+)"$`).FindStringSubmatch(script)[1]
 
 // Install returns the script that installs the agent and has it report to
-// the hub at serverURL. It reads the agents' token from ROOST_AGENT_TOKEN,
-// so the script itself holds no secret.
-func Install(serverURL string) string {
+// the hub at serverURL. It trades code, an enrollment code, for the agent's
+// own secret.
+func Install(serverURL, code string) string {
 	return strings.NewReplacer(
 		"__SERVER_URL__", shellQuote(serverURL),
+		"__CODE__", shellQuote(code),
+		"__LAYOUT__", strings.TrimRight(layout, "\n"),
 		"__AGENT_SCRIPT__", strings.TrimRight(script, "\n"),
 	).Replace(installer)
+}
+
+// Uninstall returns the script that removes the agent, and asks the agent's
+// hub to forget it.
+func Uninstall() string {
+	return strings.Replace(uninstaller, "__LAYOUT__", strings.TrimRight(layout, "\n"), 1)
 }
 
 // Older reports whether version is older than the agent the hub serves. A

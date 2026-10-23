@@ -68,6 +68,8 @@ type Feed struct {
 	zw          *flate.Writer
 	settings    map[string]store.DeviceSettings
 	settingsErr error
+	enrolled    map[string]store.Enrollment
+	enrolledErr error
 	// pingsUpTo is when the latest recorded ping was sent.
 	pingsUpTo time.Time
 	pingsErr  error
@@ -196,6 +198,7 @@ func (f *Feed) publish(ctx context.Context) *published {
 	f.recordPings(ctx, src.tailnet.Pings)
 	f.recordMetrics(ctx, src, now)
 	src.settings = f.loadSettings(ctx)
+	src.enrolled = f.loadEnrollments(ctx)
 
 	snap := newSnapshot(src, now)
 	p := &published{snap: snap, next: make(chan struct{})}
@@ -371,4 +374,22 @@ func (f *Feed) loadSettings(ctx context.Context) map[string]store.DeviceSettings
 	}
 	f.settings, f.settingsErr = settings, nil
 	return settings
+}
+
+// loadEnrollments returns the agents' enrollments, or the last ones it read
+// if the store can't say.
+func (f *Feed) loadEnrollments(ctx context.Context) map[string]store.Enrollment {
+	enrolled, err := f.opts.Store.Enrollments(ctx)
+	if err != nil {
+		if ctx.Err() == nil && f.enrolledErr == nil {
+			f.log.Warn("read the agents' enrollments", "error", err)
+		}
+		f.enrolledErr = err
+		return f.enrolled
+	}
+	if f.enrolledErr != nil {
+		f.log.Info("read the agents' enrollments again")
+	}
+	f.enrolled, f.enrolledErr = enrolled, nil
+	return enrolled
 }

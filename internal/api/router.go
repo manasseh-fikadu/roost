@@ -1,9 +1,12 @@
 package api
 
 import (
-	"crypto/subtle"
+	"errors"
 	"net/http"
 	"strings"
+	"time"
+
+	"github.com/manasseh-fikadu/roost/internal/store"
 )
 
 // A level is what a caller may do. Every route needs one, and a caller can
@@ -20,9 +23,14 @@ const (
 	viewers
 	// admins can use a route at this level.
 	admins
-	// agentToken is the level of a route for agents: a caller can use it if
-	// they send the agents' token, and a role doesn't let anyone use it.
-	agentToken
+	// agentSecret is the level of a route for enrolled agents: a caller can
+	// use it if they send an agent's secret from the machine it enrolled on.
+	// A role doesn't let anyone use it.
+	agentSecret
+	// enrollCode is the level of the route that enrolls an agent: a caller
+	// can use it if they send an enrollment code that's good for their
+	// machine. A role doesn't let anyone use it.
+	enrollCode
 )
 
 func (l level) String() string {
@@ -33,8 +41,10 @@ func (l level) String() string {
 		return "viewers"
 	case admins:
 		return "admins"
-	case agentToken:
-		return "agent token"
+	case agentSecret:
+		return "agent secret"
+	case enrollCode:
+		return "enrollment code"
 	default:
 		return "no level"
 	}
@@ -92,14 +102,24 @@ func (rt *router) write(pattern string, next http.HandlerFunc) {
 	rt.add(route{pattern, admins}, next)
 }
 
-// agent registers a route for agents, such as "POST /api/agent/heartbeat".
-// Anyone who sends the agents' token as a bearer token can use it, and no one
-// else.
+// agent registers a route for enrolled agents, such as "POST
+// /api/agent/heartbeat". A machine can use it if it sends its agent's secret
+// as a bearer token, and no one else can.
 func (rt *router) agent(pattern string, next http.HandlerFunc) {
 	if !strings.Contains(pattern, " ") {
 		panic("api: agent route " + pattern + " needs a method")
 	}
-	rt.add(route{pattern, agentToken}, next)
+	rt.add(route{pattern, agentSecret}, next)
+}
+
+// enroll registers a route that enrolls agents. A machine can use it if it
+// sends an enrollment code that's good for it as a bearer token, and no one
+// else can.
+func (rt *router) enroll(pattern string, next http.HandlerFunc) {
+	if !strings.Contains(pattern, " ") {
+		panic("api: enroll route " + pattern + " needs a method")
+	}
+	rt.add(route{pattern, enrollCode}, next)
 }
 
 // anyMethod registers a pattern without a method, such as "/" for the web UI,
@@ -122,10 +142,12 @@ func (rt *router) add(r route, next http.Handler) {
 // needs for it.
 func (h *handler) allow(r route, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		if r.need == agentToken {
-			if !h.fromAgent(req) {
-				w.Header().Set("WWW-Authenticate", "Bearer")
-				h.deny(w, req, http.StatusUnauthorized, "only Roost's agents can do this, with the token from the install command")
+		if r.need == agentSecret || r.need == enrollCode {
+			if status, msg := h.checkMachine(req, r.need); status != 0 {
+				if status == http.StatusUnauthorized {
+					w.Header().Set("WWW-Authenticate", "Bearer")
+				}
+				h.deny(w, req, status, msg)
 				return
 			}
 			next.ServeHTTP(w, req)
@@ -146,11 +168,63 @@ func (h *handler) allow(r route, next http.Handler) http.Handler {
 	})
 }
 
-// fromAgent reports whether req carries the agents' token.
-func (h *handler) fromAgent(req *http.Request) bool {
-	token, ok := strings.CutPrefix(req.Header.Get("Authorization"), "Bearer ")
-	want := h.opts.AgentToken
-	return ok && want != "" && subtle.ConstantTimeCompare([]byte(token), []byte(want)) == 1
+// checkMachine checks a request to a route for agents, which needs
+// agentSecret or enrollCode. Its bearer token must be an agent's secret, or
+// an enrollment code, that's good for the machine it came from, as Tailscale
+// says. It returns the status and message to deny the request with, or 0.
+func (h *handler) checkMachine(req *http.Request, need level) (int, string) {
+	ctx, c, token := req.Context(), callerOf(req), bearer(req)
+	switch need {
+	case agentSecret:
+		node, err := h.opts.Store.EnrolledNode(ctx, token)
+		switch {
+		case errors.Is(err, store.ErrUnknownSecret):
+			return http.StatusUnauthorized, "Roost doesn't know this agent's secret, which an admin may have revoked; " +
+				"to report again, run a new install command from Add agent on Roost's Agents page"
+		case err != nil:
+			h.log.Error("look up an agent's secret", "error", err)
+			return http.StatusServiceUnavailable, "Roost couldn't check this agent's secret"
+		case c.node != "" && node != c.node:
+			h.log.Warn("refused an agent's secret from another machine", "enrolled", node, "from", c.node)
+			return http.StatusForbidden, "this agent's secret belongs to another machine, so Roost refuses it from this one"
+		}
+	case enrollCode:
+		if err := h.opts.Store.CheckEnrollmentCode(ctx, token, c.node, time.Now()); err != nil {
+			return h.codeDenial(err)
+		}
+	default:
+		panic("api: checkMachine for a route at level " + need.String())
+	}
+	switch {
+	case c.reason == ReasonWhoIsFailed:
+		return http.StatusServiceUnavailable, "Roost couldn't ask Tailscale which machine this is"
+	case c.node == "":
+		return http.StatusForbidden, "Tailscale doesn't know the machine this came from"
+	}
+	return 0, ""
+}
+
+// codeDenial returns the status and message to refuse an enrollment code
+// with, for an error from the store.
+func (h *handler) codeDenial(err error) (int, string) {
+	const next = "get a new one from Add agent on Roost's Agents page"
+	switch {
+	case errors.Is(err, store.ErrUnknownCode):
+		return http.StatusUnauthorized, "Roost doesn't know the code in this install command, or it expired a while ago; " + next
+	case errors.Is(err, store.ErrCodeExpired):
+		return http.StatusUnauthorized, "this install command expired, since each one works for an hour; " + next
+	case errors.Is(err, store.ErrCodeUsed):
+		return http.StatusForbidden, "another machine used this install command, and each one works on one machine; " + next
+	default:
+		h.log.Error("check an enrollment code", "error", err)
+		return http.StatusServiceUnavailable, "Roost couldn't check the code in this install command"
+	}
+}
+
+// bearer returns the bearer token in req's Authorization header, or "".
+func bearer(req *http.Request) string {
+	token, _ := strings.CutPrefix(req.Header.Get("Authorization"), "Bearer ")
+	return token
 }
 
 // denial says why c can't make a request with method that needs a level.

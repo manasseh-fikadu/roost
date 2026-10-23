@@ -1,68 +1,60 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
-# Installs (or with --uninstall, removes) the Roost agent for the current user.
-# macOS: LaunchAgent. Linux: systemd user service. No root needed.
-# The hub serves this script, and its Agents page has the command to run it.
+# Installs the Roost agent for the current user: a LaunchAgent on macOS, and
+# a systemd user service on Linux. No root needed. The hub serves this script
+# only for a valid enrollment code, which Add agent on its Agents page makes.
 set -euo pipefail
 
 SERVER_URL=__SERVER_URL__
-# The token isn't in the script, which anyone on the tailnet can download.
-TOKEN="${ROOST_AGENT_TOKEN:-}"
-NAME="roost-agent"
-LABEL="dev.roost.agent"
-CONF_DIR="$HOME/.config/$NAME"
+# The code works on one machine, for an hour. The agent trades it for a
+# secret of its own.
+CODE=__CODE__
 
-case "$(uname -s)" in
-  Darwin)
-    BIN_DIR="$HOME/Library/Application Support/$NAME"
-    PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-    LOG="$HOME/Library/Logs/$NAME.log"
-    ;;
-  Linux)
-    BIN_DIR="$HOME/.local/share/$NAME"
-    UNIT_DIR="$HOME/.config/systemd/user"
-    UNIT="$UNIT_DIR/$NAME.service"
-    ;;
-  *)
-    echo "Unsupported OS: $(uname -s)" >&2
-    exit 1
-    ;;
-esac
-
-if [ "${1:-}" = "--uninstall" ]; then
-  if [ "$(uname -s)" = "Darwin" ]; then
-    launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-    rm -f "$PLIST"
-  else
-    systemctl --user disable --now "$NAME.service" 2>/dev/null || true
-    rm -f "$UNIT"
-    systemctl --user daemon-reload 2>/dev/null || true
-  fi
-  rm -rf "$BIN_DIR" "$CONF_DIR"
-  echo "Removed $NAME."
-  exit 0
-fi
+__LAYOUT__
 
 command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
-if [ -z "$TOKEN" ]; then
-  echo "ROOST_AGENT_TOKEN isn't set. Copy the install command from the Agents page in Roost, which sets it." >&2
+
+# The code goes through stdin (-K -), so it doesn't show up in `ps`. Roost
+# refuses POSTs without an X-Roost header.
+echo "Enrolling this machine with $SERVER_URL ..."
+out=$(printf 'header = "Authorization: Bearer %s"\n' "$CODE" |
+  curl -sS -m 30 -K - -w '\n%{http_code}' -X POST -H 'X-Roost: agent' "$SERVER_URL/api/agent/enroll") || {
+  echo "Couldn't reach $SERVER_URL." >&2
+  exit 1
+}
+status=${out##*$'\n'}
+body=${out%$'\n'*}
+if [ "$status" != 200 ]; then
+  # Roost's errors look like {"error":"..."}.
+  msg=$(printf '%s' "$body" | sed -n 's/^{"error":"\(.*\)"}$/\1/p')
+  echo "Roost didn't enroll this machine (HTTP $status): ${msg:-$body}" >&2
+  exit 1
+fi
+SECRET=$(printf '%s' "$body" | sed -n 's/^{"secret":"\([A-Z2-7]*\)"}$/\1/p')
+if [ -z "$SECRET" ]; then
+  echo "Roost's answer has no secret in it: $body" >&2
   exit 1
 fi
 
 mkdir -p "$BIN_DIR" "$CONF_DIR"
+chmod 700 "$CONF_DIR"
 cat > "$BIN_DIR/agent.sh" <<'ROOST_AGENT_EOF'
 __AGENT_SCRIPT__
 ROOST_AGENT_EOF
 chmod 755 "$BIN_DIR/agent.sh"
 
+# Only this user can read the secret. A new file gets mode 0600, and the
+# rename replaces an older env whatever its mode was.
 (
   umask 077
-  printf 'SERVER_URL=%q\nTOKEN=%q\nINTERVAL=15\n' "$SERVER_URL" "$TOKEN" > "$CONF_DIR/env"
+  printf 'SERVER_URL=%q\nSECRET=%q\nINTERVAL=15\n' "$SERVER_URL" "$SECRET" > "$CONF_DIR/env.new"
 )
+chmod 600 "$CONF_DIR/env.new"
+mv -f "$CONF_DIR/env.new" "$CONF_DIR/env"
 
-echo "Testing connection to $SERVER_URL ..."
+echo "Sending the first heartbeat ..."
 if ! /bin/bash "$BIN_DIR/agent.sh" --once; then
-  echo "The first heartbeat failed, so the agent isn't running. Fix what it says above, and run the install command again." >&2
+  echo "The first heartbeat failed, so the agent isn't running. Fix what it says above, and run the install command again: it works on this machine until an hour after Roost made it." >&2
   exit 1
 fi
 

@@ -2,35 +2,10 @@ package store
 
 import (
 	"context"
-	"crypto/rand"
-	"database/sql"
 	"errors"
 	"fmt"
 	"time"
 )
-
-// agentTokenKey is the kv key that holds the token agents send.
-const agentTokenKey = "agent_token"
-
-// AgentToken returns the token that agents send with each heartbeat, and
-// makes one the first time. Every agent shares it until per-device
-// enrollment (#8) replaces it.
-func (s *Store) AgentToken(ctx context.Context) (string, error) {
-	token := rand.Text()
-	// A token that's already there stays, and the second statement reads
-	// whichever token won.
-	err := s.inTx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx,
-			"INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT (key) DO NOTHING", agentTokenKey, token); err != nil {
-			return err
-		}
-		return tx.QueryRowContext(ctx, "SELECT value FROM kv WHERE key = ?", agentTokenKey).Scan(&token)
-	})
-	if err != nil {
-		return "", fmt.Errorf("get the agent token: %w", err)
-	}
-	return token, nil
-}
 
 // An AgentRecord is the latest report of a device's agent.
 type AgentRecord struct {

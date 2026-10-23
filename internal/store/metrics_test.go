@@ -71,24 +71,6 @@ func bucketString(b store.MetricsBucket) string {
 	})
 }
 
-func TestStore_AgentToken(t *testing.T) {
-	t.Parallel()
-	path := filepath.Join(t.TempDir(), "roost.db")
-	s := openStore(t, path, nil)
-	first, err := s.AgentToken(t.Context())
-	if err != nil {
-		t.Fatalf("AgentToken() error = %v", err)
-	}
-	if len(first) < 20 {
-		t.Errorf("AgentToken() = %q, want a long random token", first)
-	}
-	closeStore(t, s)
-	s = openStore(t, path, nil)
-	if again, err := s.AgentToken(t.Context()); err != nil || again != first {
-		t.Errorf("AgentToken() after reopening = %q, %v, want %q again", again, err, first)
-	}
-}
-
 func TestStore_Agents(t *testing.T) {
 	t.Parallel()
 	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)

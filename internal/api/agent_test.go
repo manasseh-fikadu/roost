@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/netip"
+	"os/exec"
 	"strings"
 	"testing"
 	"testing/synctest"
@@ -16,9 +17,9 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/roost/internal/usage"
 )
-
-const agentToken = "test-agent-token"
 
 // laptopBeat is a heartbeat as the agent sends it, with its processes.
 var laptopBeat = `{"v":1,"agentVersion":"` + agent.Version + `","hostname":"laptop","os":"macOS","osVersion":"macOS 26.1",
@@ -27,52 +28,91 @@ var laptopBeat = `{"v":1,"agentVersion":"` + agent.Version + `","hostname":"lapt
 	"netRxTotal":1000,"netTxTotal":500,"battery":{"pct":81,"charging":false,"onAc":false},"uptime":7200,"procs":512},
 	"usage":{"groups":[["app:Safari",10.5,4000,6,["Safari"]]],"procs":[[42,"Safari","alice",10.5,4000,"app:Safari","/Applications/Safari.app/Contents/MacOS/Safari --profile work"]],"total":[12.5,6000,512]}}`
 
-// sendBeat sends a heartbeat from the device at ip with a token.
-func sendBeat(t *testing.T, h http.Handler, from netip.Addr, token, body string) *httptest.ResponseRecorder {
+// newCode returns a new enrollment code from alice, made at.
+func newCode(t *testing.T, st *store.Store, at time.Time) string {
 	t.Helper()
-	req := newRequestBody(t, http.MethodPost, "/api/agent/heartbeat", from, strings.NewReader(body))
+	code, _, err := st.NewEnrollmentCode(t.Context(), alice, at)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return code
+}
+
+// enrolled returns the secret of a new agent on the machine with node ID
+// node.
+func enrolled(t *testing.T, st *store.Store, node string) string {
+	t.Helper()
+	secret, _, err := st.Enroll(t.Context(), newCode(t, st, time.Now()), node, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return secret
+}
+
+// sendAs sends a request for an agent from the device at ip, with a bearer
+// token.
+func sendAs(t *testing.T, h http.Handler, method, target string, from netip.Addr, token, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	req := newRequestBody(t, method, target, from, strings.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
 	return serve(h, req)
+}
+
+// sendBeat sends a heartbeat from the device at ip with an agent's secret.
+func sendBeat(t *testing.T, h http.Handler, from netip.Addr, secret, body string) *httptest.ResponseRecorder {
+	t.Helper()
+	return sendAs(t, h, http.MethodPost, "/api/agent/heartbeat", from, secret, body)
 }
 
 func TestHeartbeat(t *testing.T) {
 	t.Parallel()
 	for _, tt := range []struct {
-		name     string
-		from     netip.Addr
-		token    string
-		body     string
-		measured bool // Roost measures its own machine
-		wantCode int
+		name string
+		from netip.Addr
+		// enrolledOn is the node whose agent's secret the heartbeat has, or
+		// "" for a secret Roost doesn't know.
+		enrolledOn string
+		body       string
+		measured   bool // Roost measures its own machine
+		wantCode   int
 		// wantID is the ID the report is kept under, if it's taken.
 		wantID string
 	}{
-		{name: "a laptop", from: laptopIP, token: agentToken, body: laptopBeat, wantCode: http.StatusNoContent, wantID: "laptop"},
-		{name: "a tagged server", from: serverIP, token: agentToken, body: laptopBeat, wantCode: http.StatusNoContent, wantID: "server"},
+		{name: "a laptop", from: laptopIP, enrolledOn: "laptop", body: laptopBeat, wantCode: http.StatusNoContent, wantID: "laptop"},
+		{name: "a tagged server", from: serverIP, enrolledOn: "server", body: laptopBeat, wantCode: http.StatusNoContent, wantID: "server"},
 		{
-			name: "the hub, which Roost measures", from: roostIP, token: agentToken, body: laptopBeat, measured: true,
+			name: "the hub, which Roost measures", from: roostIP, enrolledOn: "roost", body: laptopBeat, measured: true,
 			wantCode: http.StatusConflict,
 		},
-		{name: "the hub, which Roost can't measure", from: roostIP, token: agentToken, body: laptopBeat, wantCode: http.StatusNoContent, wantID: store.HubID},
-		{name: "a stranger", from: strangerIP, token: agentToken, body: laptopBeat, wantCode: http.StatusForbidden},
-		{name: "the wrong token", from: laptopIP, token: "nope", body: laptopBeat, wantCode: http.StatusUnauthorized},
-		{name: "another format", from: laptopIP, token: agentToken, body: `{"v":2}`, wantCode: http.StatusBadRequest},
-		{name: "not JSON", from: laptopIP, token: agentToken, body: `{"v":1`, wantCode: http.StatusBadRequest},
-		{name: "a field Roost doesn't know", from: laptopIP, token: agentToken, body: `{"v":1,"color":"red"}`, wantCode: http.StatusNoContent, wantID: "laptop"},
+		{
+			name: "the hub, which Roost can't measure", from: roostIP, enrolledOn: "roost", body: laptopBeat,
+			wantCode: http.StatusNoContent, wantID: store.HubID,
+		},
+		{name: "another machine's secret", from: phoneIP, enrolledOn: "laptop", body: laptopBeat, wantCode: http.StatusForbidden},
+		{name: "a stranger", from: strangerIP, enrolledOn: "laptop", body: laptopBeat, wantCode: http.StatusForbidden},
+		{name: "a secret Roost doesn't know", from: laptopIP, body: laptopBeat, wantCode: http.StatusUnauthorized},
+		{name: "another format", from: laptopIP, enrolledOn: "laptop", body: `{"v":2}`, wantCode: http.StatusBadRequest},
+		{name: "not JSON", from: laptopIP, enrolledOn: "laptop", body: `{"v":1`, wantCode: http.StatusBadRequest},
+		{
+			name: "a field Roost doesn't know", from: laptopIP, enrolledOn: "laptop", body: `{"v":1,"color":"red"}`,
+			wantCode: http.StatusNoContent, wantID: "laptop",
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			st := testStore(t)
-			tn := testTailnet()
-			opts := withStore(tn, st, api.Options{AgentToken: agentToken})
+			opts := withStore(testTailnet(), st, api.Options{})
 			if tt.measured {
 				opts.Feed = api.NewFeed(api.FeedOptions{
 					Tailnet: opts.Snapshot, Store: st, Agents: opts.Agents,
 					Host: func() hostmetrics.Reading { return hostmetrics.Reading{} },
 				})
 			}
-			h := api.New(opts)
-			rec := sendBeat(t, h, tt.from, tt.token, tt.body)
+			secret := "unknown"
+			if tt.enrolledOn != "" {
+				secret = enrolled(t, st, tt.enrolledOn)
+			}
+			rec := sendBeat(t, api.New(opts), tt.from, secret, tt.body)
 			if rec.Code != tt.wantCode {
 				t.Fatalf("POST = %d %s, want %d", rec.Code, rec.Body, tt.wantCode)
 			}
@@ -90,28 +130,19 @@ func TestHeartbeat(t *testing.T) {
 	}
 }
 
-// Without a token, Roost takes no heartbeats.
-func TestHeartbeat_noToken(t *testing.T) {
-	t.Parallel()
-	h := api.New(withTailnet(t, testTailnet(), api.Options{}))
-	if rec := sendBeat(t, h, laptopIP, "", laptopBeat); rec.Code != http.StatusUnauthorized {
-		t.Errorf("POST with an empty token = %d, want 401", rec.Code)
-	}
-}
-
 // A device whose node Tailscale knows, but that wasn't in Roost's last
 // status, tries again later.
 func TestHeartbeat_unknownDevice(t *testing.T) {
 	t.Parallel()
-	tn := testTailnet()
-	opts := withTailnet(t, tn, api.Options{AgentToken: agentToken})
+	st := testStore(t)
+	opts := withStore(testTailnet(), st, api.Options{})
 	opts.Snapshot = func() tailnet.Snapshot {
 		return tailnet.Snapshot{Status: &tailnet.Status{
 			State: tailnet.StateRunning,
 			Self:  tailnet.Device{ID: "roost", DNSName: roostHost, IPs: []netip.Addr{roostIP}, Online: true},
 		}}
 	}
-	if rec := sendBeat(t, api.New(opts), laptopIP, agentToken, laptopBeat); rec.Code != http.StatusNotFound {
+	if rec := sendBeat(t, api.New(opts), laptopIP, enrolled(t, st, "laptop"), laptopBeat); rec.Code != http.StatusNotFound {
 		t.Errorf("POST = %d %s, want 404", rec.Code, rec.Body)
 	}
 }
@@ -123,14 +154,14 @@ func TestHeartbeat_shows(t *testing.T) {
 		st := testStore(t)
 		synctest.Wait()
 		tn := testTailnet()
-		opts := withStore(tn, st, api.Options{AgentToken: agentToken})
+		opts := withStore(tn, st, api.Options{})
 		go opts.Feed.Run(t.Context())
 		h := api.New(opts)
 		events := openStream(t, tn, h, laptopIP, true)
 		synctest.Wait()
 		nextSnapshot(t, events)
 
-		if rec := sendBeat(t, h, laptopIP, agentToken, laptopBeat); rec.Code != http.StatusNoContent {
+		if rec := sendBeat(t, h, laptopIP, enrolled(t, st, "laptop"), laptopBeat); rec.Code != http.StatusNoContent {
 			t.Fatalf("POST = %d %s", rec.Code, rec.Body)
 		}
 		time.Sleep(api.FeedGap)
@@ -189,6 +220,7 @@ func TestSnapshot_agents(t *testing.T) {
 			{ID: "asleep", DNSName: "asleep.example.ts.net", OS: "macOS"},
 			{ID: "old", DNSName: "old.example.ts.net", OS: "linux", Online: true},
 			{ID: "host", DNSName: "host.example.ts.net", OS: "macOS", Online: true, SameMachine: true},
+			{ID: "waiting", DNSName: "waiting.example.ts.net", OS: "linux", Online: true},
 			{ID: "none", DNSName: "none.example.ts.net", OS: "linux", Online: true},
 		},
 	}
@@ -201,8 +233,13 @@ func TestSnapshot_agents(t *testing.T) {
 		beat(reg, "asleep", agent.Version, now.Add(-time.Hour), `{"cpu":1}`)
 		beat(reg, "old", "1.0.0", now, `{"cpu":1}`)
 		// An agent on the machine Roost runs on, which Roost can't measure
-		// on macOS.
+		// on macOS. It enrolled from the machine's own node, a peer.
 		beat(reg, store.HubID, agent.Version, now, `{"cpu":42}`)
+		// The stale agent is from before enrollment, and the waiting one
+		// hasn't reported yet.
+		for _, node := range []string{"fresh", "asleep", "old", "host", "waiting"} {
+			enrolled(t, st, node)
+		}
 		opts := api.FeedOptions{Tailnet: func() tailnet.Snapshot { return tailnet.Snapshot{Status: status} }, Store: st, Agents: reg}
 		if measured {
 			opts.Host = func() hostmetrics.Reading {
@@ -214,42 +251,53 @@ func TestSnapshot_agents(t *testing.T) {
 		for _, tt := range []struct {
 			id       string
 			by       api.MeasuredBy
+			agent    bool // it has an agent, even if it hasn't reported
 			cpu      float64
 			stale    bool
 			outdated bool
+			enrolled bool
 			status   api.Status
 			reason   string
 		}{
-			{id: "fresh", by: api.MeasuredByAgent, cpu: 5, status: api.StatusAttention, reason: "Disk 90% full"},
+			{id: "fresh", by: api.MeasuredByAgent, cpu: 5, enrolled: true, status: api.StatusAttention, reason: "Disk 90% full"},
 			{id: "stale", by: api.MeasuredByAgent, cpu: 99, stale: true, status: api.StatusAttention, reason: "Agent stopped reporting"},
-			{id: "asleep", by: api.MeasuredByAgent, cpu: 1, status: api.StatusOffline, reason: "Not connected to the tailnet"},
-			{id: "old", by: api.MeasuredByAgent, cpu: 1, outdated: true, status: api.StatusOnline},
-			{id: "roost", by: api.MeasuredByAgent, cpu: 42, status: api.StatusOnline},
-			{id: "host", by: api.MeasuredByAgent, cpu: 42, status: api.StatusOnline},
+			{id: "asleep", by: api.MeasuredByAgent, cpu: 1, enrolled: true, status: api.StatusOffline, reason: "Not connected to the tailnet"},
+			{id: "old", by: api.MeasuredByAgent, cpu: 1, outdated: true, enrolled: true, status: api.StatusOnline},
+			{id: "roost", by: api.MeasuredByAgent, cpu: 42, enrolled: true, status: api.StatusOnline},
+			{id: "host", by: api.MeasuredByAgent, cpu: 42, enrolled: true, status: api.StatusOnline},
+			{id: "waiting", agent: true, enrolled: true, status: api.StatusOnline},
 			{id: "none", status: api.StatusOnline},
 		} {
 			if measured && (tt.id == "roost" || tt.id == "host") {
-				tt.by, tt.cpu = api.MeasuredByHub, 7
+				tt.by, tt.cpu, tt.enrolled = api.MeasuredByHub, 7, false
 			}
 			d := findDevice(t, snap, tt.id)
 			if d.MeasuredBy != tt.by || d.Status != tt.status || (tt.reason != "" && d.StatusReason != tt.reason) {
 				t.Errorf("measured %v: %s is measured by %q, %s %q; want %q, %s %q",
 					measured, tt.id, d.MeasuredBy, d.Status, d.StatusReason, tt.by, tt.status, tt.reason)
 			}
+			if wantAgent := tt.agent || tt.by == api.MeasuredByAgent; (d.Agent != nil) != wantAgent {
+				t.Fatalf("measured %v: %s agent = %+v, want one: %v", measured, tt.id, d.Agent, wantAgent)
+			}
+			if a := d.Agent; a != nil {
+				if a.Stale != tt.stale || a.Outdated != tt.outdated || (a.EnrolledAt != nil) != tt.enrolled {
+					t.Errorf("%s agent = %+v, want stale %v, outdated %v, enrolled %v", tt.id, a, tt.stale, tt.outdated, tt.enrolled)
+				}
+				if tt.enrolled && a.EnrolledBy != alice {
+					t.Errorf("%s agent enrolled by %q, want %q", tt.id, a.EnrolledBy, alice)
+				}
+				if (a.LastSeen != nil) != (tt.by == api.MeasuredByAgent) {
+					t.Errorf("%s agent last seen %v, want a time only if it reported", tt.id, a.LastSeen)
+				}
+			}
 			if tt.by == "" {
-				if d.Metrics != nil || d.Agent != nil {
-					t.Errorf("%s has metrics %+v and agent %+v, want neither", tt.id, d.Metrics, d.Agent)
+				if d.Metrics != nil {
+					t.Errorf("%s has metrics %+v, want none", tt.id, d.Metrics)
 				}
 				continue
 			}
 			if d.Metrics == nil || *d.Metrics.CPU != tt.cpu {
 				t.Errorf("measured %v: %s metrics = %+v, want CPU %v", measured, tt.id, d.Metrics, tt.cpu)
-			}
-			if (d.Agent != nil) != (tt.by == api.MeasuredByAgent) {
-				t.Errorf("measured %v: %s agent = %+v, want one only if it's measured by an agent", measured, tt.id, d.Agent)
-			}
-			if a := d.Agent; a != nil && (a.Stale != tt.stale || a.Outdated != tt.outdated) {
-				t.Errorf("%s agent = %+v, want stale %v, outdated %v", tt.id, a, tt.stale, tt.outdated)
 			}
 		}
 		if b := findDevice(t, snap, "fresh").Metrics.Battery; b == nil || b.Percent != 50 || !b.Charging {
@@ -260,68 +308,320 @@ func TestSnapshot_agents(t *testing.T) {
 
 func TestAgentSetup(t *testing.T) {
 	t.Parallel()
-	opts := withTailnet(t, testTailnet(), api.Options{AgentToken: agentToken, AppURL: "https://" + roostHost + "/"})
-	h := api.New(opts)
+	h := api.New(withTailnet(t, testTailnet(), api.Options{AppURL: "https://" + roostHost + "/"}))
 	rec := serve(h, newRequest(t, http.MethodGet, "/api/agent", laptopIP))
 	var got api.AgentSetup
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || rec.Code != http.StatusOK {
 		t.Fatalf("GET /api/agent = %d %s", rec.Code, rec.Body)
 	}
-	script := "https://" + roostHost + "/api/agent/install.sh"
 	want := api.AgentSetup{
 		Version:          agent.Version,
-		InstallCommand:   "curl -fsSL " + script + " | ROOST_AGENT_TOKEN=" + agentToken + " bash",
-		UninstallCommand: "curl -fsSL " + script + " | bash -s -- --uninstall",
+		UninstallCommand: "curl -fsSL https://" + roostHost + "/api/agent/uninstall.sh | bash",
 	}
 	if got != want {
 		t.Errorf("GET /api/agent = %+v, want %+v", got, want)
+	}
+
+	// The script holds no secret, so even a tagged server can get it.
+	rec = serve(h, newRequest(t, http.MethodGet, "/api/agent/uninstall.sh", serverIP))
+	if rec.Code != http.StatusOK || rec.Body.String() != agent.Uninstall() {
+		t.Errorf("GET /api/agent/uninstall.sh = %d, want 200 and the script", rec.Code)
+	}
+}
+
+// An admin's install command works on one machine. That machine trades it
+// for a secret it then sends its heartbeats with.
+func TestEnrollmentCode(t *testing.T) {
+	t.Parallel()
+	opts := withTailnet(t, testTailnet(), api.Options{AppURL: "https://" + roostHost})
+	h := api.New(opts)
+	before := time.Now()
+	rec := send(t, h, http.MethodPost, "/api/agent/codes", laptopIP, "")
+	var got api.AgentCode
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || rec.Code != http.StatusCreated {
+		t.Fatalf("POST /api/agent/codes = %d %s", rec.Code, rec.Body)
+	}
+	prefix := "curl -fsSL https://" + roostHost + "/api/agent/install/"
+	code, ok := strings.CutPrefix(got.InstallCommand, prefix)
+	code, ok2 := strings.CutSuffix(code, " | bash")
+	if !ok || !ok2 || len(code) < 20 {
+		t.Fatalf("install command = %q, want %s<code> | bash", got.InstallCommand, prefix)
+	}
+	if got.CreatedAt.Before(before) || !got.ExpiresAt.Equal(got.CreatedAt.Add(store.EnrollmentCodeLife)) {
+		t.Errorf("code made at %v and expires at %v, want an hour after it was made, after %v", got.CreatedAt, got.ExpiresAt, before)
+	}
+
+	script := serve(h, newRequest(t, http.MethodGet, "/api/agent/install/"+code, serverIP)).Body.String()
+	if !strings.Contains(script, "\nCODE='"+code+"'\n") || !strings.Contains(script, "\nSERVER_URL='https://"+roostHost+"'\n") {
+		t.Fatalf("the install script doesn't have the code and the hub's URL:\n%.300s", script)
+	}
+	rec = sendAs(t, h, http.MethodPost, "/api/agent/enroll", serverIP, code, "")
+	var secret api.AgentSecret
+	if err := json.Unmarshal(rec.Body.Bytes(), &secret); err != nil || rec.Code != http.StatusOK || secret.Secret == "" {
+		t.Fatalf("POST /api/agent/enroll = %d %s, want a secret", rec.Code, rec.Body)
+	}
+	if rec := sendBeat(t, h, serverIP, secret.Secret, laptopBeat); rec.Code != http.StatusNoContent {
+		t.Errorf("a heartbeat with the secret = %d %s, want 204", rec.Code, rec.Body)
+	}
+
+	// Only admins make codes.
+	if rec := send(t, h, http.MethodPost, "/api/agent/codes", phoneIP, ""); rec.Code != http.StatusForbidden {
+		t.Errorf("POST /api/agent/codes from a viewer = %d, want 403", rec.Code)
+	}
+}
+
+func TestEnroll(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name     string
+		from     netip.Addr
+		code     string // "fresh", "expired", "laptop's" (used by the laptop) or "unknown"
+		measured bool
+		// missing leaves the laptop out of Roost's last status.
+		missing  bool
+		wantCode int
+	}{
+		{name: "a fresh code", from: laptopIP, code: "fresh", wantCode: http.StatusOK},
+		{name: "a tagged server", from: serverIP, code: "fresh", wantCode: http.StatusOK},
+		{name: "again from the same machine", from: laptopIP, code: "laptop's", wantCode: http.StatusOK},
+		{name: "from another machine", from: phoneIP, code: "laptop's", wantCode: http.StatusForbidden},
+		{name: "an expired code", from: laptopIP, code: "expired", wantCode: http.StatusUnauthorized},
+		{name: "an unknown code", from: laptopIP, code: "unknown", wantCode: http.StatusUnauthorized},
+		{name: "a stranger", from: strangerIP, code: "fresh", wantCode: http.StatusForbidden},
+		{name: "the hub, which Roost measures", from: roostIP, code: "fresh", measured: true, wantCode: http.StatusConflict},
+		{name: "the hub, which Roost can't measure", from: roostIP, code: "fresh", wantCode: http.StatusOK},
+		{name: "a machine Roost hasn't seen yet", from: laptopIP, code: "fresh", missing: true, wantCode: http.StatusNotFound},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			st := testStore(t)
+			opts := withStore(testTailnet(), st, api.Options{})
+			if tt.measured {
+				opts.Feed = api.NewFeed(api.FeedOptions{
+					Tailnet: opts.Snapshot, Store: st, Agents: opts.Agents,
+					Host: func() hostmetrics.Reading { return hostmetrics.Reading{} },
+				})
+			}
+			if tt.missing {
+				full := opts.Snapshot
+				opts.Snapshot = func() tailnet.Snapshot {
+					s := full()
+					status := *s.Status
+					status.Peers = nil
+					s.Status = &status
+					return s
+				}
+			}
+			h := api.New(opts)
+			code := map[string]string{
+				"fresh":   newCode(t, st, time.Now()),
+				"expired": newCode(t, st, time.Now().Add(-store.EnrollmentCodeLife)),
+				"unknown": "UNKNOWN",
+			}
+			code["laptop's"] = code["fresh"]
+			if tt.code == "laptop's" {
+				if _, _, err := st.Enroll(t.Context(), code["fresh"], "laptop", time.Now()); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			rec := sendAs(t, h, http.MethodPost, "/api/agent/enroll", tt.from, code[tt.code], "")
+			if rec.Code != tt.wantCode {
+				t.Fatalf("POST = %d %s, want %d", rec.Code, rec.Body, tt.wantCode)
+			}
+			enrollments, err := st.Enrollments(t.Context())
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantEnrolled := 0
+			if tt.code == "laptop's" {
+				wantEnrolled++
+			}
+			if rec.Code != http.StatusOK {
+				if len(enrollments) != wantEnrolled {
+					t.Errorf("enrollments = %v, want %d", enrollments, wantEnrolled)
+				}
+				// A machine that can't enroll yet, or at all, doesn't use the
+				// code up.
+				if tt.code == "fresh" {
+					if err := st.CheckEnrollmentCode(t.Context(), code["fresh"], "tablet", time.Now()); err != nil {
+						t.Errorf("the code after a refused enrollment: %v, want it unused", err)
+					}
+				}
+				return
+			}
+			var got api.AgentSecret
+			if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || got.Secret == "" {
+				t.Fatalf("POST = %s, want a secret", rec.Body)
+			}
+			node, err := st.EnrolledNode(t.Context(), got.Secret)
+			if err != nil || len(enrollments) != 1 {
+				t.Errorf("the secret is for %q, %v, and there are %d enrollments; want one, for the machine", node, err, len(enrollments))
+			}
+		})
 	}
 }
 
 func TestInstallScript(t *testing.T) {
 	t.Parallel()
+	st := testStore(t)
+	h := api.New(withStore(testTailnet(), st, api.Options{}))
+	fresh := newCode(t, st, time.Now())
+	used := newCode(t, st, time.Now())
+	if _, _, err := st.Enroll(t.Context(), used, "laptop", time.Now()); err != nil {
+		t.Fatal(err)
+	}
 	for _, tt := range []struct {
-		name, appURL, want string
+		name string
+		code string
+		from netip.Addr
+		// want is in the script, unless it refuses with a message that has
+		// refusal in it.
+		want, refusal string
 	}{
-		{"with the app's URL", "https://" + roostHost, "\nSERVER_URL='https://" + roostHost + "'\n"},
+		{name: "a fresh code", code: fresh, from: serverIP, want: "\nCODE='" + fresh + "'\n"},
 		// The request came over plain HTTP.
-		{"from the request", "", "\nSERVER_URL='http://" + roostHost + "'\n"},
+		{name: "the hub's URL", code: fresh, from: serverIP, want: "\nSERVER_URL='http://" + roostHost + "'\n"},
+		{name: "a code the machine used", code: used, from: laptopIP, want: "\nCODE='" + used + "'\n"},
+		{name: "a code another machine used", code: used, from: phoneIP, refusal: "another machine used this install command"},
+		{name: "an expired code", code: newCode(t, st, time.Now().Add(-time.Hour)), from: laptopIP, refusal: "expired"},
+		{name: "an unknown code", code: "UNKNOWN", from: laptopIP, refusal: "doesn't know the code"},
 	} {
-		h := api.New(withTailnet(t, testTailnet(), api.Options{AppURL: tt.appURL}))
-		// A tagged server can't sign in, but can get the script.
-		rec := serve(h, newRequest(t, http.MethodGet, "/api/agent/install.sh", serverIP))
+		rec := serve(h, newRequest(t, http.MethodGet, "/api/agent/install/"+tt.code, tt.from))
 		if rec.Code != http.StatusOK || !strings.HasPrefix(rec.Header().Get("Content-Type"), "text/x-shellscript") {
 			t.Fatalf("%s: GET = %d %s", tt.name, rec.Code, rec.Header().Get("Content-Type"))
 		}
-		if body := rec.Body.String(); !strings.Contains(body, tt.want) || strings.Contains(body, agentToken) {
-			t.Errorf("%s: the script doesn't set %q, or holds the token", tt.name, tt.want)
+		script := rec.Body.String()
+		if tt.refusal == "" {
+			if !strings.Contains(script, tt.want) {
+				t.Errorf("%s: the script doesn't have %q", tt.name, tt.want)
+			}
+			continue
+		}
+		if strings.Contains(script, "agent.sh") {
+			t.Errorf("%s: GET answered with the install script, want a script that refuses", tt.name)
+		}
+		if _, err := exec.LookPath("sh"); err != nil {
+			continue
+		}
+		cmd := exec.CommandContext(t.Context(), "sh")
+		cmd.Stdin = strings.NewReader(script)
+		out, err := cmd.CombinedOutput()
+		if code := cmd.ProcessState.ExitCode(); code != 1 || !strings.Contains(string(out), tt.refusal) {
+			t.Errorf("%s: the script exits %d (%v) and says %q, want 1 and a message with %q", tt.name, code, err, out, tt.refusal)
 		}
 	}
 }
 
-func TestForgetAgent(t *testing.T) {
+// Uninstalling the agent unenrolls it, and Roost forgets what it reported.
+func TestUnenroll(t *testing.T) {
 	t.Parallel()
-	opts := withTailnet(t, testTailnet(), api.Options{AgentToken: agentToken})
+	st := testStore(t)
+	opts := withStore(testTailnet(), st, api.Options{})
 	h := api.New(opts)
-	if rec := sendBeat(t, h, laptopIP, agentToken, laptopBeat); rec.Code != http.StatusNoContent {
+	secret := enrolled(t, st, "laptop")
+	if rec := sendBeat(t, h, laptopIP, secret, laptopBeat); rec.Code != http.StatusNoContent {
 		t.Fatalf("POST = %d %s", rec.Code, rec.Body)
 	}
+	if rec := sendAs(t, h, http.MethodDelete, "/api/agent/enrollment", phoneIP, secret, ""); rec.Code != http.StatusForbidden {
+		t.Errorf("DELETE from another machine = %d %s, want 403", rec.Code, rec.Body)
+	}
+	if rec := sendAs(t, h, http.MethodDelete, "/api/agent/enrollment", laptopIP, secret, ""); rec.Code != http.StatusNoContent {
+		t.Fatalf("DELETE = %d %s, want 204", rec.Code, rec.Body)
+	}
+	if _, ok := opts.Agents.Reports()["laptop"]; ok {
+		t.Error("the laptop's agent is still there after it was uninstalled")
+	}
+	if _, _, ok := opts.Usage.Latest("laptop"); ok {
+		t.Error("the laptop's usage is still there after its agent was uninstalled")
+	}
+	if rec := sendBeat(t, h, laptopIP, secret, laptopBeat); rec.Code != http.StatusUnauthorized {
+		t.Errorf("a heartbeat after uninstalling = %d %s, want 401", rec.Code, rec.Body)
+	}
+}
+
+func TestRevokeAgent(t *testing.T) {
+	t.Parallel()
+	st := testStore(t)
+	opts := withStore(testTailnet(), st, api.Options{})
+	h := api.New(opts)
+	secret := enrolled(t, st, "laptop")
+	if rec := sendBeat(t, h, laptopIP, secret, laptopBeat); rec.Code != http.StatusNoContent {
+		t.Fatalf("POST = %d %s", rec.Code, rec.Body)
+	}
+	// The server's agent is from before enrollment: it reported, but has no
+	// secret.
+	var hb agents.Heartbeat
+	if err := json.Unmarshal([]byte(laptopBeat), &hb); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := opts.Agents.Record(t.Context(), "server", hb, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	// The phone's enrolled, and hasn't reported yet.
+	enrolled(t, st, "phone")
+	// Roost measures its own machine, which has no agent.
+	opts.Usage.Record(t.Context(), store.HubID, usage.Sample{At: time.Now(), Source: usage.SourceHub})
+
 	for _, tt := range []struct {
 		device string
 		want   int
 	}{
 		{"laptop", http.StatusNoContent},
 		{"laptop", http.StatusNotFound},
+		{"server", http.StatusNoContent},
+		{"phone", http.StatusNoContent},
+		{"roost", http.StatusNotFound},
+		{"tablet", http.StatusNotFound},
 		{"toaster", http.StatusNotFound},
 	} {
 		if rec := send(t, h, http.MethodDelete, "/api/devices/"+tt.device+"/agent", laptopIP, ""); rec.Code != tt.want {
 			t.Errorf("DELETE %s's agent = %d %s, want %d", tt.device, rec.Code, rec.Body, tt.want)
 		}
 	}
-	if _, ok := opts.Agents.Reports()["laptop"]; ok {
-		t.Error("the laptop's agent is still there after it was forgotten")
+	if reports := opts.Agents.Reports(); len(reports) != 0 {
+		t.Errorf("reports after revoking = %v, want none", reports)
 	}
 	if _, _, ok := opts.Usage.Latest("laptop"); ok {
-		t.Error("the laptop's usage is still there after its agent was forgotten")
+		t.Error("the laptop's usage is still there after its agent was revoked")
+	}
+	if _, _, ok := opts.Usage.Latest(store.HubID); !ok {
+		t.Error("revoking the agent of Roost's own machine, which has none, dropped the usage Roost measured")
+	}
+	if enrollments, err := st.Enrollments(t.Context()); err != nil || len(enrollments) != 0 {
+		t.Errorf("enrollments after revoking = %v, %v, want none", enrollments, err)
+	}
+	if rec := sendBeat(t, h, laptopIP, secret, laptopBeat); rec.Code != http.StatusUnauthorized {
+		t.Errorf("a heartbeat after revoking = %d %s, want 401", rec.Code, rec.Body)
+	}
+}
+
+// In embedded mode, the machine Roost runs on has Roost's node and its own,
+// and revoking the agent from either revokes it.
+func TestRevokeAgent_hub(t *testing.T) {
+	t.Parallel()
+	hostIP := netip.MustParseAddr("100.64.0.10")
+	for _, device := range []string{"roost", "host"} {
+		tn := tailnettest.New(tailnet.Status{
+			State: tailnet.StateRunning,
+			Self:  tailnet.Device{ID: "roost", DNSName: roostHost, IPs: []netip.Addr{roostIP}, Owner: alice, Online: true},
+			Peers: []tailnet.Device{
+				{ID: "laptop", DNSName: "laptop.example.ts.net", IPs: []netip.Addr{laptopIP}, Owner: alice, Online: true},
+				{ID: "host", DNSName: "host.example.ts.net", IPs: []netip.Addr{hostIP}, Owner: alice, Online: true, SameMachine: true},
+			},
+		})
+		st := testStore(t)
+		opts := withStore(tn, st, api.Options{})
+		h := api.New(opts)
+		secret := enrolled(t, st, "host")
+		if rec := sendBeat(t, h, hostIP, secret, laptopBeat); rec.Code != http.StatusNoContent {
+			t.Fatalf("POST = %d %s", rec.Code, rec.Body)
+		}
+		if rec := send(t, h, http.MethodDelete, "/api/devices/"+device+"/agent", laptopIP, ""); rec.Code != http.StatusNoContent {
+			t.Errorf("DELETE %s's agent = %d %s, want 204", device, rec.Code, rec.Body)
+		}
+		if rec := sendBeat(t, h, hostIP, secret, laptopBeat); rec.Code != http.StatusUnauthorized {
+			t.Errorf("a heartbeat after revoking %s's agent = %d %s, want 401", device, rec.Code, rec.Body)
+		}
 	}
 }

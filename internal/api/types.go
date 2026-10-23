@@ -251,7 +251,8 @@ type Device struct {
 	Metrics *Metrics `json:"metrics,omitempty"`
 	// Info is what the machine is, if Roost measures it.
 	Info *DeviceInfo `json:"info,omitempty"`
-	// Agent is the device's agent, if one has reported.
+	// Agent is the device's agent, if one enrolled or reported. Roost
+	// measures the device with it once it reports.
 	Agent    *Agent         `json:"agent,omitempty"`
 	Settings DeviceSettings `json:"settings"`
 }
@@ -271,16 +272,25 @@ const (
 // Agent is a device's agent, which sends a heartbeat with the machine's
 // metrics every 15 seconds.
 type Agent struct {
-	// Version is the agent's version, such as 1.2.0.
-	Version string `json:"version"`
-	// LastSeen is when the agent's latest heartbeat arrived.
-	LastSeen time.Time `json:"lastSeen"`
+	// Version is the agent's version, such as 1.3.0, from its latest
+	// heartbeat.
+	Version string `json:"version,omitempty"`
+	// LastSeen is when the agent's latest heartbeat arrived. It's missing
+	// before the first.
+	LastSeen *time.Time `json:"lastSeen,omitempty"`
 	// Stale reports whether the device is online, but the agent stopped
 	// sending heartbeats.
 	Stale bool `json:"stale,omitempty"`
 	// Outdated reports whether the agent is older than the one Roost serves.
-	// Running the install command again updates it.
+	// A new install command updates it.
 	Outdated bool `json:"outdated,omitempty"`
+	// EnrolledAt is when the agent enrolled. It's missing if it isn't
+	// enrolled, such as an agent from before enrollment, whose heartbeats
+	// Roost refuses.
+	EnrolledAt *time.Time `json:"enrolledAt,omitempty"`
+	// EnrolledBy is the login of the admin who made the code it enrolled
+	// with.
+	EnrolledBy string `json:"enrolledBy,omitempty" roost:"secret"`
 }
 
 // Status is the state of something Roost watches, such as a device.
@@ -464,17 +474,32 @@ type Point struct {
 	V *float64 `json:"v" tstype:"number | null,required"`
 }
 
-// AgentSetup is the response to GET /api/agent: how to install the agent.
-// Only admins can see it.
+// AgentSetup is the response to GET /api/agent. Only admins can see it.
 type AgentSetup struct {
 	// Version is the version of the agent that Roost serves.
 	Version string `json:"version"`
-	// InstallCommand installs the agent on a macOS or Linux machine, or
-	// updates it, for the user who runs it. It holds the token that every
-	// agent sends until per-device enrollment (#8).
-	InstallCommand string `json:"installCommand" roost:"secret"`
-	// UninstallCommand removes the agent.
+	// UninstallCommand removes the agent from the machine it runs on, for
+	// the user who runs it.
 	UninstallCommand string `json:"uninstallCommand"`
+}
+
+// AgentCode is the response to POST /api/agent/codes: a command that
+// installs the agent on a macOS or Linux machine, or updates it, for the user
+// who runs it. It holds a new enrollment code, which works on one machine:
+// the first that uses it. That machine can use it again until it expires,
+// such as after a failed install.
+type AgentCode struct {
+	InstallCommand string `json:"installCommand" roost:"secret"`
+	// CreatedAt and ExpiresAt are by the hub's clock.
+	CreatedAt time.Time `json:"createdAt"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+// AgentSecret is the response to POST /api/agent/enroll: the secret the
+// agent sends with each heartbeat from then on. It's not tagged
+// roost:"secret", since only the machine that enrolled gets it.
+type AgentSecret struct {
+	Secret string `json:"secret"`
 }
 
 // DeviceUsage is the response to GET /api/devices/{id}/usage: what uses the
