@@ -375,7 +375,8 @@ export interface Device {
    */
   info?: DeviceInfo;
   /**
-   * Agent is the device's agent, if one has reported.
+   * Agent is the device's agent, if one enrolled or reported. Roost
+   * measures the device with it once it reports.
    */
   agent?: Agent;
   settings: DeviceSettings;
@@ -402,13 +403,15 @@ export type MeasuredBy = typeof MeasuredByHub | typeof MeasuredByAgent;
  */
 export interface Agent {
   /**
-   * Version is the agent's version, such as 1.2.0.
+   * Version is the agent's version, such as 1.3.0, from its latest
+   * heartbeat.
    */
-  version: string;
+  version?: string;
   /**
-   * LastSeen is when the agent's latest heartbeat arrived.
+   * LastSeen is when the agent's latest heartbeat arrived. It's missing
+   * before the first.
    */
-  lastSeen: string /* RFC 3339 */;
+  lastSeen?: string /* RFC 3339 */;
   /**
    * Stale reports whether the device is online, but the agent stopped
    * sending heartbeats.
@@ -416,9 +419,20 @@ export interface Agent {
   stale?: boolean;
   /**
    * Outdated reports whether the agent is older than the one Roost serves.
-   * Running the install command again updates it.
+   * A new install command updates it.
    */
   outdated?: boolean;
+  /**
+   * EnrolledAt is when the agent enrolled. It's missing if it isn't
+   * enrolled, such as an agent from before enrollment, whose heartbeats
+   * Roost refuses.
+   */
+  enrolledAt?: string /* RFC 3339 */;
+  /**
+   * EnrolledBy is the login of the admin who made the code it enrolled
+   * with.
+   */
+  enrolledBy?: string;
 }
 /**
  * Status is the state of something Roost watches, such as a device.
@@ -687,8 +701,7 @@ export interface Point {
   v: number | null;
 }
 /**
- * AgentSetup is the response to GET /api/agent: how to install the agent.
- * Only admins can see it.
+ * AgentSetup is the response to GET /api/agent. Only admins can see it.
  */
 export interface AgentSetup {
   /**
@@ -696,15 +709,33 @@ export interface AgentSetup {
    */
   version: string;
   /**
-   * InstallCommand installs the agent on a macOS or Linux machine, or
-   * updates it, for the user who runs it. It holds the token that every
-   * agent sends until per-device enrollment (#8).
-   */
-  installCommand: string;
-  /**
-   * UninstallCommand removes the agent.
+   * UninstallCommand removes the agent from the machine it runs on, for
+   * the user who runs it.
    */
   uninstallCommand: string;
+}
+/**
+ * AgentCode is the response to POST /api/agent/codes: a command that
+ * installs the agent on a macOS or Linux machine, or updates it, for the user
+ * who runs it. It holds a new enrollment code, which works on one machine:
+ * the first that uses it. That machine can use it again until it expires,
+ * such as after a failed install, unless an admin revokes its agent.
+ */
+export interface AgentCode {
+  installCommand: string;
+  /**
+   * CreatedAt and ExpiresAt are by the hub's clock.
+   */
+  createdAt: string /* RFC 3339 */;
+  expiresAt: string /* RFC 3339 */;
+}
+/**
+ * AgentSecret is the response to POST /api/agent/enroll: the secret the
+ * agent sends with each heartbeat from then on. It's not tagged
+ * roost:"secret", since only the machine that enrolled gets it.
+ */
+export interface AgentSecret {
+  secret: string;
 }
 /**
  * DeviceUsage is the response to GET /api/devices/{id}/usage: what uses the

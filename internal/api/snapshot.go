@@ -42,6 +42,9 @@ type sources struct {
 	agents map[string]agents.Report
 	// settings holds the settings of the devices that have any, by ID.
 	settings map[string]store.DeviceSettings
+	// enrolled holds the enrollments of the agents, by the ID of the node
+	// each runs on.
+	enrolled map[string]store.Enrollment
 }
 
 // newSnapshot builds a Snapshot of what Roost knows at now.
@@ -68,7 +71,18 @@ func newSnapshot(src sources, now time.Time) Snapshot {
 		return out
 	}
 	out.Hub.DNSName, out.Hub.Tailnet = st.Self.DNSName, st.Tailnet
-	for i, d := range append([]tailnet.Device{st.Self}, st.Peers...) {
+	devices := append([]tailnet.Device{st.Self}, st.Peers...)
+	// An agent enrolls from its machine's node, and its reports are kept
+	// under the machine's history ID. The machine Roost runs on can have two
+	// nodes, which both show its agent.
+	enrolled := map[string]store.Enrollment{}
+	for i, d := range devices {
+		id := historyID(d, i == 0)
+		if e, ok := src.enrolled[d.ID]; ok && e.At.After(enrolled[id].At) {
+			enrolled[id] = e
+		}
+	}
+	for i, d := range devices {
 		dev := deviceInput{device: d, self: i == 0, settings: src.settings[d.ID]}
 		// Roost measures the machine it runs on, and on a machine it can't
 		// measure, an agent can. In embedded mode, that machine's own node
@@ -76,8 +90,12 @@ func newSnapshot(src sources, now time.Time) Snapshot {
 		if dev.self || d.SameMachine {
 			dev.host = src.host
 		}
-		if r, ok := src.agents[historyID(d, dev.self)]; ok {
+		id := historyID(d, dev.self)
+		if r, ok := src.agents[id]; ok {
 			dev.agent = &r
+		}
+		if e, ok := enrolled[id]; ok {
+			dev.enrollment = &e
 		}
 		out.Devices = append(out.Devices, newDevice(s, dev, now))
 	}
@@ -139,9 +157,10 @@ type deviceInput struct {
 	// host is what Roost measured of the device, if it's the machine Roost
 	// runs on.
 	host *hostmetrics.Reading
-	// agent is what the device's agent last reported, if it has one. It's
-	// only used if host is nil.
-	agent *agents.Report
+	// agent is what the device's agent last reported, and enrollment is
+	// when it enrolled, if it has. They're only used if host is nil.
+	agent      *agents.Report
+	enrollment *store.Enrollment
 }
 
 func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) Device {
@@ -177,20 +196,26 @@ func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) Device {
 			sustained = h.Sample.CPUSustained
 		}
 		out.Info = newInfo(h.Info)
-	case in.agent != nil:
+	case in.agent != nil || in.enrollment != nil:
+		out.Agent = &Agent{}
+		if e := in.enrollment; e != nil {
+			out.Agent.EnrolledAt, out.Agent.EnrolledBy = timePtr(e.At), e.By
+		}
 		a := in.agent
+		if a == nil {
+			// It enrolled, and hasn't reported yet.
+			break
+		}
 		out.MeasuredBy = MeasuredByAgent
 		out.Metrics = newMetrics(a.Sample)
 		if b := a.Battery; b != nil {
 			out.Metrics.Battery = &Battery{Percent: b.Percent, Charging: b.Charging, OnAC: b.OnAC}
 		}
 		out.Info = newInfo(a.Info)
-		out.Agent = &Agent{
-			Version:  a.Version,
-			LastSeen: a.ReceivedAt,
-			Stale:    d.Online && a.Stale(now),
-			Outdated: agent.Older(a.Version),
-		}
+		out.Agent.Version = a.Version
+		out.Agent.LastSeen = timePtr(a.ReceivedAt)
+		out.Agent.Stale = d.Online && a.Stale(now)
+		out.Agent.Outdated = agent.Older(a.Version)
 		// The CPU of an agent that stopped is out of date.
 		if !out.Agent.Stale {
 			sustained = a.Sample.CPUSustained

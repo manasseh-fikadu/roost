@@ -4,12 +4,12 @@
 # Works on macOS (bash 3.2) and Linux. Needs only curl and standard system tools.
 set -u
 
-AGENT_VERSION="1.2.0"
+AGENT_VERSION="1.3.0"
 CONF="${ROOST_AGENT_CONF:-$HOME/.config/roost-agent/env}"
 # shellcheck disable=SC1090
 [ -f "$CONF" ] && . "$CONF"
 : "${SERVER_URL:?SERVER_URL is not set (expected in $CONF)}"
-: "${TOKEN:?TOKEN is not set (expected in $CONF)}"
+: "${SECRET:?SECRET is not set (expected in $CONF); enroll this machine again from the Agents page in Roost}"
 INTERVAL="${INTERVAL:-15}"
 OS="$(uname -s)"
 export PATH="$PATH:/usr/local/bin:/opt/homebrew/bin:/usr/sbin:/sbin"
@@ -362,24 +362,26 @@ build_payload() {
     "$(num "$temp")" "$battery" "$(num "$uptime_s")" "$(num "$procs")" "$usage")
 }
 
-# Sends one heartbeat. If it fails, says why on stderr, with what the hub answered.
+# Sends one heartbeat. If it fails, says why on stderr, with what the hub
+# answered, and leaves the HTTP status in STATUS.
 send_heartbeat() {
-  local out code body msg
+  local out body msg
+  STATUS=""
   build_payload
-  # The token goes through stdin (-K -) so it never shows up in `ps`. Roost
+  # The secret goes through stdin (-K -) so it never shows up in `ps`. Roost
   # refuses POSTs without an X-Roost header, which pages on other sites can't send.
-  out=$(printf 'header = "Authorization: Bearer %s"\n' "$TOKEN" |
+  out=$(printf 'header = "Authorization: Bearer %s"\n' "$SECRET" |
     curl -sS -m 10 -K - -w '\n%{http_code}' -X POST -H 'Content-Type: application/json' -H 'X-Roost: agent' \
       --data-binary "$payload" "$SERVER_URL/api/agent/heartbeat") || {
     echo "$(date '+%Y-%m-%d %H:%M:%S') heartbeat failed: couldn't reach $SERVER_URL" >&2
     return 1
   }
-  code=${out##*$'\n'}
-  case "$code" in 2??) return 0 ;; esac
+  STATUS=${out##*$'\n'}
+  case "$STATUS" in 2??) return 0 ;; esac
   body=${out%$'\n'*}
   # Roost's errors look like {"error":"..."}.
   msg=$(printf '%s' "$body" | sed -n 's/^{"error":"\(.*\)"}$/\1/p')
-  echo "$(date '+%Y-%m-%d %H:%M:%S') heartbeat failed with HTTP $code: ${msg:-$body}" >&2
+  echo "$(date '+%Y-%m-%d %H:%M:%S') heartbeat failed with HTTP $STATUS: ${msg:-$body}" >&2
   return 1
 }
 
@@ -395,6 +397,9 @@ if [ "${1:-}" = "--once" ]; then
 fi
 
 while true; do
-  send_heartbeat
-  sleep "$INTERVAL"
+  delay="$INTERVAL"
+  # A hub that refuses this agent, such as after an admin revoked it, won't
+  # change its mind in 15 seconds, so ask every 5 minutes instead.
+  send_heartbeat || case "$STATUS" in 401 | 403 | 409) delay=300 ;; esac
+  sleep "$delay"
 done

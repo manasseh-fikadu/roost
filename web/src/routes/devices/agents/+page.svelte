@@ -1,20 +1,22 @@
 <script lang="ts">
-	import Apple from '@lucide/svelte/icons/apple';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import KeyRound from '@lucide/svelte/icons/key-round';
 	import Monitor from '@lucide/svelte/icons/monitor';
-	import Terminal from '@lucide/svelte/icons/terminal';
+	import Plus from '@lucide/svelte/icons/plus';
 	import { resolve } from '$app/paths';
 	import AdminOnly from '#lib/AdminOnly.svelte';
-	import { forgetAgent } from '#lib/api/client.js';
+	import { agentRuns, agentState } from '#lib/agent.js';
+	import { revokeAgent } from '#lib/api/client.js';
 	import type { Device } from '#lib/api/types.js';
 	import { deviceIcon } from '#lib/device.js';
-	import AgentInstall from '#lib/devices/AgentInstall.svelte';
-	import { ago, osLabel, plural } from '#lib/format.js';
+	import AddAgent from '#lib/devices/AddAgent.svelte';
+	import AgentUninstall from '#lib/devices/AgentUninstall.svelte';
+	import { dateTime, osLabel, plural } from '#lib/format.js';
 	import { live } from '#lib/live.svelte.js';
 	import type { Status } from '#lib/status.js';
 	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
+	import Dialog from '#lib/ui/Dialog.svelte';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import PageHeader from '#lib/ui/PageHeader.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
@@ -24,39 +26,10 @@
 	const now = $derived(live.snapshot ? Date.parse(live.snapshot.generatedAt) : Date.now());
 	const reporting = $derived(devices.filter((d) => d.measuredBy).length);
 
-	/** The devices whose agent Roost is forgetting. */
-	let forgetting = $state<string[]>([]);
-
-	interface AgentState {
-		label: string;
-		status: Status;
-		/** A line about it, after the device's OS. */
-		detail?: string;
-	}
-
-	function agentState(d: Device): AgentState {
-		const a = d.agent;
-		if (d.measuredBy === 'hub') {
-			return { label: 'Built in', status: 'online', detail: 'Roost runs here and measures it' };
-		}
-		if (a) {
-			const last = `last heartbeat ${ago(a.lastSeen, now)}`;
-			if (!d.online) {
-				return { label: 'Offline', status: 'unknown', detail: last };
-			}
-			if (a.stale) {
-				return { label: 'Stopped reporting', status: 'attention', detail: last };
-			}
-			if (a.outdated) {
-				return { label: 'Update available', status: 'attention', detail: `v${a.version}` };
-			}
-			return { label: 'Reporting', status: 'online', detail: `v${a.version}` };
-		}
-		if (['linux', 'macos'].includes(d.os.toLowerCase())) {
-			return { label: 'Not installed', status: 'unknown' };
-		}
-		return { label: 'Not supported', status: 'unknown' };
-	}
+	/** The device whose agent an admin is about to revoke. */
+	let revoking = $state<{ id: string; name: string } | null>(null);
+	let confirmOpen = $state(false);
+	let busy = $state(false);
 
 	const tone: Record<Status, string> = {
 		online: 'text-fg-muted',
@@ -65,17 +38,39 @@
 		unknown: 'text-fg-faint'
 	};
 
-	async function forget(d: Device) {
-		forgetting = [...forgetting, d.id];
+	function askRevoke(d: Device) {
+		revoking = { id: d.id, name: d.name };
+		confirmOpen = true;
+	}
+
+	async function revoke() {
+		if (!revoking) {
+			return;
+		}
+		busy = true;
 		try {
-			await forgetAgent(d.id);
+			await revokeAgent(revoking.id);
+			confirmOpen = false;
 		} catch {
-			// forgetAgent showed the error as a toast.
+			// revokeAgent showed the error as a toast.
 		} finally {
-			forgetting = forgetting.filter((id) => id !== d.id);
+			busy = false;
 		}
 	}
+
+	/** When a device's agent enrolled, and who let it, for a tooltip. */
+	function enrolledTitle(d: Device): string | undefined {
+		const a = d.agent;
+		if (!a?.enrolledAt) {
+			return undefined;
+		}
+		return `Enrolled ${dateTime(a.enrolledAt)}${a.enrolledBy ? ` with a code from ${a.enrolledBy}` : ''}`;
+	}
 </script>
+
+{#snippet plus()}
+	<Plus class="size-3.5" />
+{/snippet}
 
 <a
 	href={resolve('/devices')}
@@ -88,48 +83,15 @@
 	description={live.snapshot
 		? `A small shell script that sends a machine's CPU, memory, disk, network, battery and processes to the hub every 15 seconds. ${reporting} of ${plural(devices.length, 'machine')} report.`
 		: 'Connecting to the hub…'}
-/>
+>
+	{#snippet actions()}
+		<AdminOnly>
+			<AddAgent variant="primary" icon={plus} />
+		</AdminOnly>
+	{/snippet}
+</PageHeader>
 
-<div class="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-	<Card
-		title="Install"
-		description="Run it on any macOS or Linux machine on the tailnet. It installs for the user who runs it, without root."
-	>
-		<div class="space-y-4 p-4">
-			<AdminOnly>
-				<div>
-					<div class="mb-2 flex items-center gap-2 text-[13px] font-medium text-fg-muted">
-						<Apple class="size-3.5" /> macOS <span class="text-fg-faint">·</span>
-						<Terminal class="size-3.5" /> Linux
-					</div>
-					<AgentInstall detailed />
-				</div>
-				<p
-					class="flex items-start gap-2.5 rounded-lg border border-line bg-canvas px-3 py-2.5 text-[13px] text-fg-muted"
-				>
-					<KeyRound class="mt-0.5 size-4 shrink-0 text-fg-faint" />
-					<span>
-						Every agent sends the same token, which is in the install command, and Roost counts each
-						heartbeat for the machine that Tailscale says sent it. Enrolling each machine on its own
-						comes next, in
-						<a
-							href="https://github.com/manasseh-fikadu/roost/issues/8"
-							target="_blank"
-							rel="noreferrer"
-							class="underline decoration-line-heavy underline-offset-4 hover:text-fg">#8</a
-						>.
-					</span>
-				</p>
-				{#snippet fallback()}
-					<p class="text-[13px] text-fg-muted">
-						The install command holds the token agents send, so only Roost's admins can see it. Ask
-						one to install the agent.
-					</p>
-				{/snippet}
-			</AdminOnly>
-		</div>
-	</Card>
-
+<div class="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
 	<Card title="Machines">
 		{#if !live.snapshot}
 			{#each [1, 2, 3] as i (i)}
@@ -147,8 +109,8 @@
 			<ul class="divide-y divide-line">
 				{#each devices as d (d.id)}
 					{@const Icon = deviceIcon(d)}
-					{@const info = agentState(d)}
-					<li class="flex items-center gap-3 px-4 py-3">
+					{@const info = agentState(d, now)}
+					<li class="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3">
 						<span
 							class="flex size-8 shrink-0 items-center justify-center rounded-md border border-line bg-raised text-fg-muted"
 						>
@@ -161,7 +123,10 @@
 							>
 								{d.name}
 							</a>
-							<span class="block truncate font-mono text-[11px] text-fg-subtle">
+							<span
+								class="block truncate font-mono text-[11px] text-fg-subtle"
+								title={enrolledTitle(d)}
+							>
 								{osLabel(d.os)}{info.detail ? ` · ${info.detail}` : ''}
 							</span>
 						</span>
@@ -169,22 +134,67 @@
 							<StatusDot status={info.status} />
 							{info.label}
 						</span>
-						{#if d.agent}
-							<AdminOnly>
-								<Button
-									size="xs"
-									variant="ghost"
-									loading={forgetting.includes(d.id)}
-									title="Forget what this agent reported, such as after uninstalling it. An agent that still runs comes back with its next heartbeat."
-									onclick={() => forget(d)}
-								>
-									Forget
-								</Button>
-							</AdminOnly>
-						{/if}
+						<AdminOnly>
+							{#if d.agent}
+								<span class="flex shrink-0 gap-1">
+									<AddAgent
+										device={d}
+										label={d.agent.outdated ? 'Update' : 'Re-enroll'}
+										size="xs"
+										variant="ghost"
+									/>
+									<Button size="xs" variant="ghost" onclick={() => askRevoke(d)}>Revoke</Button>
+								</span>
+							{:else if d.measuredBy !== 'hub' && agentRuns(d.os)}
+								<AddAgent device={d} label="Add" size="xs" variant="ghost" />
+							{/if}
+						</AdminOnly>
 					</li>
 				{/each}
 			</ul>
 		{/if}
 	</Card>
+
+	<Card title="How it works">
+		<div class="space-y-3 p-4 text-[13px] text-fg-muted">
+			<p>
+				Add agent makes an install command for macOS or Linux. It works on one machine for an hour,
+				and installs the agent for the user who runs it, without root.
+			</p>
+			<p class="flex items-start gap-2.5">
+				<KeyRound class="mt-0.5 size-4 shrink-0 text-fg-faint" />
+				<span>
+					The agent trades the command's code for a secret of its own, which only its user can read.
+					Roost takes its heartbeats only from the machine it enrolled on, as Tailscale says, and
+					stops taking them when an admin revokes it.
+				</span>
+			</p>
+			<p>
+				On macOS it runs as a LaunchAgent, which logs to
+				<code class="font-mono text-[12px]">~/Library/Logs/roost-agent.log</code>. On Linux it's a
+				systemd user service:
+				<code class="font-mono text-[12px]">journalctl --user -u roost-agent</code>.
+			</p>
+			<AdminOnly>
+				<AgentUninstall />
+				{#snippet fallback()}
+					<p>Only Roost's admins can add or remove agents.</p>
+				{/snippet}
+			</AdminOnly>
+		</div>
+	</Card>
 </div>
+
+<Dialog
+	bind:open={confirmOpen}
+	title="Revoke {revoking?.name ?? 'this'}'s agent?"
+	description="Roost will refuse its heartbeats and forget what it reported. To add it back, run a new install command on the machine."
+>
+	<p class="text-[13px] text-fg-muted">
+		The agent keeps running until it's uninstalled, and tries again every few minutes.
+	</p>
+	{#snippet footer()}
+		<Button variant="ghost" onclick={() => (confirmOpen = false)}>Cancel</Button>
+		<Button variant="danger" loading={busy} onclick={revoke}>Revoke</Button>
+	{/snippet}
+</Dialog>
