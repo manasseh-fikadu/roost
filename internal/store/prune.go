@@ -33,6 +33,9 @@ var retention = []struct {
 	// as the Checks page shows.
 	{"check_results", 7 * 24 * time.Hour, "DELETE FROM check_results WHERE ts < ?"},
 	{"health", 7 * 24 * time.Hour, "DELETE FROM health WHERE ts < ?"},
+	// A resolved alert, and its notes, are kept for a month, like the
+	// activity log.
+	{"alerts", 30 * 24 * time.Hour, "DELETE FROM alerts WHERE resolved_at < ?"},
 	// An enrollment code goes once it expires.
 	{"enrollment_codes", 0, "DELETE FROM enrollment_codes WHERE expires_at < ?"},
 }

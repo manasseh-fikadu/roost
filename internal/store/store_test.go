@@ -29,8 +29,8 @@ func TestOpen_newDatabase(t *testing.T) {
 		t.Errorf("user_version = %d, want %d", got, want)
 	}
 	if got, want := tables(t, s.DB()), []string{
-		"agents", "check_results", "checks", "device_settings", "enrollment_codes", "enrollments", "events",
-		"health", "kv", "metrics", "pings", "roles", "usage_samples",
+		"agents", "alert_notes", "alerts", "check_results", "checks", "device_settings", "enrollment_codes",
+		"enrollments", "events", "health", "kv", "metrics", "pings", "roles", "usage_samples",
 	}; !slices.Equal(got, want) {
 		t.Errorf("tables = %q, want %q", got, want)
 	}
