@@ -11,7 +11,9 @@ tool (
 )
 
 require (
+	github.com/coder/websocket v1.8.15
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
+	golang.org/x/crypto v0.58.0
 	golang.org/x/sys v0.49.0
 	modernc.org/sqlite v1.60.1
 	tailscale.com v1.104.2
@@ -21,7 +23,6 @@ require (
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/akutz/memconn v0.1.0 // indirect
 	github.com/alexbrainman/sspi v0.0.0-20250919150558-7d374ff0d59e // indirect
-	github.com/coder/websocket v1.8.15 // indirect
 	github.com/creachadair/msync v0.10.1 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20260526185140-fb298caac7ca // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
@@ -59,7 +60,6 @@ require (
 	github.com/x448/float16 v0.8.4 // indirect
 	go4.org/mem v0.0.0-20240501181205-ae6ca9944745 // indirect
 	go4.org/netipx v0.0.0-20260823151212-3075585bcbeb // indirect
-	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20260908205506-85c1c2202aba // indirect
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
