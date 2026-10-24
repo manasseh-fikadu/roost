@@ -22,6 +22,31 @@ export interface TermStatus {
 	message?: string;
 }
 
+/**
+ * What to tell someone whose terminal ended. The hub sends no status when
+ * the connection to the machine dropped, so the shell, and the tmux session
+ * it was attached to, may still be running. A tmux client that exits with 0
+ * may only have detached, and Roost can't tell that from its last shell
+ * exiting, so it doesn't say the session ended.
+ */
+export function exitMessage(session: string | null, code: number | null | undefined): string {
+	if (code == null) {
+		return session
+			? `Lost the connection to ${session}. It may still be running on the machine.`
+			: 'Lost the connection to the shell.';
+	}
+	if (session) {
+		if (code === 0) {
+			return `Detached from ${session}, or the session ended.`;
+		}
+		// What sh says when the command isn't there.
+		return code === 127
+			? "tmux isn't installed on the machine."
+			: `tmux exited with status ${code}.`;
+	}
+	return code === 0 ? 'The shell exited.' : `The shell exited with status ${code}.`;
+}
+
 /** Where the Terminal page keeps its tabs in localStorage. */
 export const tabsKey = 'roost.terminal.tabs';
 

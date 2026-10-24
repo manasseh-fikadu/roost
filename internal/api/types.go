@@ -1228,8 +1228,11 @@ type TerminalMessage struct {
 	Bytes int `json:"n,omitempty"`
 	// Session is the tmux session, for TerminalMessageTypeReady.
 	Session string `json:"session,omitempty"`
-	// Code is the exit status, or null if there was none, for
-	// TerminalMessageTypeExit.
+	// Code is the exit status, for TerminalMessageTypeExit. It's missing if
+	// the shell didn't say one, because the connection to the machine
+	// dropped. The shell, and the tmux session it was attached to, may
+	// still be running then, and a tmux client that exits with 0 may only
+	// have detached.
 	Code *int `json:"code,omitempty"`
 	// Message says what went wrong, for TerminalMessageTypeError.
 	Message string `json:"message,omitempty"`

@@ -11,7 +11,7 @@
 	import { Terminal } from '@xterm/xterm';
 	import '@xterm/xterm/css/xterm.css';
 	import type { TerminalMessage } from '#lib/api/types.js';
-	import { Acker, terminalURL, type TermStatus } from '#lib/terminal.js';
+	import { Acker, exitMessage, terminalURL, type TermStatus } from '#lib/terminal.js';
 
 	interface Props {
 		deviceId: string;
@@ -114,12 +114,7 @@
 					onstatus({ state: 'error', message: m.message });
 					break;
 				case 'exit':
-					onstatus({
-						state: 'closed',
-						message: session
-							? `The tmux session ${session} ended.`
-							: `The shell exited${m.code != null && m.code >= 0 ? ` with status ${m.code}` : ''}.`
-					});
+					onstatus({ state: 'closed', message: exitMessage(session, m.code) });
 					break;
 			}
 		};

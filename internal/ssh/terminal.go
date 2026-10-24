@@ -41,11 +41,13 @@ type Terminal struct {
 	output  *io.PipeReader
 	client  *gossh.Client
 	session *gossh.Session
-	// exited is closed once the shell exits, with its status in code.
-	exited chan struct{}
-	code   int
-	done   func()
-	once   sync.Once
+	// exited is closed once the shell is done, with its status in code if
+	// it said one: hasCode.
+	exited  chan struct{}
+	code    int
+	hasCode bool
+	done    func()
+	once    sync.Once
 }
 
 // OpenTerminal opens a terminal on a device. The terminal closes with the
@@ -138,7 +140,7 @@ func startTerminal(client *gossh.Client, cmd string, opts TerminalOptions) (*Ter
 	term := &Terminal{Reader: r, Writer: stdin, output: r, client: client, session: s, exited: make(chan struct{})}
 	go func() {
 		// Wait returns once the output has all been copied.
-		term.code = exitCode(s.Wait())
+		term.code, term.hasCode = exitCode(s.Wait())
 		_ = w.Close()
 		close(term.exited)
 	}()
@@ -162,23 +164,27 @@ func (t *Terminal) Resize(cols, rows int) error {
 	return t.session.WindowChange(rows, cols)
 }
 
-// Wait waits for the shell to exit, after all its output, and returns its
-// exit status, or -1 if it didn't exit with one, such as when the
-// connection closed.
-func (t *Terminal) Wait() int {
+// Wait waits for the shell to be done, after all its output, and returns its
+// exit status. ok is false if it didn't say one, since the connection
+// dropped, as when keepalives got no answer, the machine rebooted, or an
+// admin changed or removed the access: the shell may still be running, and
+// so may the tmux session it was attached to.
+func (t *Terminal) Wait() (code int, ok bool) {
 	<-t.exited
-	return t.code
+	return t.code, t.hasCode
 }
 
-func exitCode(err error) int {
+// exitCode returns the exit status that err, from Session.Wait, says, and
+// whether it says one.
+func exitCode(err error) (int, bool) {
 	var exit *gossh.ExitError
 	switch {
 	case err == nil:
-		return 0
+		return 0, true
 	case errors.As(err, &exit):
-		return exit.ExitStatus()
+		return exit.ExitStatus(), true
 	default:
-		return -1
+		return 0, false
 	}
 }
 

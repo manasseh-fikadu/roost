@@ -164,8 +164,13 @@ func bridge(ctx context.Context, conn *websocket.Conn, term *ssh.Terminal, stopp
 	select {
 	case exited := <-ended:
 		if exited {
-			code := term.Wait()
-			_ = writeMessage(ctx, conn, TerminalMessage{Type: TerminalMessageTypeExit, Code: &code})
+			// Without a status, the connection dropped, and the shell may
+			// still run.
+			msg := TerminalMessage{Type: TerminalMessageTypeExit}
+			if code, ok := term.Wait(); ok {
+				msg.Code = &code
+			}
+			_ = writeMessage(ctx, conn, msg)
 			_ = conn.Close(websocket.StatusNormalClosure, "the shell exited")
 			return
 		}

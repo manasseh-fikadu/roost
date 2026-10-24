@@ -1800,8 +1800,11 @@ export interface TerminalMessage {
    */
   session?: string;
   /**
-   * Code is the exit status, or null if there was none, for
-   * TerminalMessageTypeExit.
+   * Code is the exit status, for TerminalMessageTypeExit. It's missing if
+   * the shell didn't say one, because the connection to the machine
+   * dropped. The shell, and the tmux session it was attached to, may
+   * still be running then, and a tmux client that exits with 0 may only
+   * have detached.
    */
   code?: number /* int */;
   /**

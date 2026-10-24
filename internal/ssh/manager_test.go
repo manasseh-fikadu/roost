@@ -762,8 +762,8 @@ func TestManager_terminal(t *testing.T) {
 		if err != nil || string(out) != "you said hello\n" {
 			t.Errorf("output = %q, %v, want %q", out, err, "you said hello\n")
 		}
-		if code := term.Wait(); code != 7 {
-			t.Errorf("exit status %d, want 7", code)
+		if code, ok := term.Wait(); !ok || code != 7 {
+			t.Errorf("exit status %d, %v, want 7", code, ok)
 		}
 		_ = term.Close()
 	})
@@ -785,8 +785,8 @@ func TestManager_removeClosesTerminals(t *testing.T) {
 		if err := e.m.Remove(t.Context(), "laptop"); err != nil {
 			t.Fatal(err)
 		}
-		if code := term.Wait(); code != -1 {
-			t.Errorf("exit status %d, want -1 for a closed connection", code)
+		if code, ok := term.Wait(); ok {
+			t.Errorf("exit status %d, want none for a closed connection", code)
 		}
 		_ = term.Close()
 		synctest.Wait()

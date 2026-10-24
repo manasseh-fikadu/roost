@@ -3,6 +3,7 @@ import type { Device, DeviceSSH } from './api/types.js';
 import {
 	Acker,
 	canOpen,
+	exitMessage,
 	loadTabs,
 	nextSessionName,
 	saveTabs,
@@ -168,6 +169,74 @@ describe('terminalURL', () => {
 		expect(url).toBe(want);
 		expect(new URL(url).searchParams.get('session')).toBe(session);
 		expect(new URL(url).searchParams.get('cwd')).toBe(cwd);
+	});
+});
+
+describe('exitMessage', () => {
+	test.each<{
+		name: string;
+		session: string | null;
+		code: number | null | undefined;
+		want: string;
+	}>([
+		{
+			name: 'a dropped connection on a tmux tab: the session may still run',
+			session: 'web-1',
+			code: undefined,
+			want: 'Lost the connection to web-1. It may still be running on the machine.'
+		},
+		{
+			name: 'a null status, as the same',
+			session: 'web-1',
+			code: null,
+			want: 'Lost the connection to web-1. It may still be running on the machine.'
+		},
+		{
+			name: 'a dropped connection on a shell',
+			session: null,
+			code: undefined,
+			want: 'Lost the connection to the shell.'
+		},
+		{
+			name: 'tmux exits with 0 after a detach, which looks like the end of the session',
+			session: 'web-1',
+			code: 0,
+			want: 'Detached from web-1, or the session ended.'
+		},
+		{ name: 'tmux fails', session: 'web-1', code: 1, want: 'tmux exited with status 1.' },
+		{ name: 'no tmux', session: 'web-1', code: 127, want: "tmux isn't installed on the machine." },
+		{ name: 'a shell exits', session: null, code: 0, want: 'The shell exited.' },
+		{
+			name: 'a shell exits with a status',
+			session: null,
+			code: 3,
+			want: 'The shell exited with status 3.'
+		}
+	])('$name', ({ session, code, want }) => {
+		expect(exitMessage(session, code)).toBe(want);
+	});
+});
+
+describe('parsePort', () => {
+	test.each<{ text: string; want: number | null }>([
+		{ text: '', want: 22 },
+		{ text: '   ', want: 22 },
+		{ text: '22', want: 22 },
+		{ text: ' 2222 ', want: 2222 },
+		{ text: '1', want: 1 },
+		{ text: '65535', want: 65535 },
+		{ text: '22a', want: null },
+		{ text: 'ssh', want: null },
+		{ text: '0', want: null },
+		{ text: '65536', want: null },
+		{ text: '-1', want: null },
+		{ text: '22.5', want: null },
+		{ text: '1e3', want: null },
+		{ text: '0x16', want: null },
+		{ text: '٢٢', want: null },
+		{ text: '123456', want: null }
+	])('"$text"', ({ text, want }) => {
+		expect(parsePort(text)).toBe(want);
 	});
 });
 

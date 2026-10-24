@@ -545,6 +545,29 @@ func TestTerminal(t *testing.T) {
 	})
 }
 
+func TestTerminal_connectionDropped(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		e := newSSHEnv(t, openStore(t), nil)
+		e.setUp(t)
+		c, err := dialTerminal(t, e, laptopIP, "?session=web-1", roostOrigin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		synctest.Wait()
+		c.message(t)
+
+		// The machine goes away, without the shell saying how it ended.
+		e.sshd.Drop()
+		synctest.Wait()
+		if m := c.message(t); m.Type != api.TerminalMessageTypeExit || m.Code != nil {
+			t.Errorf("message %+v, want exit with no status, since the shell may still run", m)
+		}
+		if status := c.ended(t); status != websocket.StatusNormalClosure {
+			t.Errorf("closed with %v, want normal closure", status)
+		}
+	})
+}
+
 func TestTerminal_window(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newSSHEnv(t, openStore(t), nil)
