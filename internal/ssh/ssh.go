@@ -70,9 +70,15 @@ var (
 	ErrBadUser       = errors.New("the user must be a login name, such as alice")
 	ErrBadPort       = errors.New("the port must be from 1 to 65535")
 	ErrHostKeyChange = errors.New("the machine's host key changed")
-	ErrNoTmux        = errors.New("tmux isn't installed on the device")
-	ErrTmux          = errors.New("tmux failed")
-	ErrNoSession     = errors.New("no tmux session with this name is running")
+	// ErrNoChangedKey means there's no changed host key to trust: it
+	// didn't change, or Roost hasn't seen it change since it started.
+	ErrNoChangedKey = errors.New("the device's host key hasn't changed, as far as Roost has seen")
+	// ErrOfferedKeyChanged means the machine offers another host key than
+	// the one an admin looked at.
+	ErrOfferedKeyChanged = errors.New("the machine now offers another host key than the one you looked at")
+	ErrNoTmux            = errors.New("tmux isn't installed on the device")
+	ErrTmux              = errors.New("tmux failed")
+	ErrNoSession         = errors.New("no tmux session with this name is running")
 )
 
 // State says whether Roost can log in to a machine.
@@ -113,6 +119,8 @@ type Access struct {
 	// OfferedKey is the fingerprint of the host key the machine offered
 	// instead of the pinned one, while the State is StateHostKeyChanged.
 	OfferedKey string
+	// offered is that key as in known_hosts, which TrustHostKey pins.
+	offered string
 }
 
 // Options configures NewManager.
@@ -500,8 +508,49 @@ func (m *Manager) Remove(ctx context.Context, deviceID string) error {
 	return nil
 }
 
-// ResetHostKey forgets a device's pinned host key, such as after the
-// machine was reinstalled, so the next connection pins the key it offers.
+// TrustHostKey pins the host key a device offered in place of the one
+// pinned, once an admin has looked at its fingerprint: the one in
+// Access.OfferedKey. It pins exactly that key, and returns
+// ErrOfferedKeyChanged if the device offers another by now, so what an admin
+// trusts is what they saw. It returns ErrNoChangedKey if Roost isn't
+// refusing a changed key from the device.
+func (m *Manager) TrustHostKey(ctx context.Context, deviceID, fingerprint string) (Access, error) {
+	id, err := m.accessID(deviceID)
+	if err != nil {
+		return Access{}, err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	a, ok := m.access[id]
+	if !ok {
+		return Access{}, ErrNotSetUp
+	}
+	v := m.checks[id]
+	switch {
+	case v.State != StateHostKeyChanged || v.offered == "":
+		return Access{}, ErrNoChangedKey
+	case v.OfferedKey != fingerprint:
+		return Access{}, ErrOfferedKeyChanged
+	}
+	now := time.Now()
+	if err := m.opts.Store.ReplaceHostKey(ctx, id, v.offered, now); err != nil {
+		if errors.Is(err, store.ErrNoSSHAccess) {
+			return Access{}, ErrNotSetUp
+		}
+		return Access{}, err
+	}
+	a.HostKey, a.PinnedAt = v.offered, now
+	m.access[id] = a
+	// The next login checks the key against this one, so a machine that
+	// offers yet another is refused again.
+	m.resetLocked(id)
+	m.log.Info("pinned an SSH host key an admin trusted", "device", id, "fingerprint", v.OfferedKey)
+	return m.viewLocked(id, a), nil
+}
+
+// ResetHostKey forgets a device's pinned host key, so the next connection
+// pins whichever key the machine offers then. To pin the key a machine
+// offered instead of the pinned one, use TrustHostKey.
 func (m *Manager) ResetHostKey(ctx context.Context, deviceID string) (Access, error) {
 	id, err := m.accessID(deviceID)
 	if err != nil {
@@ -639,7 +688,7 @@ func (m *Manager) checkHostKey(ctx context.Context, t target, offered gossh.Publ
 		}
 	}
 	m.checks[t.id] = Access{
-		State: StateHostKeyChanged, Error: err.Error(), CheckedAt: time.Now(), OfferedKey: got,
+		State: StateHostKeyChanged, Error: err.Error(), CheckedAt: time.Now(), OfferedKey: got, offered: key,
 		Tmux: v.Tmux, Docker: v.Docker, DockerSocket: v.DockerSocket,
 	}
 	m.changed()

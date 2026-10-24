@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"net/netip"
 	"strconv"
 	"strings"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+	gossh "golang.org/x/crypto/ssh"
 
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/ssh"
@@ -246,6 +248,60 @@ func TestSSH_checkAndHostKey(t *testing.T) {
 		if ev.Kind == api.EventKindSSH {
 			t.Errorf("a viewer sees %+v", ev)
 		}
+	}
+}
+
+func TestSSH_trustHostKey(t *testing.T) {
+	t.Parallel()
+	e := newSSHEnv(t, testStore(t), nil)
+	e.setUp(t)
+	put := func(from netip.Addr, fingerprint string) *httptest.ResponseRecorder {
+		body, err := json.Marshal(api.TrustHostKey{Fingerprint: fingerprint})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return send(t, e.h, http.MethodPut, "/api/devices/laptop/ssh/host-key", from, string(body))
+	}
+	check := func() api.DeviceSSH {
+		t.Helper()
+		var got api.DeviceSSH
+		rec := send(t, e.h, http.MethodPost, "/api/devices/laptop/ssh/check", laptopIP, "")
+		if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil {
+			t.Fatalf("POST check = %d %s, want 200", rec.Code, rec.Body)
+		}
+		return got
+	}
+	pinned := check().HostKey
+	if rec := put(laptopIP, "SHA256:anything"); rec.Code != http.StatusConflict {
+		t.Errorf("PUT before the key changed = %d %s, want 409", rec.Code, rec.Body)
+	}
+
+	offered := gossh.FingerprintSHA256(e.sshd.ChangeHostKey())
+	if got := check(); got.State != api.SSHStateHostKeyChanged || got.OfferedKey != offered || got.HostKey != pinned {
+		t.Fatalf("check = %+v, want the change refused, with %s offered", got, offered)
+	}
+	if rec := put(phoneIP, offered); rec.Code != http.StatusForbidden {
+		t.Errorf("PUT as a viewer = %d, want 403", rec.Code)
+	}
+	if rec := put(laptopIP, "SHA256:another"); rec.Code != http.StatusConflict ||
+		!strings.Contains(rec.Body.String(), "another host key than the one you looked at") {
+		t.Errorf("PUT of a key that isn't the one offered = %d %s, want 409 saying so", rec.Code, rec.Body)
+	}
+	rec := put(laptopIP, offered)
+	var got api.DeviceSSH
+	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil {
+		t.Fatalf("PUT = %d %s, want 200", rec.Code, rec.Body)
+	}
+	if got.HostKey != offered {
+		t.Errorf("PUT pinned %s, want %s", got.HostKey, offered)
+	}
+	if got := check(); got.State != api.SSHStateOK || got.HostKey != offered {
+		t.Errorf("check after trusting = %+v, want ok, with %s pinned", got, offered)
+	}
+	events := e.events(t, api.EventKindSSH)
+	if len(events) == 0 || events[0].Level != string(api.EventLevelWarning) || events[0].Actor != alice ||
+		events[0].Message != "Trusted the new SSH host key of laptop, "+offered {
+		t.Errorf("events = %+v, want a warning that alice trusted %s", events, offered)
 	}
 }
 

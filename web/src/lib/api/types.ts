@@ -1725,6 +1725,18 @@ export interface SetSSH {
   port?: number /* int */;
 }
 /**
+ * TrustHostKey is the body of PUT /api/devices/{id}/ssh/host-key, which
+ * pins the host key a device offered in place of the one Roost pinned, and
+ * answers with the device's DeviceSSH. Fingerprint is DeviceSSH.OfferedKey,
+ * the one an admin looked at: if the device offers another by then, Roost
+ * refuses with a 409, so it pins exactly the key the admin saw. DELETE
+ * forgets the pinned key instead, so Roost pins whichever key the device
+ * offers next.
+ */
+export interface TrustHostKey {
+  fingerprint: string;
+}
+/**
  * TerminalSessions is the response to GET
  * /api/devices/{id}/terminal/sessions: the tmux sessions on a device.
  */

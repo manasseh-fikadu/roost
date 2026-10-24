@@ -107,6 +107,7 @@ func (h *handler) routes(rt *router) {
 	rt.write("DELETE /api/devices/{id}/ssh", h.removeSSH)
 	rt.write("POST /api/devices/{id}/ssh/check", h.checkSSH)
 	rt.write("POST /api/devices/{id}/ssh/authorize", h.authorizeSSH)
+	rt.write("PUT /api/devices/{id}/ssh/host-key", h.trustHostKey)
 	rt.write("DELETE /api/devices/{id}/ssh/host-key", h.resetHostKey)
 	// A WebSocket, which guard only lets in from Roost's own pages.
 	rt.read("GET /api/devices/{id}/terminal", admins, h.terminal)

@@ -16,7 +16,8 @@
 		getSSHSetup,
 		putSSH,
 		removeSSH,
-		resetHostKey
+		resetHostKey,
+		trustHostKey
 	} from '#lib/api/client.js';
 	import type { Device, DeviceSSH, SSHSetup } from '#lib/api/types.js';
 	import { ago } from '#lib/format.js';
@@ -59,11 +60,18 @@
 	let port = $state('22');
 	let busy = $state<string | null>(null);
 	/** What the admin is asked to confirm, while confirmOpen. */
-	let confirm = $state<'remove' | 'reset'>('remove');
+	let confirm = $state<'remove' | 'reset' | 'trust'>('remove');
+	/**
+	 * The fingerprint of the host key the admin is asked to trust, as it was
+	 * when they clicked, and what they're shown. Roost pins that key, and
+	 * refuses if the machine offers another by the time they confirm.
+	 */
+	let trusting = $state('');
 	let confirmOpen = $state(false);
 
-	function ask(what: 'remove' | 'reset') {
+	function ask(what: 'remove' | 'reset' | 'trust') {
 		confirm = what;
+		trusting = what === 'trust' ? (ssh.offeredKey ?? '') : '';
 		confirmOpen = true;
 	}
 
@@ -120,7 +128,11 @@
 	}
 
 	async function confirmed() {
-		const action = confirm === 'remove' ? () => removeSSH(deviceId) : () => resetHostKey(deviceId);
+		const action = {
+			remove: () => removeSSH(deviceId),
+			reset: () => resetHostKey(deviceId),
+			trust: () => trustHostKey(deviceId, trusting)
+		}[confirm];
 		if (await run('confirm', action)) {
 			confirmOpen = false;
 		}
@@ -230,8 +242,9 @@
 						</IconButton>
 					{/snippet}
 					<MenuItem onSelect={startEditing}>Change user or port</MenuItem>
-					{#if ssh.hostKey}
-						<MenuItem onSelect={() => ask('reset')}>Reset the host key</MenuItem>
+					<!-- A changed key has its own button, which pins the key that was offered. -->
+					{#if ssh.hostKey && ssh.state !== 'host-key-changed'}
+						<MenuItem onSelect={() => ask('reset')}>Forget the host key</MenuItem>
 					{/if}
 					<MenuItem danger onSelect={() => ask('remove')}>Remove access</MenuItem>
 				</Menu>
@@ -260,7 +273,9 @@
 							<dd class="inline text-fg">{ssh.offeredKey}</dd>
 						</div>
 					</dl>
-					<Button size="xs" onclick={() => ask('reset')}>Trust the new key</Button>
+					<Button size="xs" disabled={!ssh.offeredKey} onclick={() => ask('trust')}
+						>Trust the new key</Button
+					>
 				</div>
 			{/if}
 			<dl>
@@ -321,25 +336,48 @@
 
 <Dialog
 	bind:open={confirmOpen}
-	title={confirm === 'remove' ? `Remove SSH access to ${device.name}?` : 'Trust the next host key?'}
+	title={{
+		remove: `Remove SSH access to ${device.name}?`,
+		reset: 'Forget the host key?',
+		trust: 'Trust this host key?'
+	}[confirm]}
 >
-	<p class="text-[13px] text-fg-muted">
-		{#if confirm === 'remove'}
+	{#if confirm === 'remove'}
+		<p class="text-[13px] text-fg-muted">
 			Roost closes its connections and terminals there. Its key stays in the machine's
 			authorized_keys until you take it out.
-		{:else}
-			Roost forgets the key it pinned for {device.name}, and trusts the one the machine offers at
-			the next login. Only do this if you know why the key changed, such as a reinstall.
-		{/if}
-	</p>
+		</p>
+	{:else if confirm === 'reset'}
+		<p class="text-[13px] text-fg-muted">
+			Roost forgets the key it pinned for {device.name}, and pins whichever key the machine offers
+			at its next login. Only do this if you know the machine's key was meant to change.
+		</p>
+	{:else}
+		<div class="space-y-3 text-[13px] text-fg-muted">
+			<p>Roost will pin the key {device.name} offered, and nothing else:</p>
+			<p
+				class="rounded-md border border-line bg-canvas px-3 py-2 font-mono text-[12px] break-all text-fg"
+			>
+				{trusting}
+			</p>
+			<p>
+				Compare it with the machine's own, which
+				<code class="font-mono text-[12px] text-fg">ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub</code
+				>
+				lists there. If the machine offers another key by the time you confirm, Roost refuses and shows
+				you the new one.
+			</p>
+		</div>
+	{/if}
 	{#snippet footer()}
 		<Button variant="ghost" onclick={() => (confirmOpen = false)}>Cancel</Button>
 		<Button
 			variant={confirm === 'remove' ? 'danger' : 'primary'}
 			loading={busy === 'confirm'}
+			disabled={confirm === 'trust' && !trusting}
 			onclick={confirmed}
 		>
-			{confirm === 'remove' ? 'Remove' : 'Reset the host key'}
+			{{ remove: 'Remove', reset: 'Forget the host key', trust: 'Trust this key' }[confirm]}
 		</Button>
 	{/snippet}
 </Dialog>

@@ -118,6 +118,18 @@ func (s *Store) PinHostKey(ctx context.Context, deviceID, key string, at time.Ti
 	return pinned, err
 }
 
+// ReplaceHostKey pins key as a machine's host key, in place of the one
+// pinned now, if any. It returns ErrNoSSHAccess if nothing is saved for the
+// machine.
+func (s *Store) ReplaceHostKey(ctx context.Context, deviceID, key string, at time.Time) error {
+	res, err := s.db.ExecContext(ctx, "UPDATE ssh_access SET host_key = ?, pinned_at = ? WHERE device_id = ?",
+		key, at.UnixMilli(), deviceID)
+	if err != nil {
+		return fmt.Errorf("pin a host key: %w", err)
+	}
+	return noRow(res, ErrNoSSHAccess)
+}
+
 // ResetHostKey forgets a machine's pinned host key, so the next connection
 // pins the one it offers. It returns ErrNoSSHAccess if nothing is saved for
 // the machine.

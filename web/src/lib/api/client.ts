@@ -192,10 +192,22 @@ export function checkSSH(id: string): Promise<DeviceSSH> {
 	return mutate('POST', sshPath(id, '/check'));
 }
 
-/** Forgets a device's pinned host key, and says so in a toast. Admins only. */
+/**
+ * Pins the host key a device offered in place of the one Roost pinned, and
+ * says so in a toast. `fingerprint` is the offered key's, as the admin saw
+ * it: if the device offers another by now, the hub refuses. Admins only.
+ */
+export function trustHostKey(id: string, fingerprint: string): Promise<DeviceSSH> {
+	return mutate('PUT', sshPath(id, '/host-key'), { fingerprint }, { success: 'Host key trusted' });
+}
+
+/**
+ * Forgets a device's pinned host key, so Roost pins whichever key it offers
+ * next, and says so in a toast. Admins only.
+ */
 export function resetHostKey(id: string): Promise<DeviceSSH> {
 	return mutate('DELETE', sshPath(id, '/host-key'), undefined, {
-		success: 'Roost trusts the next key it sees'
+		success: 'Host key forgotten'
 	});
 }
 

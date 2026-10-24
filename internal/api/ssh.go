@@ -52,7 +52,7 @@ func (h *handler) sshError(w http.ResponseWriter, r *http.Request, err error) bo
 	case errors.Is(err, ssh.ErrStarting):
 		status = http.StatusServiceUnavailable
 	case errors.Is(err, ssh.ErrNotSetUp), errors.Is(err, ssh.ErrOffline), errors.Is(err, ssh.ErrHostKeyChange),
-		errors.Is(err, ssh.ErrNoTmux):
+		errors.Is(err, ssh.ErrNoTmux), errors.Is(err, ssh.ErrNoChangedKey), errors.Is(err, ssh.ErrOfferedKeyChanged):
 		status = http.StatusConflict
 	case errors.As(err, &ce), errors.Is(err, ssh.ErrTmux), errors.Is(err, context.DeadlineExceeded):
 		status = http.StatusBadGateway
@@ -138,6 +138,24 @@ func (h *handler) checkSSH(w http.ResponseWriter, r *http.Request) {
 	if _, err := h.opts.SSH.Check(r.Context(), id); h.sshError(w, r, err) {
 		return
 	}
+	h.writeJSON(w, r, http.StatusOK, h.sshOf(id))
+}
+
+// trustHostKey answers PUT /api/devices/{id}/ssh/host-key, which pins the
+// host key the device offered, if it's the one the admin looked at.
+func (h *handler) trustHostKey(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var body TrustHostKey
+	if !h.readJSON(w, r, &body) {
+		return
+	}
+	if _, err := h.opts.SSH.TrustHostKey(r.Context(), id, body.Fingerprint); h.sshError(w, r, err) {
+		return
+	}
+	h.logEvent(r, store.Event{
+		Level: string(EventLevelWarning), Kind: string(EventKindSSH), DeviceID: id, Actor: callerOf(r).who.LoginName,
+		Message: "Trusted the new SSH host key of " + h.deviceName(r, id) + ", " + body.Fingerprint,
+	})
 	h.writeJSON(w, r, http.StatusOK, h.sshOf(id))
 }
 

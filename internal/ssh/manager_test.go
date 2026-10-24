@@ -320,6 +320,108 @@ func TestManager_hostKeyChanged(t *testing.T) {
 	})
 }
 
+func TestManager_trustHostKey(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		e := newEnv(t, envOptions{})
+		ok(e.laptop)
+		e.setUp(t, "laptop", "alice")
+		synctest.Wait()
+		first := e.m.Access()["laptop"].HostKey
+
+		if _, err := e.m.TrustHostKey(t.Context(), "laptop", "SHA256:anything"); !errors.Is(err, ssh.ErrNoChangedKey) {
+			t.Errorf("TrustHostKey before the key changed = %v, want ErrNoChangedKey", err)
+		}
+
+		// The machine is reinstalled, and an admin looks at the key it offers.
+		seen := gossh.FingerprintSHA256(e.laptop.ChangeHostKey())
+		e.laptop.Drop()
+		synctest.Wait()
+		if _, err := e.m.Exec(t.Context(), "laptop", "true"); !errors.Is(err, ssh.ErrHostKeyChange) {
+			t.Fatalf("Exec = %v, want ErrHostKeyChange", err)
+		}
+		if a := e.m.Access()["laptop"]; a.OfferedKey != seen {
+			t.Fatalf("offered key = %s, want %s", a.OfferedKey, seen)
+		}
+
+		// It offers another key by the time Roost sees it again, so what the
+		// admin looked at isn't what they'd trust.
+		other := gossh.FingerprintSHA256(e.laptop.ChangeHostKey())
+		if _, err := e.m.Exec(t.Context(), "laptop", "true"); !errors.Is(err, ssh.ErrHostKeyChange) {
+			t.Fatalf("Exec = %v, want ErrHostKeyChange", err)
+		}
+		if _, err := e.m.TrustHostKey(t.Context(), "laptop", seen); !errors.Is(err, ssh.ErrOfferedKeyChanged) {
+			t.Errorf("TrustHostKey of the key that was seen = %v, want ErrOfferedKeyChanged", err)
+		}
+		if a := e.m.Access()["laptop"]; a.HostKey != first || a.State != ssh.StateHostKeyChanged {
+			t.Errorf("after the refusal, access = %+v, want the first key still pinned, and the change still refused", a)
+		}
+
+		// Trusting the key that's on the screen pins exactly that.
+		a, err := e.m.TrustHostKey(t.Context(), "laptop", other)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a.HostKey != other {
+			t.Errorf("TrustHostKey pinned %s, want %s", a.HostKey, other)
+		}
+		synctest.Wait() // Run logs in again, with the key checked against the one pinned.
+		if a := e.m.Access()["laptop"]; a.State != ssh.StateOK || a.HostKey != other {
+			t.Errorf("after trusting, access = %+v, want ok, with %s pinned", a, other)
+		}
+		saved, err := e.st.SSHAccess(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := saved["laptop"]; !strings.HasPrefix(got.HostKey, "ssh-ed25519 ") || fingerprintOf(t, got.HostKey) != other {
+			t.Errorf("saved host key %q, want the ed25519 key %s", got.HostKey, other)
+		}
+		if _, err := e.m.TrustHostKey(t.Context(), "laptop", other); !errors.Is(err, ssh.ErrNoChangedKey) {
+			t.Errorf("TrustHostKey again = %v, want ErrNoChangedKey", err)
+		}
+	})
+}
+
+// Trusting a key pins the one an admin looked at, not whichever the machine
+// offers by the time Roost logs in again, which Roost then refuses.
+func TestManager_trustHostKey_pinsTheKeyThatWasSeen(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		e := newEnv(t, envOptions{})
+		ok(e.laptop)
+		e.setUp(t, "laptop", "alice")
+		synctest.Wait()
+
+		seen := gossh.FingerprintSHA256(e.laptop.ChangeHostKey())
+		e.laptop.Drop()
+		synctest.Wait()
+		if _, err := e.m.Exec(t.Context(), "laptop", "true"); !errors.Is(err, ssh.ErrHostKeyChange) {
+			t.Fatalf("Exec = %v, want ErrHostKeyChange", err)
+		}
+		// Another machine starts answering, and Roost hasn't seen its key.
+		later := gossh.FingerprintSHA256(e.laptop.ChangeHostKey())
+
+		a, err := e.m.TrustHostKey(t.Context(), "laptop", seen)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if a.HostKey != seen {
+			t.Errorf("TrustHostKey pinned %s, want %s, the key that was seen", a.HostKey, seen)
+		}
+		synctest.Wait()
+		if a := e.m.Access()["laptop"]; a.State != ssh.StateHostKeyChanged || a.HostKey != seen || a.OfferedKey != later {
+			t.Errorf("access = %+v, want %s pinned, and %s refused", a, seen, later)
+		}
+	})
+}
+
+func fingerprintOf(t *testing.T, authorizedKey string) string {
+	t.Helper()
+	pub, _, _, _, err := gossh.ParseAuthorizedKey([]byte(authorizedKey))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return gossh.FingerprintSHA256(pub)
+}
+
 func TestManager_pinsEd25519(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newEnv(t, envOptions{noRun: true})
