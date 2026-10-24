@@ -15,6 +15,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/settings"
+	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/systemd"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
@@ -44,6 +45,9 @@ type sources struct {
 	// systemd of its units, or nil if it doesn't read them.
 	docker  *docker.Reading
 	systemd *systemd.Reading
+	// ssh says how Roost logs in to each machine, by access ID, or is nil
+	// if Roost doesn't.
+	ssh map[string]ssh.Access
 }
 
 // A machine is a device that Roost measures, once for each machine. The
@@ -120,6 +124,9 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 			dev.enrollment = &e
 		}
 		device, m := newDevice(s, dev, now)
+		if src.ssh != nil && ssh.Supported(d, dev.self) {
+			device.SSH = newDeviceSSH(d, dev.self, src.ssh)
+		}
 		out.Devices = append(out.Devices, device)
 		// In embedded mode, the machine's own node shows what Roost's does.
 		if m.deviceID != "" && (dev.self || !d.SameMachine) {

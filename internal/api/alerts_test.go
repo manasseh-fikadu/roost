@@ -394,7 +394,7 @@ func openAlert(t *testing.T) (http.Handler, *store.Store, *api.Feed, int64) {
 	engine.Apply(t.Context(), []alerts.Condition{{
 		Key: "disk:roost", Source: "metrics", DeviceID: "roost", Severity: alerts.Warning, Title: "Disk 90% full on roost",
 	}}, func(string, string) bool { return true }, time.Now())
-	opts := withStore(tn, st, api.Options{Alerts: engine})
+	opts := withStore(t, tn, st, api.Options{Alerts: engine})
 	return api.New(opts), st, opts.Feed, engine.Open()[0].ID
 }
 
@@ -499,7 +499,7 @@ func TestAddAlertNote_storeFails(t *testing.T) {
 	if err := alertStore.Close(); err != nil {
 		t.Fatal(err)
 	}
-	h := api.New(withStore(testTailnet(), checksStore(t), api.Options{Alerts: engine}))
+	h := api.New(withStore(t, testTailnet(), checksStore(t), api.Options{Alerts: engine}))
 	rec := send(t, h, http.MethodPost, fmt.Sprintf("/api/alerts/%d/notes", id), laptopIP, `{"text":"x"}`)
 	if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "closed") {
 		t.Errorf("POST notes = %d %s, want 500 without the store's error", rec.Code, rec.Body)
@@ -510,7 +510,7 @@ func TestEventRoutes(t *testing.T) {
 	t.Parallel()
 	st := checksStore(t)
 	tn := testTailnet()
-	h := api.New(withStore(tn, st, api.Options{}))
+	h := api.New(withStore(t, tn, st, api.Options{}))
 	// What admins do is in the activity log.
 	if rec := send(t, h, http.MethodPut, "/api/access/users/carol@example.com", laptopIP, `{"role":"viewer"}`); rec.Code != http.StatusOK {
 		t.Fatalf("PUT access = %d %s", rec.Code, rec.Body)

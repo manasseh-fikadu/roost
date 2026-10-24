@@ -18,6 +18,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/checks"
+	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
 	"github.com/manasseh-fikadu/roost/internal/usage"
@@ -56,6 +57,7 @@ func TestStream(t *testing.T) {
 					Version: "v1.2.3", WhoIs: tn.WhoIs, Snapshot: snapshot, Feed: feed, Store: st,
 					Agents: agents.NewRegistry(st, nil), Usage: usage.NewRecorder(st, nil),
 					Checks: checks.NewRunner(st, checks.Options{Dial: tn.Dial}), Alerts: alerts.NewEngine(st, nil),
+					SSH: ssh.NewManager(ssh.Options{KeyDir: t.TempDir(), Store: st, Tailnet: snapshot, Dial: tn.Dial}),
 				})
 				events := openStream(t, tn, h, tt.from, tt.gzip)
 
@@ -126,7 +128,7 @@ func TestStream_gathersChanges(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		tn := testTailnet()
 		changed := make(chan struct{}, 1)
-		opts := withStore(tn, st, api.Options{})
+		opts := withStore(t, tn, st, api.Options{})
 		opts.Feed = api.NewFeed(api.FeedOptions{Tailnet: opts.Snapshot, TailnetChanged: changed, Store: st})
 		go opts.Feed.Run(t.Context())
 		events := openStream(t, tn, api.New(opts), laptopIP, true)
@@ -161,7 +163,7 @@ func TestStream_roleChange(t *testing.T) {
 	st := testStore(t)
 	synctest.Test(t, func(t *testing.T) {
 		tn := testTailnet()
-		h := api.New(withStore(tn, st, api.Options{}))
+		h := api.New(withStore(t, tn, st, api.Options{}))
 		events := openStream(t, tn, h, phoneIP, true)
 		synctest.Wait()
 		nextSnapshot(t, events)
@@ -183,7 +185,7 @@ func TestStream_roleLookupFails(t *testing.T) {
 	st := testStore(t)
 	synctest.Test(t, func(t *testing.T) {
 		tn := testTailnet()
-		h := api.New(withStore(tn, st, api.Options{}))
+		h := api.New(withStore(t, tn, st, api.Options{}))
 		events := openStream(t, tn, h, phoneIP, true)
 		synctest.Wait()
 		nextSnapshot(t, events)
@@ -210,7 +212,7 @@ func TestStream_stopping(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		tn := testTailnet()
 		stopping := make(chan struct{})
-		h := api.New(withStore(tn, st, api.Options{Stopping: stopping}))
+		h := api.New(withStore(t, tn, st, api.Options{Stopping: stopping}))
 		events := openStream(t, tn, h, laptopIP, true)
 		synctest.Wait()
 		nextSnapshot(t, events)

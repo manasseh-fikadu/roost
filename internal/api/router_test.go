@@ -45,7 +45,7 @@ func TestRoutes(t *testing.T) {
 
 	for _, devUI := range []bool{false, true} {
 		st := testStore(t)
-		opts := withStore(testTailnet(), st, api.Options{})
+		opts := withStore(t, testTailnet(), st, api.Options{})
 		if devUI {
 			opts.DevUI = &url.URL{Scheme: "http", Host: "127.0.0.1:5173"}
 		}

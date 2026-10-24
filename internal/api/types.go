@@ -272,6 +272,9 @@ type Device struct {
 	// measures the device with it once it reports.
 	Agent    *Agent         `json:"agent,omitempty"`
 	Settings DeviceSettings `json:"settings"`
+	// SSH is how Roost logs in to the device, if it can: Linux, macOS and
+	// FreeBSD machines. Only admins get it.
+	SSH *DeviceSSH `json:"ssh,omitempty" roost:"secret"`
 }
 
 // MeasuredBy says how Roost measures a device.
@@ -991,6 +994,12 @@ const (
 	EventKindContainer EventKind = "container"
 	// EventKindAccess is a change to who has a role in Roost.
 	EventKindAccess EventKind = "access"
+	// EventKindSSH is SSH access to a device that an admin set up, changed
+	// or removed, or a host key that changed.
+	EventKindSSH EventKind = "ssh"
+	// EventKindTerminal is a terminal an admin opened, or a tmux session
+	// they ended.
+	EventKindTerminal EventKind = "terminal"
 )
 
 // EventList is the response to GET /api/events?before=&after=&limit=&kind=&device=:
@@ -1092,4 +1101,151 @@ const (
 	UnitScopeSystem UnitScope = "system"
 	// UnitScopeUser is the user Roost runs as.
 	UnitScopeUser UnitScope = "user"
+)
+
+// DeviceSSH is how Roost logs in to a device over SSH, with its own key,
+// for terminals, files and Docker. The machine Roost runs on can be two
+// nodes, which share it.
+type DeviceSSH struct {
+	State SSHState `json:"state"`
+	// User is the account Roost logs in as, and Port where sshd listens.
+	// They're empty until an admin sets up access.
+	User string `json:"user,omitempty"`
+	Port int    `json:"port,omitempty"`
+	// Hub marks the machine Roost runs on, where Roost logs in on the
+	// loopback address, and can add its key for the user it runs as.
+	Hub bool `json:"hub,omitempty"`
+	// HostKey is the SHA256 fingerprint of the machine's host key, which
+	// Roost pinned the first time it logged in.
+	HostKey string `json:"hostKey,omitempty"`
+	// OfferedKey is the fingerprint of the key the machine offered instead,
+	// while the State is SSHStateHostKeyChanged.
+	OfferedKey string `json:"offeredKey,omitempty"`
+	// Error says why Roost can't log in, while the State is
+	// SSHStateFailing or SSHStateHostKeyChanged.
+	Error string `json:"error,omitempty"`
+	// CheckedAt is when Roost last checked the machine, if it has.
+	CheckedAt *time.Time `json:"checkedAt,omitempty"`
+	// Tmux says whether the machine has tmux, which keeps terminals running
+	// after their tab closes, and Docker whether Roost's user can open its
+	// Docker socket. Each is missing until a check finds out.
+	Tmux   *bool `json:"tmux,omitempty"`
+	Docker *bool `json:"docker,omitempty"`
+}
+
+// SSHState says whether Roost can log in to a device.
+type SSHState string
+
+// The states of a DeviceSSH.
+const (
+	// SSHStateNotSetUp means no admin has set up access yet.
+	SSHStateNotSetUp SSHState = "not-set-up"
+	// SSHStateUnchecked means Roost hasn't logged in since it started, or
+	// since the access changed.
+	SSHStateUnchecked SSHState = "unchecked"
+	SSHStateOK        SSHState = "ok"
+	SSHStateFailing   SSHState = "failing"
+	// SSHStateHostKeyChanged means the machine offered another host key
+	// than the one Roost pinned, so Roost won't log in until an admin
+	// resets it, such as after the machine was reinstalled.
+	SSHStateHostKeyChanged SSHState = "host-key-changed"
+)
+
+// SSHSetup is the response to GET /api/devices/{id}/ssh: how to let Roost
+// log in to a device. Only admins can see it.
+type SSHSetup struct {
+	// Command adds AuthorizedKey to the authorized_keys of the user who
+	// runs it on the device.
+	Command string `json:"command"`
+	// AuthorizedKey is Roost's key, which only works from Roost's tailnet
+	// addresses, and on the machine Roost runs on, from the loopback
+	// addresses too. Agent and X11 forwarding are off for it.
+	AuthorizedKey string `json:"authorizedKey"`
+	// HubUser is the user Roost runs as, on the machine Roost runs on,
+	// which POST /api/devices/{id}/ssh/authorize logs in as.
+	HubUser string `json:"hubUser,omitempty"`
+}
+
+// SetSSH is the body of PUT /api/devices/{id}/ssh, which sets up how Roost
+// logs in to a device and answers with its DeviceSSH. Changing the port
+// forgets the pinned host key. DELETE removes the access.
+type SetSSH struct {
+	User string `json:"user"`
+	// Port is 22 if it's left out.
+	Port int `json:"port,omitempty"`
+}
+
+// TerminalSessions is the response to GET
+// /api/devices/{id}/terminal/sessions: the tmux sessions on a device.
+type TerminalSessions struct {
+	// Tmux says whether the device has tmux. Without it, there are no
+	// sessions, and a terminal ends when its tab closes.
+	Tmux bool `json:"tmux"`
+	// Sessions are by name.
+	Sessions []TerminalSession `json:"sessions"`
+}
+
+// A TerminalSession is a tmux session, which keeps running after the
+// terminals attached to it close. DELETE
+// /api/devices/{id}/terminal/sessions/{name} ends one.
+type TerminalSession struct {
+	Name string `json:"name"`
+	// CreatedAt is when it started, and ActiveAt when something last
+	// happened in it.
+	CreatedAt *time.Time `json:"createdAt,omitempty"`
+	ActiveAt  *time.Time `json:"activeAt,omitempty"`
+	// Attached is how many terminals are attached, in Roost or not.
+	Attached int `json:"attached"`
+	Windows  int `json:"windows"`
+	// Command is what runs in its active pane, such as bash or htop.
+	Command string `json:"command,omitempty"`
+}
+
+// TerminalWindow is how many bytes of output the hub sends a terminal
+// ahead of what the browser says it has written to the screen.
+const TerminalWindow = 1 << 20
+
+// TerminalMessage is a JSON text frame on the WebSocket of GET
+// /api/devices/{id}/terminal?session=&cwd=&cols=&rows=, which only admins
+// can open. Without a session, the terminal is a login shell that ends when
+// the WebSocket closes. The shell's output comes in binary frames.
+//
+// The browser sends input, a new size, and, as it writes output to the
+// screen, how many bytes it wrote: the hub sends at most TerminalWindow
+// bytes ahead, and waits for that before it sends more, so a command that
+// floods the terminal can't flood the browser. The hub sends ready once the
+// shell starts, exit with its status when it ends, and error if it can't
+// start one.
+type TerminalMessage struct {
+	Type TerminalMessageType `json:"t"`
+	// Data is the input, for TerminalMessageTypeInput.
+	Data string `json:"d,omitempty"`
+	// Cols and Rows are the size, for TerminalMessageTypeResize.
+	Cols int `json:"c,omitempty"`
+	Rows int `json:"r,omitempty"`
+	// Bytes is how much output the browser wrote, for
+	// TerminalMessageTypeAck.
+	Bytes int `json:"n,omitempty"`
+	// Session is the tmux session, for TerminalMessageTypeReady.
+	Session string `json:"session,omitempty"`
+	// Code is the exit status, or null if there was none, for
+	// TerminalMessageTypeExit.
+	Code *int `json:"code,omitempty"`
+	// Message says what went wrong, for TerminalMessageTypeError.
+	Message string `json:"message,omitempty"`
+}
+
+// TerminalMessageType says what a TerminalMessage is.
+type TerminalMessageType string
+
+// The types of TerminalMessage.
+const (
+	// The browser sends these.
+	TerminalMessageTypeInput  TerminalMessageType = "i"
+	TerminalMessageTypeResize TerminalMessageType = "r"
+	TerminalMessageTypeAck    TerminalMessageType = "a"
+	// The hub sends these.
+	TerminalMessageTypeReady TerminalMessageType = "ready"
+	TerminalMessageTypeExit  TerminalMessageType = "exit"
+	TerminalMessageTypeError TerminalMessageType = "error"
 )

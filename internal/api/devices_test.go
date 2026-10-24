@@ -72,7 +72,7 @@ func TestSetDeviceSettings(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			st := testStore(t)
-			h := api.New(withStore(testTailnet(), st, api.Options{}))
+			h := api.New(withStore(t, testTailnet(), st, api.Options{}))
 			rec := send(t, h, http.MethodPut, "/api/devices/"+tt.device+"/settings", laptopIP, tt.body)
 			if rec.Code != tt.wantCode {
 				t.Fatalf("PUT = %d %s, want %d", rec.Code, rec.Body, tt.wantCode)
@@ -110,7 +110,7 @@ func TestSetDeviceSettings_publishes(t *testing.T) {
 		st := testStore(t)
 		synctest.Wait()
 		tn := testTailnet()
-		opts := withStore(tn, st, api.Options{})
+		opts := withStore(t, tn, st, api.Options{})
 		go opts.Feed.Run(t.Context())
 		h := api.New(opts)
 		events := openStream(t, tn, h, laptopIP, true)
@@ -132,7 +132,7 @@ func TestSetDeviceSettings_publishes(t *testing.T) {
 func TestDeviceHistory(t *testing.T) {
 	t.Parallel()
 	st := testStore(t)
-	h := api.New(withStore(testTailnet(), st, api.Options{}))
+	h := api.New(withStore(t, testTailnet(), st, api.Options{}))
 	now := time.Now()
 	minute := now.Truncate(time.Minute)
 	err := st.AddPings(t.Context(), []store.Ping{
@@ -356,7 +356,7 @@ func TestDeviceUsage(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		st := testStore(t)
 		synctest.Wait()
-		opts := withStore(testTailnet(), st, api.Options{})
+		opts := withStore(t, testTailnet(), st, api.Options{})
 		h := api.New(opts)
 		get := func(target string) (api.DeviceUsage, int) {
 			t.Helper()

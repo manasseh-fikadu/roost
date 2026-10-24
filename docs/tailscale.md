@@ -51,11 +51,11 @@ If you log Roost in as yourself, its node has your access, and nothing more is n
 }
 ```
 
-The second grant matters even before you use SSH. Tailscale only tells a node about the peers its policy lets it talk to, so Roost can only list and ping the devices it can reach. Tagged nodes also don't expire, while a node logged in as a user needs a new login when its key expires (after 180 days by default).
+The last grant matters even before you use SSH. Tailscale only tells a node about the peers its policy lets it talk to, so Roost can only list and ping the devices it can reach. If a machine's sshd listens on another port, add that port to it. Tagged nodes also don't expire, while a node logged in as a user needs a new login when its key expires (after 180 days by default).
 
 ### The machine Roost runs on
 
-In embedded mode, Roost is its own node, so the machine it runs on shows up separately if it's on the tailnet too. Roost marks that device as the same machine when one of its tailnet IPs is on a local network interface. This works when the machine's Tailscale uses a TUN device, which is the default. In a container, or with userspace networking, Roost can't see those addresses, and the machine shows up like any other device. Roost doesn't compare host names, since its own node is named after Roost. On Linux, Roost measures that machine itself, so it turns away an agent there.
+In embedded mode, Roost is its own node, so the machine it runs on shows up separately if it's on the tailnet too. Roost marks that device as the same machine when one of its tailnet IPs is on a local network interface. This works when the machine's Tailscale uses a TUN device, which is the default. In a container, or with userspace networking, Roost can't see those addresses, and the machine shows up like any other device. Roost doesn't compare host names, since its own node is named after Roost. On Linux, Roost measures that machine itself, so it turns away an agent there. Both nodes share the machine's SSH access: Roost logs in on 127.0.0.1, or on the machine's tailnet IP if sshd only listens there, and can add its key for the user it runs as with one click.
 
 ## Host mode
 

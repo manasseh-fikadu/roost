@@ -14,6 +14,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/checks"
+	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
@@ -77,13 +78,14 @@ func testStore(t *testing.T) *store.Store {
 // and a testStore.
 func withTailnet(t *testing.T, tn *tailnettest.Tailnet, opts api.Options) api.Options {
 	t.Helper()
-	return withStore(tn, testStore(t), opts)
+	return withStore(t, tn, testStore(t), opts)
 }
 
 // withStore fills in opts' required fields with tn, as of its current
 // status, and st. Its Feed isn't running, so it builds one snapshot, the
 // first time one is asked for.
-func withStore(tn *tailnettest.Tailnet, st *store.Store, opts api.Options) api.Options {
+func withStore(t *testing.T, tn *tailnettest.Tailnet, st *store.Store, opts api.Options) api.Options {
+	t.Helper()
 	opts.WhoIs = tn.WhoIs
 	opts.Snapshot = func() tailnet.Snapshot {
 		status, err := tn.Status(context.Background())
@@ -101,6 +103,9 @@ func withStore(tn *tailnettest.Tailnet, st *store.Store, opts api.Options) api.O
 	}
 	if opts.Alerts == nil {
 		opts.Alerts = alerts.NewEngine(st, nil)
+	}
+	if opts.SSH == nil {
+		opts.SSH = ssh.NewManager(ssh.Options{KeyDir: t.TempDir(), Store: st, Tailnet: opts.Snapshot, Dial: tn.Dial})
 	}
 	if opts.Feed == nil {
 		opts.Feed = api.NewFeed(api.FeedOptions{Tailnet: opts.Snapshot, Agents: opts.Agents, Checks: opts.Checks, Alerts: opts.Alerts, Store: st})

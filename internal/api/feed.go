@@ -17,6 +17,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/settings"
+	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/systemd"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
@@ -67,6 +68,11 @@ type FeedOptions struct {
 	Systemd func() systemd.Reading
 	// SystemdChanged receives a value when Systemd's answer changes.
 	SystemdChanged <-chan struct{}
+	// SSH says how Roost logs in to each machine, by access ID. It's nil
+	// if Roost doesn't.
+	SSH func() map[string]ssh.Access
+	// SSHChanged receives a value when SSH's answer changes.
+	SSHChanged <-chan struct{}
 	// Store holds the devices' settings and history. Required.
 	Store *store.Store
 	// Logger receives errors. Nil discards them.
@@ -170,6 +176,7 @@ func (f *Feed) Run(ctx context.Context) {
 		case <-checksChanged:
 		case <-f.opts.DockerChanged:
 		case <-f.opts.SystemdChanged:
+		case <-f.opts.SSHChanged:
 		case <-f.poked:
 		case <-heartbeat.C:
 		case <-health.C:
@@ -209,7 +216,7 @@ func (f *Feed) measuresHub() bool { return f.opts.Host != nil }
 func (f *Feed) drain() {
 	for _, ch := range []<-chan struct{}{
 		f.opts.TailnetChanged, f.opts.HostChanged, f.agentsChanged(), f.checksChanged(),
-		f.opts.DockerChanged, f.opts.SystemdChanged, f.poked,
+		f.opts.DockerChanged, f.opts.SystemdChanged, f.opts.SSHChanged, f.poked,
 	} {
 		select {
 		case <-ch:
@@ -269,6 +276,9 @@ func (f *Feed) publish(ctx context.Context) *published {
 	if f.opts.Systemd != nil {
 		r := f.opts.Systemd()
 		src.systemd = &r
+	}
+	if f.opts.SSH != nil {
+		src.ssh = f.opts.SSH()
 	}
 
 	snap, machines := newSnapshot(src, now)

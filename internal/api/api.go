@@ -16,6 +16,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/checks"
+	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/usage"
@@ -50,6 +51,8 @@ type Options struct {
 	Checks *checks.Runner
 	// Alerts keeps the open alerts. Required.
 	Alerts *alerts.Engine
+	// SSH logs in to the tailnet's machines, for terminals. Required.
+	SSH *ssh.Manager
 	// AppURL is where the app is on the tailnet, such as
 	// https://roost.example.ts.net, which the agent sends its heartbeats to.
 	// If it's empty, it's worked out from each request.
@@ -75,8 +78,8 @@ func New(opts Options) http.Handler {
 
 func newHandler(opts Options) *handler {
 	if opts.WhoIs == nil || opts.Snapshot == nil || opts.Feed == nil || opts.Store == nil || opts.Agents == nil ||
-		opts.Usage == nil || opts.Checks == nil || opts.Alerts == nil {
-		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents, Usage, Checks and Alerts are required")
+		opts.Usage == nil || opts.Checks == nil || opts.Alerts == nil || opts.SSH == nil {
+		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents, Usage, Checks, Alerts and SSH are required")
 	}
 	h := &handler{opts: opts, log: opts.Logger}
 	if h.log == nil {
@@ -98,6 +101,17 @@ func (h *handler) routes(rt *router) {
 	rt.read("GET /api/devices/{id}/usage/history", viewers, h.usageHistory)
 	rt.write("PUT /api/devices/{id}/settings", h.setDeviceSettings)
 	rt.write("DELETE /api/devices/{id}/agent", h.revokeAgent)
+
+	rt.read("GET /api/devices/{id}/ssh", admins, h.sshSetup)
+	rt.write("PUT /api/devices/{id}/ssh", h.setSSH)
+	rt.write("DELETE /api/devices/{id}/ssh", h.removeSSH)
+	rt.write("POST /api/devices/{id}/ssh/check", h.checkSSH)
+	rt.write("POST /api/devices/{id}/ssh/authorize", h.authorizeSSH)
+	rt.write("DELETE /api/devices/{id}/ssh/host-key", h.resetHostKey)
+	// A WebSocket, which guard only lets in from Roost's own pages.
+	rt.read("GET /api/devices/{id}/terminal", admins, h.terminal)
+	rt.read("GET /api/devices/{id}/terminal/sessions", admins, h.terminalSessions)
+	rt.write("DELETE /api/devices/{id}/terminal/sessions/{name}", h.killSession)
 
 	rt.read("GET /api/checks/recent", viewers, h.recentResults)
 	rt.read("GET /api/checks/{id}/history", viewers, h.checkHistory)
