@@ -105,7 +105,7 @@ func TestHeartbeat(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			st := testStore(t)
-			opts := withStore(testTailnet(), st, api.Options{})
+			opts := withStore(t, testTailnet(), st, api.Options{})
 			if tt.measured {
 				opts.Feed = api.NewFeed(api.FeedOptions{
 					Tailnet: opts.Snapshot, Store: st, Agents: opts.Agents,
@@ -139,7 +139,7 @@ func TestHeartbeat(t *testing.T) {
 func TestHeartbeat_unknownDevice(t *testing.T) {
 	t.Parallel()
 	st := testStore(t)
-	opts := withStore(testTailnet(), st, api.Options{})
+	opts := withStore(t, testTailnet(), st, api.Options{})
 	opts.Snapshot = func() tailnet.Snapshot {
 		return tailnet.Snapshot{Status: &tailnet.Status{
 			State: tailnet.StateRunning,
@@ -156,7 +156,7 @@ func TestHeartbeat_unknownDevice(t *testing.T) {
 func TestHeartbeat_revokedOnTheWay(t *testing.T) {
 	t.Parallel()
 	st := testStore(t)
-	opts := withStore(testTailnet(), st, api.Options{})
+	opts := withStore(t, testTailnet(), st, api.Options{})
 	h := api.New(opts)
 	body := &gatedReader{r: strings.NewReader(laptopBeat), reading: make(chan struct{}), release: make(chan struct{})}
 	req := newRequestBody(t, http.MethodPost, "/api/agent/heartbeat", laptopIP, body)
@@ -202,7 +202,7 @@ func TestHeartbeat_shows(t *testing.T) {
 		st := testStore(t)
 		synctest.Wait()
 		tn := testTailnet()
-		opts := withStore(tn, st, api.Options{})
+		opts := withStore(t, tn, st, api.Options{})
 		go opts.Feed.Run(t.Context())
 		h := api.New(opts)
 		events := openStream(t, tn, h, laptopIP, true)
@@ -447,7 +447,7 @@ func TestEnroll(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			st := testStore(t)
-			opts := withStore(testTailnet(), st, api.Options{})
+			opts := withStore(t, testTailnet(), st, api.Options{})
 			if tt.measured {
 				opts.Feed = api.NewFeed(api.FeedOptions{
 					Tailnet: opts.Snapshot, Store: st, Agents: opts.Agents,
@@ -522,7 +522,7 @@ func TestEnroll(t *testing.T) {
 func TestInstallScript(t *testing.T) {
 	t.Parallel()
 	st := testStore(t)
-	h := api.New(withStore(testTailnet(), st, api.Options{}))
+	h := api.New(withStore(t, testTailnet(), st, api.Options{}))
 	fresh := newCode(t, st, time.Now())
 	used := newCode(t, st, time.Now())
 	if _, _, err := st.Enroll(t.Context(), used, "laptop", time.Now()); err != nil {
@@ -571,7 +571,7 @@ func TestInstallScript(t *testing.T) {
 
 	// Without the machine, Roost can't tell that the laptop used the code,
 	// and asks it to try again rather than saying another machine did.
-	opts := withStore(testTailnet(), st, api.Options{})
+	opts := withStore(t, testTailnet(), st, api.Options{})
 	opts.WhoIs = func(context.Context, string) (*tailnet.Identity, error) {
 		return nil, errors.New("tailscaled went away")
 	}
@@ -585,7 +585,7 @@ func TestInstallScript(t *testing.T) {
 func TestUnenroll(t *testing.T) {
 	t.Parallel()
 	st := testStore(t)
-	opts := withStore(testTailnet(), st, api.Options{})
+	opts := withStore(t, testTailnet(), st, api.Options{})
 	h := api.New(opts)
 	code := newCode(t, st, time.Now())
 	secret, _, err := st.Enroll(t.Context(), code, "laptop", time.Now())
@@ -619,7 +619,7 @@ func TestUnenroll(t *testing.T) {
 func TestRevokeAgent(t *testing.T) {
 	t.Parallel()
 	st := testStore(t)
-	opts := withStore(testTailnet(), st, api.Options{})
+	opts := withStore(t, testTailnet(), st, api.Options{})
 	h := api.New(opts)
 	code := newCode(t, st, time.Now())
 	secret, _, err := st.Enroll(t.Context(), code, "laptop", time.Now())
@@ -695,7 +695,7 @@ func TestRevokeAgent_hub(t *testing.T) {
 			},
 		})
 		st := testStore(t)
-		opts := withStore(tn, st, api.Options{})
+		opts := withStore(t, tn, st, api.Options{})
 		h := api.New(opts)
 		secret := enrolled(t, st, "host")
 		if rec := sendBeat(t, h, hostIP, secret, laptopBeat); rec.Code != http.StatusNoContent {

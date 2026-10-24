@@ -212,9 +212,10 @@ func (h *handler) listEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	q := r.URL.Query()
 	query := store.EventQuery{Before: before, After: after, Kind: q.Get("kind"), DeviceID: q.Get("device"), Limit: limit + 1}
-	// Who has a role is for admins, like GET /api/access.
+	// Who has a role is for admins, like GET /api/access, and so are SSH
+	// access and terminals, which only admins can use.
 	if callerOf(r).level < admins {
-		query.HideKinds = []string{string(EventKindAccess)}
+		query.HideKinds = []string{string(EventKindAccess), string(EventKindSSH), string(EventKindTerminal)}
 	}
 	events, err := h.opts.Store.Events(r.Context(), query)
 	if err != nil {

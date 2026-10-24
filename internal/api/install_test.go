@@ -44,7 +44,7 @@ func TestInstallScripts(t *testing.T) {
 	st := testStore(t)
 	srv := httptest.NewUnstartedServer(nil)
 	_, port, _ := net.SplitHostPort(srv.Listener.Addr().String())
-	opts := withStore(tn, st, api.Options{AppURL: "http://localhost:" + port})
+	opts := withStore(t, tn, st, api.Options{AppURL: "http://localhost:" + port})
 	srv.Config.Handler = api.New(opts)
 	srv.Start()
 	t.Cleanup(srv.Close)

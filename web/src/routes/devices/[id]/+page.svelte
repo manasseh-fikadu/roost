@@ -18,6 +18,7 @@
 	import DeviceSettingsDialog from '#lib/devices/DeviceSettingsDialog.svelte';
 	import MetricTile from '#lib/devices/MetricTile.svelte';
 	import ServicesCard from '#lib/devices/ServicesCard.svelte';
+	import SSHCard from '#lib/devices/SSHCard.svelte';
 	import UsagePanel from '#lib/devices/UsagePanel.svelte';
 	import {
 		ago,
@@ -361,6 +362,10 @@
 					<p class="px-4 py-4 text-[13px] text-fg-subtle">No system details without the agent.</p>
 				{/if}
 			</Card>
+			{#if device.ssh}
+				<!-- Only admins get device.ssh. -->
+				<SSHCard {device} {now} />
+			{/if}
 			{#if device.measuredBy === 'hub' && (live.snapshot?.collectors ?? []).some((c) => c.name === 'systemd units')}
 				<ServicesCard {units} {containers} {now} />
 			{/if}

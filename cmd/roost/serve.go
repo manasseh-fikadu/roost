@@ -26,6 +26,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/settings"
+	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/systemd"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
@@ -178,6 +179,19 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 
 	poller := tailnet.NewPoller(node, logger)
 	wg.Go(func() { poller.Run(ctx) })
+	// SSH reaches peers through the node, and the machine Roost runs on
+	// through its loopback address.
+	remote := ssh.NewManager(ssh.Options{
+		KeyDir:   filepath.Join(cfg.DataDir, "ssh"),
+		Store:    st,
+		Tailnet:  poller.Snapshot,
+		Dial:     node.Dial,
+		HostMode: cfg.Tailscale == config.Host,
+		Logger:   logger,
+	})
+	if err := remote.Load(ctx); err != nil {
+		return errors.Join(fmt.Errorf("load SSH access: %w", err), res.ln.Close(), srvs.stop(ctx))
+	}
 	feedOpts := api.FeedOptions{
 		Version:        buildVersion(),
 		Tailnet:        poller.Snapshot,
@@ -185,6 +199,8 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		Agents:         registry,
 		Checks:         runner,
 		Alerts:         engine,
+		SSH:            remote.Access,
+		SSHChanged:     remote.Changes(),
 		Store:          st,
 		Logger:         logger,
 	}
@@ -220,6 +236,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		return errors.Join(res.ln.Close(), srvs.stop(ctx))
 	}
 	wg.Go(func() { feed.Run(ctx) })
+	wg.Go(func() { remote.Run(ctx) })
 	stopping := make(chan struct{})
 	app := srvs.start(api.New(api.Options{
 		Version:  buildVersion(),
@@ -233,6 +250,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		Usage:    recorder,
 		Checks:   runner,
 		Alerts:   engine,
+		SSH:      remote,
 		AppURL:   res.url,
 		Stopping: stopping,
 		Logger:   logger,

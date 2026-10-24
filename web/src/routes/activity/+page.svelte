@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { isAdmin } from '#lib/access.js';
-	import { eventKindLabels, eventLevelStatus, mergeById } from '#lib/alerts.js';
+	import { adminEventKinds, eventKindLabels, eventLevelStatus, mergeById } from '#lib/alerts.js';
 	import { getEvents } from '#lib/api/client.js';
 	import type { CollectorState, Event, EventKind } from '#lib/api/types.js';
 	import { ago, dateTime } from '#lib/format.js';
@@ -25,9 +25,11 @@
 	const now = $derived(live.snapshot ? Date.parse(live.snapshot.generatedAt) : Date.now());
 	const lastEventId = $derived(live.snapshot?.lastEventId ?? 0);
 
-	// Who has a role is for admins, so viewers don't get those events.
+	// Viewers don't get the events that only admins see.
 	const kinds = $derived(
-		(Object.keys(eventKindLabels) as EventKind[]).filter((k) => admin || k !== 'access')
+		(Object.keys(eventKindLabels) as EventKind[]).filter(
+			(k) => admin || !adminEventKinds.includes(k)
+		)
 	);
 	const filters = $derived<{ value: Filter; label: string }[]>([
 		{ value: 'all', label: 'All' },

@@ -108,7 +108,7 @@ func TestSnapshot_checks(t *testing.T) {
 	// The snapshot has each check's last result, and GET /api/checks/recent
 	// has the ones before.
 	var recent api.RecentResults
-	get(t, api.New(withStore(tn, st, api.Options{Checks: runner})), "/api/checks/recent", phoneIP, &recent)
+	get(t, api.New(withStore(t, tn, st, api.Options{Checks: runner})), "/api/checks/recent", phoneIP, &recent)
 	var got []summary
 	for _, c := range snap.Checks {
 		results := recent.Checks[c.ID]
@@ -215,7 +215,7 @@ func TestChecks_addChangeDelete(t *testing.T) {
 	t.Parallel()
 	st := checksStore(t)
 	tn := testTailnet()
-	h := api.New(withStore(tn, st, api.Options{Checks: loadedRunner(t, st, tn)}))
+	h := api.New(withStore(t, tn, st, api.Options{Checks: loadedRunner(t, st, tn)}))
 
 	rec := send(t, h, http.MethodPost, "/api/checks", laptopIP,
 		`{"name":"API","kind":"http","target":"https://api.example.com/health","group":"Apps","intervalSec":30,"expectStatus":204}`)
@@ -317,7 +317,7 @@ func TestChecks_run(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		h := api.New(withStore(tn, st, api.Options{Checks: runner}))
+		h := api.New(withStore(t, tn, st, api.Options{Checks: runner}))
 
 		rec := send(t, h, http.MethodPost, "/api/checks/"+c.ID+"/run", laptopIP, "")
 		if rec.Code != http.StatusOK {
@@ -353,7 +353,7 @@ func TestChecks_history(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	h := api.New(withStore(tn, st, api.Options{Checks: loadedRunner(t, st, tn)}))
+	h := api.New(withStore(t, tn, st, api.Options{Checks: loadedRunner(t, st, tn)}))
 
 	var history api.CheckHistory
 	get(t, h, "/api/checks/"+c.ID+"/history?range=24h", phoneIP, &history)

@@ -409,6 +409,11 @@ export interface Device {
    */
   agent?: Agent;
   settings: DeviceSettings;
+  /**
+   * SSH is how Roost logs in to the device, if it can: Linux, macOS and
+   * FreeBSD machines. Only admins get it.
+   */
+  ssh?: DeviceSSH;
 }
 /**
  * MeasuredBy says how Roost measures a device.
@@ -1456,9 +1461,19 @@ export const EventKindContainer = "container";
  */
 export const EventKindAccess = "access";
 /**
+ * EventKindSSH is SSH access to a device that an admin set up, changed
+ * or removed, or a host key that changed.
+ */
+export const EventKindSSH = "ssh";
+/**
+ * EventKindTerminal is a terminal an admin opened, or a tmux session
+ * they ended.
+ */
+export const EventKindTerminal = "terminal";
+/**
  * The kinds of Event.
  */
-export type EventKind = typeof EventKindDevice | typeof EventKindAgent | typeof EventKindAlert | typeof EventKindCheck | typeof EventKindContainer | typeof EventKindAccess;
+export type EventKind = typeof EventKindDevice | typeof EventKindAgent | typeof EventKindAlert | typeof EventKindCheck | typeof EventKindContainer | typeof EventKindAccess | typeof EventKindSSH | typeof EventKindTerminal;
 /**
  * EventList is the response to GET /api/events?before=&after=&limit=&kind=&device=:
  * events, newest first. Before and After are event IDs.
@@ -1606,3 +1621,225 @@ export const UnitScopeUser = "user";
  * The scopes of a Unit.
  */
 export type UnitScope = typeof UnitScopeSystem | typeof UnitScopeUser;
+/**
+ * DeviceSSH is how Roost logs in to a device over SSH, with its own key,
+ * for terminals, files and Docker. The machine Roost runs on can be two
+ * nodes, which share it.
+ */
+export interface DeviceSSH {
+  state: SSHState;
+  /**
+   * User is the account Roost logs in as, and Port where sshd listens.
+   * They're empty until an admin sets up access.
+   */
+  user?: string;
+  port?: number /* int */;
+  /**
+   * Hub marks the machine Roost runs on, where Roost logs in on the
+   * loopback address, and can add its key for the user it runs as.
+   */
+  hub?: boolean;
+  /**
+   * HostKey is the SHA256 fingerprint of the machine's host key, which
+   * Roost pinned the first time it logged in.
+   */
+  hostKey?: string;
+  /**
+   * OfferedKey is the fingerprint of the key the machine offered instead,
+   * while the State is SSHStateHostKeyChanged.
+   */
+  offeredKey?: string;
+  /**
+   * Error says why Roost can't log in, while the State is
+   * SSHStateFailing or SSHStateHostKeyChanged.
+   */
+  error?: string;
+  /**
+   * CheckedAt is when Roost last checked the machine, if it has.
+   */
+  checkedAt?: string /* RFC 3339 */;
+  /**
+   * Tmux says whether the machine has tmux, which keeps terminals running
+   * after their tab closes, and Docker whether Roost's user can open its
+   * Docker socket. Each is missing until a check finds out.
+   */
+  tmux?: boolean;
+  docker?: boolean;
+}
+/**
+ * SSHState says whether Roost can log in to a device.
+ */
+/**
+ * SSHStateNotSetUp means no admin has set up access yet.
+ */
+export const SSHStateNotSetUp = "not-set-up";
+/**
+ * SSHStateUnchecked means Roost hasn't logged in since it started, or
+ * since the access changed.
+ */
+export const SSHStateUnchecked = "unchecked";
+export const SSHStateOK = "ok";
+export const SSHStateFailing = "failing";
+/**
+ * SSHStateHostKeyChanged means the machine offered another host key
+ * than the one Roost pinned, so Roost won't log in until an admin
+ * resets it, such as after the machine was reinstalled.
+ */
+export const SSHStateHostKeyChanged = "host-key-changed";
+/**
+ * The states of a DeviceSSH.
+ */
+export type SSHState = typeof SSHStateNotSetUp | typeof SSHStateUnchecked | typeof SSHStateOK | typeof SSHStateFailing | typeof SSHStateHostKeyChanged;
+/**
+ * SSHSetup is the response to GET /api/devices/{id}/ssh: how to let Roost
+ * log in to a device. Only admins can see it.
+ */
+export interface SSHSetup {
+  /**
+   * Command adds AuthorizedKey to the authorized_keys of the user who
+   * runs it on the device.
+   */
+  command: string;
+  /**
+   * AuthorizedKey is Roost's key, which only works from Roost's tailnet
+   * addresses, and on the machine Roost runs on, from the loopback
+   * addresses too. Agent and X11 forwarding are off for it.
+   */
+  authorizedKey: string;
+  /**
+   * HubUser is the user Roost runs as, on the machine Roost runs on,
+   * which POST /api/devices/{id}/ssh/authorize logs in as.
+   */
+  hubUser?: string;
+}
+/**
+ * SetSSH is the body of PUT /api/devices/{id}/ssh, which sets up how Roost
+ * logs in to a device and answers with its DeviceSSH. Changing the port
+ * forgets the pinned host key. DELETE removes the access.
+ */
+export interface SetSSH {
+  user: string;
+  /**
+   * Port is 22 if it's left out.
+   */
+  port?: number /* int */;
+}
+/**
+ * TrustHostKey is the body of PUT /api/devices/{id}/ssh/host-key, which
+ * pins the host key a device offered in place of the one Roost pinned, and
+ * answers with the device's DeviceSSH. Fingerprint is DeviceSSH.OfferedKey,
+ * the one an admin looked at: if the device offers another by then, Roost
+ * refuses with a 409, so it pins exactly the key the admin saw. DELETE
+ * forgets the pinned key instead, so Roost pins whichever key the device
+ * offers next.
+ */
+export interface TrustHostKey {
+  fingerprint: string;
+}
+/**
+ * TerminalSessions is the response to GET
+ * /api/devices/{id}/terminal/sessions: the tmux sessions on a device.
+ */
+export interface TerminalSessions {
+  /**
+   * Tmux says whether the device has tmux. Without it, there are no
+   * sessions, and a terminal ends when its tab closes.
+   */
+  tmux: boolean;
+  /**
+   * Sessions are by name.
+   */
+  sessions: TerminalSession[];
+}
+/**
+ * A TerminalSession is a tmux session, which keeps running after the
+ * terminals attached to it close. DELETE
+ * /api/devices/{id}/terminal/sessions/{name} ends one.
+ */
+export interface TerminalSession {
+  name: string;
+  /**
+   * CreatedAt is when it started, and ActiveAt when something last
+   * happened in it.
+   */
+  createdAt?: string /* RFC 3339 */;
+  activeAt?: string /* RFC 3339 */;
+  /**
+   * Attached is how many terminals are attached, in Roost or not.
+   */
+  attached: number /* int */;
+  windows: number /* int */;
+  /**
+   * Command is what runs in its active pane, such as bash or htop.
+   */
+  command?: string;
+}
+/**
+ * TerminalWindow is how many bytes of output the hub sends a terminal
+ * ahead of what the browser says it has written to the screen.
+ */
+export const TerminalWindow = 1 << 20;
+/**
+ * TerminalMessage is a JSON text frame on the WebSocket of GET
+ * /api/devices/{id}/terminal?session=&cwd=&cols=&rows=, which only admins
+ * can open. Without a session, the terminal is a login shell that ends when
+ * the WebSocket closes. The shell's output comes in binary frames.
+ * The browser sends input, a new size, and, as it writes output to the
+ * screen, how many bytes it wrote: the hub sends at most TerminalWindow
+ * bytes ahead, and waits for that before it sends more, so a command that
+ * floods the terminal can't flood the browser. The hub sends ready once the
+ * shell starts, exit with its status when it ends, and error if it can't
+ * start one.
+ */
+export interface TerminalMessage {
+  t: TerminalMessageType;
+  /**
+   * Data is the input, for TerminalMessageTypeInput.
+   */
+  d?: string;
+  /**
+   * Cols and Rows are the size, for TerminalMessageTypeResize.
+   */
+  c?: number /* int */;
+  r?: number /* int */;
+  /**
+   * Bytes is how much output the browser wrote, for
+   * TerminalMessageTypeAck.
+   */
+  n?: number /* int */;
+  /**
+   * Session is the tmux session, for TerminalMessageTypeReady.
+   */
+  session?: string;
+  /**
+   * Code is the exit status, for TerminalMessageTypeExit. It's missing if
+   * the shell didn't say one, because the connection to the machine
+   * dropped. The shell, and the tmux session it was attached to, may
+   * still be running then, and a tmux client that exits with 0 may only
+   * have detached.
+   */
+  code?: number /* int */;
+  /**
+   * Message says what went wrong, for TerminalMessageTypeError.
+   */
+  message?: string;
+}
+/**
+ * TerminalMessageType says what a TerminalMessage is.
+ */
+/**
+ * The browser sends these.
+ */
+export const TerminalMessageTypeInput = "i";
+export const TerminalMessageTypeResize = "r";
+export const TerminalMessageTypeAck = "a";
+/**
+ * The hub sends these.
+ */
+export const TerminalMessageTypeReady = "ready";
+export const TerminalMessageTypeExit = "exit";
+export const TerminalMessageTypeError = "error";
+/**
+ * The types of TerminalMessage.
+ */
+export type TerminalMessageType = typeof TerminalMessageTypeInput | typeof TerminalMessageTypeResize | typeof TerminalMessageTypeAck | typeof TerminalMessageTypeReady | typeof TerminalMessageTypeExit | typeof TerminalMessageTypeError;
