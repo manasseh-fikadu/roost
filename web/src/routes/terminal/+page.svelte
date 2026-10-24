@@ -18,6 +18,7 @@
 	import {
 		canOpen,
 		extraKeys,
+		listedDeviceId,
 		loadTabs,
 		nextSessionName,
 		saveTabs,
@@ -43,10 +44,16 @@
 	const all = $derived(live.snapshot?.devices ?? []);
 	const devices = $derived(terminalDevices(all));
 	const now = $derived(live.snapshot ? Date.parse(live.snapshot.generatedAt) : Date.now());
-	/** The device in ?device=, or else the machine Roost runs on, or else the first. */
+	/**
+	 * The device in ?device=, or else the machine Roost runs on, or else the
+	 * first. The machine Roost runs on is listed once, so a link to its other
+	 * node, such as the Terminal button on Roost's own node, opens the one
+	 * that's listed.
+	 */
 	const device = $derived.by((): Device | undefined => {
 		const wanted = page.url.searchParams.get('device');
-		return devices.find((d) => d.id === wanted) ?? devices.find((d) => d.ssh?.hub) ?? devices[0];
+		const id = wanted && listedDeviceId(all, wanted);
+		return devices.find((d) => d.id === id) ?? devices.find((d) => d.ssh?.hub) ?? devices[0];
 	});
 	const deviceId = $derived(device?.id);
 	const ready = $derived(!!device && canOpen(device));
@@ -183,7 +190,8 @@
 	let linkedTo = $state(page.url.searchParams.get('device'));
 
 	$effect(() => {
-		const id = linkedTo;
+		// The node that's listed, if the link was to the machine's other one.
+		const id = linkedTo && listedDeviceId(all, linkedTo);
 		if (
 			!id ||
 			!restored ||

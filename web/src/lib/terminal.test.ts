@@ -4,8 +4,10 @@ import {
 	Acker,
 	canOpen,
 	exitMessage,
+	listedDeviceId,
 	loadTabs,
 	nextSessionName,
+	parsePort,
 	saveTabs,
 	terminalDevices,
 	terminalURL,
@@ -63,6 +65,35 @@ describe('terminalDevices', () => {
 	});
 });
 
+describe('listedDeviceId', () => {
+	const embedded = [device('roost', hub, { self: true }), device('vps', hub), device('laptop', ok)];
+	test.each<{ name: string; devices: Device[]; id: string; want: string }>([
+		{ name: "the machine's own node stays", devices: embedded, id: 'vps', want: 'vps' },
+		{
+			name: "Roost's own node means the machine's, in embedded mode",
+			devices: embedded,
+			id: 'roost',
+			want: 'vps'
+		},
+		{ name: 'another device stays', devices: embedded, id: 'laptop', want: 'laptop' },
+		{
+			name: "Roost's own node stays when it's the only one",
+			devices: [device('roost', hub, { self: true }), device('laptop', ok)],
+			id: 'roost',
+			want: 'roost'
+		},
+		{
+			name: "a device that isn't listed stays",
+			devices: [...embedded, device('phone')],
+			id: 'phone',
+			want: 'phone'
+		},
+		{ name: "one that isn't there stays", devices: embedded, id: 'gone', want: 'gone' }
+	])('$name', ({ devices, id, want }) => {
+		expect(listedDeviceId(devices, id)).toBe(want);
+	});
+});
+
 describe('canOpen', () => {
 	test.each<{ name: string; device: Device; want: boolean }>([
 		{ name: 'connected', device: device('laptop', ok), want: true },
@@ -116,6 +147,14 @@ describe('loadTabs', () => {
 		}
 	])('$name', ({ saved, want }) => {
 		expect(loadTabs(saved, devices)).toEqual(want);
+	});
+
+	test("a tab on Roost's own node follows the machine's node, in embedded mode", () => {
+		const embedded = [device('roost', hub, { self: true }), device('vps', hub)];
+		const saved = JSON.stringify([{ key: 'a', deviceId: 'roost', session: 'web-1' }]);
+		expect(loadTabs(saved, embedded)).toEqual([
+			{ key: 'a', deviceId: 'vps', session: 'web-1', cwd: null }
+		]);
 	});
 
 	test('saveTabs keeps the tmux tabs', () => {

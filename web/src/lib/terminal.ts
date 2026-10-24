@@ -60,6 +60,22 @@ export function terminalDevices(devices: Device[]): Device[] {
 	return set.filter((d) => d !== drop);
 }
 
+/**
+ * The ID a device is listed under on the Terminal page. The machine Roost
+ * runs on can be two nodes that share one SSH access, and the page lists only
+ * one (see terminalDevices), so a link to the other, such as the Terminal
+ * button on Roost's own node in embedded mode, means the one that's listed.
+ * Any other ID stays as it is.
+ */
+export function listedDeviceId(devices: Device[], id: string): string {
+	const listed = terminalDevices(devices);
+	if (listed.some((d) => d.id === id)) {
+		return id;
+	}
+	const dropped = devices.find((d) => d.id === id);
+	return (dropped?.ssh?.hub && listed.find((d) => d.ssh?.hub)?.id) || id;
+}
+
 /** Whether a terminal can open on a device now. */
 export function canOpen(d: Device): boolean {
 	const s = d.ssh;
@@ -84,13 +100,17 @@ export function loadTabs(saved: string | null, devices: Device[]): TerminalTab[]
 	const tabs: TerminalTab[] = [];
 	for (const t of raw) {
 		if (
-			typeof t?.key === 'string' &&
-			typeof t.deviceId === 'string' &&
-			typeof t.session === 'string' &&
-			ids.has(t.deviceId) &&
-			!tabs.some((o) => o.key === t.key)
+			typeof t?.key !== 'string' ||
+			typeof t.deviceId !== 'string' ||
+			typeof t.session !== 'string' ||
+			tabs.some((o) => o.key === t.key)
 		) {
-			tabs.push({ key: t.key, deviceId: t.deviceId, session: t.session, cwd: null });
+			continue;
+		}
+		// A tab on the machine Roost runs on follows the node that's listed.
+		const deviceId = listedDeviceId(devices, t.deviceId);
+		if (ids.has(deviceId)) {
+			tabs.push({ key: t.key, deviceId, session: t.session, cwd: null });
 		}
 	}
 	return tabs;
@@ -177,6 +197,26 @@ export const extraKeys: { label: string; data: string }[] = [
 	{ label: '~', data: '~' },
 	{ label: '/', data: '/' }
 ];
+
+/** The port sshd listens on unless an admin says otherwise. */
+export const defaultSSHPort = 22;
+
+/**
+ * Reads what's typed in a port field: nothing is the default port, and
+ * anything but a whole number from 1 to 65535 is null, so a mistake such as
+ * `22a` isn't turned into a port.
+ */
+export function parsePort(text: string): number | null {
+	const t = text.trim();
+	if (t === '') {
+		return defaultSSHPort;
+	}
+	if (!/^[0-9]{1,5}$/.test(t)) {
+		return null;
+	}
+	const n = Number(t);
+	return n >= 1 && n <= 65535 ? n : null;
+}
 
 const stateLabels: Record<SSHState, string> = {
 	'not-set-up': 'Not set up',

@@ -23,7 +23,7 @@
 	import { ago } from '#lib/format.js';
 	import type { Status } from '#lib/status.js';
 	import { tailnetIP } from '#lib/tailnet.js';
-	import { canOpen, sshStateLabel } from '#lib/terminal.js';
+	import { canOpen, parsePort, sshStateLabel } from '#lib/terminal.js';
 	import Badge from '#lib/ui/Badge.svelte';
 	import Button from '#lib/ui/Button.svelte';
 	import { buttonClass } from '#lib/ui/button.js';
@@ -58,6 +58,7 @@
 	let setupError = $state<string | null>(null);
 	let user = $state('');
 	let port = $state('22');
+	let portError = $state<string | null>(null);
 	let busy = $state<string | null>(null);
 	/** What the admin is asked to confirm, while confirmOpen. */
 	let confirm = $state<'remove' | 'reset' | 'trust'>('remove');
@@ -116,12 +117,18 @@
 	function startEditing() {
 		user = ssh.user ?? '';
 		port = String(ssh.port ?? 22);
+		portError = null;
 		editing = true;
 	}
 
 	async function save(event: SubmitEvent) {
 		event.preventDefault();
-		const p = port.trim() === '' ? 22 : Number(port);
+		const p = parsePort(port);
+		if (p === null) {
+			portError = 'The port must be a whole number from 1 to 65535.';
+			return;
+		}
+		portError = null;
 		if (await run('save', () => putSSH(deviceId, { user: user.trim(), port: p }))) {
 			editing = false;
 		}
@@ -151,7 +158,7 @@
 </script>
 
 {#snippet setupForm(submit: string)}
-	<form class="flex flex-wrap items-end gap-2" onsubmit={save}>
+	<form class="flex flex-wrap items-end gap-2" onsubmit={save} novalidate>
 		<Field label="User">
 			<Input
 				bind:value={user}
@@ -164,7 +171,14 @@
 			/>
 		</Field>
 		<Field label="Port">
-			<Input bind:value={port} class="w-20" inputmode="numeric" placeholder="22" />
+			<Input
+				bind:value={port}
+				class="w-20"
+				inputmode="numeric"
+				placeholder="22"
+				aria-invalid={portError ? true : undefined}
+				oninput={() => (portError = null)}
+			/>
 		</Field>
 		<Button type="submit" variant="primary" size="md" class="h-9" loading={busy === 'save'}
 			>{submit}</Button
@@ -174,6 +188,9 @@
 			>
 		{/if}
 	</form>
+	{#if portError}
+		<p role="alert" class="mt-2 text-[12px] text-red-fg">{portError}</p>
+	{/if}
 {/snippet}
 
 {#snippet steps()}
