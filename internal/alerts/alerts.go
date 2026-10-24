@@ -307,17 +307,30 @@ func (e *Engine) change(ctx context.Context, id int64, f func(a *store.Alert) st
 	return next, nil
 }
 
-// AddNote adds a note by the admin with login by to an alert, open or
-// resolved, and returns it. It returns store.ErrNoAlert if there's no such
-// alert.
-func (e *Engine) AddNote(ctx context.Context, id int64, by, text string, now time.Time) (store.AlertNote, error) {
+// CleanNote trims a note an admin wrote and returns it, or an error that
+// says what's wrong with it, for the admin.
+func CleanNote(text string) (string, error) {
 	text = strings.TrimSpace(text)
 	switch {
 	case text == "":
-		return store.AlertNote{}, errors.New("the note is empty")
+		return "", errors.New("the note is empty")
 	case utf8.RuneCountInString(text) > MaxNote:
-		return store.AlertNote{}, errors.New("the note is too long")
+		return "", errors.New("the note is too long")
 	}
+	return text, nil
+}
+
+// AddNote adds a note by the admin with login by to an alert, open or
+// resolved, and returns it. It fails with CleanNote's error if the note is
+// bad, and with store.ErrNoAlert if there's no such alert.
+func (e *Engine) AddNote(ctx context.Context, id int64, by, text string, now time.Time) (store.AlertNote, error) {
+	text, err := CleanNote(text)
+	if err != nil {
+		return store.AlertNote{}, err
+	}
+	// The store keeps times to the millisecond, so the note is the same as
+	// when it's read back.
+	now = now.Truncate(time.Millisecond)
 	n, err := e.st.AddAlertNote(ctx, id, store.AlertNote{At: now, Author: by, Text: text})
 	if err != nil {
 		return store.AlertNote{}, err

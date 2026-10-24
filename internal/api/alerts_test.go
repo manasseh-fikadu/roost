@@ -485,6 +485,27 @@ func TestAlertRoutes(t *testing.T) {
 	}
 }
 
+// A note the store can't add is the server's fault, and its error stays in
+// the log.
+func TestAddAlertNote_storeFails(t *testing.T) {
+	t.Parallel()
+	// The alerts are in a store of their own, so only they fail.
+	alertStore := testStore(t)
+	engine := alerts.NewEngine(alertStore, nil)
+	engine.Apply(t.Context(), []alerts.Condition{{
+		Key: "disk:roost", Source: "metrics", DeviceID: "roost", Severity: alerts.Warning, Title: "Disk 90% full on roost",
+	}}, func(string, string) bool { return true }, time.Now())
+	id := engine.Open()[0].ID
+	if err := alertStore.Close(); err != nil {
+		t.Fatal(err)
+	}
+	h := api.New(withStore(testTailnet(), checksStore(t), api.Options{Alerts: engine}))
+	rec := send(t, h, http.MethodPost, fmt.Sprintf("/api/alerts/%d/notes", id), laptopIP, `{"text":"x"}`)
+	if rec.Code != http.StatusInternalServerError || strings.Contains(rec.Body.String(), "closed") {
+		t.Errorf("POST notes = %d %s, want 500 without the store's error", rec.Code, rec.Body)
+	}
+}
+
 func TestEventRoutes(t *testing.T) {
 	t.Parallel()
 	st := checksStore(t)

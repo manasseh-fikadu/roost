@@ -180,7 +180,12 @@ func (h *handler) addAlertNote(w http.ResponseWriter, r *http.Request) {
 	if !h.readJSON(w, r, &body) {
 		return
 	}
-	n, err := h.opts.Alerts.AddNote(r.Context(), id, callerOf(r).who.LoginName, body.Text, time.Now())
+	text, err := alerts.CleanNote(body.Text)
+	if err != nil {
+		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: err.Error()})
+		return
+	}
+	n, err := h.opts.Alerts.AddNote(r.Context(), id, callerOf(r).who.LoginName, text, time.Now())
 	switch {
 	case errors.Is(err, store.ErrNoAlert):
 		h.noAlert(w, r, "no alert has this ID")
@@ -188,8 +193,7 @@ func (h *handler) addAlertNote(w http.ResponseWriter, r *http.Request) {
 	case err != nil && errors.Is(err, r.Context().Err()):
 		return
 	case err != nil:
-		// Clean notes only fail with what's wrong with them.
-		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: err.Error()})
+		h.fail(w, r, "add a note to an alert", err)
 		return
 	}
 	h.opts.Feed.Poke()

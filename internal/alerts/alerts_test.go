@@ -231,8 +231,14 @@ func TestEngine_ackSnoozeAndNotes(t *testing.T) {
 			}
 		}
 
-		if n, err := e.AddNote(ctx, id, alice, "  Cleaning up logs \n", time.Now()); err != nil || n.Text != "Cleaning up logs" || n.Author != alice {
+		n, err := e.AddNote(ctx, id, alice, "  Cleaning up logs \n", time.Now().Add(1234567*time.Nanosecond))
+		if err != nil || n.Text != "Cleaning up logs" || n.Author != alice {
 			t.Errorf("AddNote() = %+v, %v, want the note, trimmed", n, err)
+		}
+		// The note is the same as the store reads back, to the millisecond it
+		// keeps.
+		if a, err := st.AlertByID(ctx, id); err != nil || len(a.Notes) != 1 || !a.Notes[0].At.Equal(n.At) {
+			t.Errorf("the stored notes = %+v, %v, want one at %v", a.Notes, err, n.At)
 		}
 		if notes := e.Open()[0].Notes; len(notes) != 1 {
 			t.Errorf("the open alert's notes = %+v, want the one", notes)
