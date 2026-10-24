@@ -51,16 +51,19 @@ const (
 
 // Why a session name or working directory is refused.
 var (
-	ErrBadSession = errors.New("a session's name must be 1 to 64 characters, without a colon, dot, backslash or control character")
+	ErrBadSession = errors.New("a session's name must be 1 to 64 characters, without a colon, dot, #, backslash or control character")
 	ErrBadDir     = errors.New("the working directory must be an absolute path, without a backslash or control character")
 )
 
 // CheckSession returns ErrBadSession unless name can be a tmux session's
-// name as it is: tmux turns a colon or dot into an underscore, and shows a
-// backslash or control character escaped.
+// name as it is: tmux turns a colon or dot into an underscore, shows a
+// backslash or control character escaped, and reads # in the name it's given
+// as the start of a format, so `a#{host}b` would name the session after the
+// machine, and a session that was made with ## has a name with one # that
+// Roost couldn't give tmux again.
 func CheckSession(name string) error {
 	if name == "" || utf8.RuneCountInString(name) > maxSessionName || !utf8.ValidString(name) ||
-		strings.ContainsAny(name, ":.\\") || strings.ContainsFunc(name, unicode.IsControl) {
+		strings.ContainsAny(name, ":.#\\") || strings.ContainsFunc(name, unicode.IsControl) {
 		return ErrBadSession
 	}
 	return nil
@@ -77,14 +80,21 @@ func CheckDir(dir string) error {
 }
 
 // The scripts that terminals run. Each takes the session's name, if it has
-// one, and then the working directory, which may be "". tmux only uses the
-// directory when it makes the session: attaching to one keeps its own.
+// one, and then the working directory, which may be "".
+//
+// tmux makes a new session in its client's working directory, so the script
+// goes there first, and attaching to a session that's there already keeps
+// the session's own. It doesn't pass the directory as -c, since tmux reads
+// that as a format too, and # in a directory, such as `a#{host}b`, would
+// start the session in another one. A directory that's gone leaves the
+// session in the user's home, as -c did.
+//
 // Mouse mode lets the wheel scroll tmux's history, and Shift-drag still
 // selects text in the browser. A ";" on its own is how tmux runs one command
 // after another.
 const (
 	tmuxScript = extraPath +
-		`if [ -n "$2" ]; then exec tmux new-session -A -s "$1" -c "$2" ";" set-option -q mouse on; fi; ` +
+		`if [ -n "$2" ]; then cd "$2" 2>/dev/null; fi; ` +
 		`exec tmux new-session -A -s "$1" ";" set-option -q mouse on`
 	shellScript = `if [ -n "$1" ]; then cd "$1"; fi; exec "${SHELL:-/bin/sh}" -l`
 )
