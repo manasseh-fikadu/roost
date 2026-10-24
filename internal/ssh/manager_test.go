@@ -654,6 +654,42 @@ func TestManager_run(t *testing.T) {
 	})
 }
 
+// A terminal that logs in to a machine whose last check failed says Roost
+// can log in, but not what the machine offers, so the machine is checked
+// again soon, not an hour later.
+func TestManager_checksAfterALoginThatMendsAFailure(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		e := newEnv(t, envOptions{unauthorized: true})
+		e.laptop.Handle(func(x *sshtest.Exec) int {
+			if x.Pty != nil {
+				_, _ = io.Copy(io.Discard, x.Stdin)
+			}
+			return 0
+		})
+		e.setUp(t, "laptop", "alice")
+		synctest.Wait()
+		if a := e.m.Access()["laptop"]; a.State != ssh.StateFailing || a.Tmux != nil {
+			t.Fatalf("access = %+v, want failing with nothing found", a)
+		}
+
+		// The admin adds the key, and opens a terminal before Run checks again.
+		key, err := e.m.Key()
+		if err != nil {
+			t.Fatal(err)
+		}
+		e.laptop.Authorize(key.PublicKey())
+		term, err := e.m.OpenTerminal(t.Context(), "laptop", ssh.TerminalOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = term.Close() }()
+		synctest.Wait()
+		if a := e.m.Access()["laptop"]; a.State != ssh.StateOK || a.Tmux == nil || a.Docker == nil {
+			t.Errorf("access = %+v, want ok, with tmux and Docker found by a check", a)
+		}
+	})
+}
+
 func TestManager_changes(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newEnv(t, envOptions{noRun: true})

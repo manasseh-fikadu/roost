@@ -120,6 +120,14 @@ func (m *Manager) record(id string, gen uint64, err error) {
 	// check found stays.
 	v.State, v.Error = StateOK, ""
 	m.setCheckLocked(id, v, err)
+	if err == nil {
+		// A machine that wasn't OK, such as one whose key an admin just
+		// added, may offer more than Roost last found, so check it now.
+		select {
+		case m.wake <- struct{}{}:
+		default:
+		}
+	}
 }
 
 // setCheckLocked records what Roost found of a machine, or err if it
@@ -196,6 +204,12 @@ func (m *Manager) due(now time.Time) []target {
 			wait = recheckFailing
 		case StateOK:
 			wait = recheckOK
+			// Logging in says nothing of what the machine offers. If no
+			// check has found out yet, it's due now, whenever it last
+			// logged in.
+			if v.Tmux == nil {
+				wait = 0
+			}
 		case StateUnchecked, "":
 		}
 		if !m.checking[id] && now.Sub(v.CheckedAt) >= wait {
