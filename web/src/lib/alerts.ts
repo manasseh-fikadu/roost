@@ -6,7 +6,6 @@ import type {
 	AlertSeverity,
 	Container,
 	Device,
-	Event,
 	EventKind,
 	EventLevel,
 	Unit
@@ -176,12 +175,13 @@ export const eventLevelStatus: Record<EventLevel, Status> = {
 };
 
 /**
- * Merges events newer than the ones loaded into them, newest first, once
- * each.
+ * Merges a fresh page of items, such as events or resolved alerts, into the
+ * ones loaded: once each, the fresh one of an ID winning, newest (highest
+ * ID) first.
  */
-export function mergeEvents(loaded: Event[], newer: Event[]): Event[] {
-	const seen = new Set(loaded.map((e) => e.id));
-	return [...newer.filter((e) => !seen.has(e.id)), ...loaded].sort((a, b) => b.id - a.id);
+export function mergeById<T extends { id: number }>(loaded: T[], fresh: T[]): T[] {
+	const ids = new Set(fresh.map((x) => x.id));
+	return [...fresh, ...loaded.filter((x) => !ids.has(x.id))].sort((a, b) => b.id - a.id);
 }
 
 /** A service on the network map: a compose project, a container in none, or a systemd unit. */

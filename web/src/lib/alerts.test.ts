@@ -5,7 +5,7 @@ import {
 	deviceIds,
 	groupContainers,
 	mapServices,
-	mergeEvents,
+	mergeById,
 	onDevice,
 	parseAlertTab,
 	unitStatus
@@ -151,7 +151,7 @@ test('groupContainers groups by project, and those in none last', () => {
 	]);
 });
 
-test('mergeEvents puts newer events first, once each', () => {
+test('mergeById puts newer events first, once each', () => {
 	const event = (id: number): Event => ({
 		id,
 		at: '',
@@ -159,9 +159,21 @@ test('mergeEvents puts newer events first, once each', () => {
 		kind: 'device',
 		message: `${id}`
 	});
-	expect(
-		mergeEvents([event(3), event(2)], [event(5), event(4), event(3)]).map((e) => e.id)
-	).toEqual([5, 4, 3, 2]);
+	expect(mergeById([event(3), event(2)], [event(5), event(4), event(3)]).map((e) => e.id)).toEqual([
+		5, 4, 3, 2
+	]);
+});
+
+test('mergeById keeps older alerts loaded, and takes the fresh one of an ID', () => {
+	const loaded = [alert(9, 'resolved'), alert(5, 'resolved'), alert(2, 'resolved')];
+	const noted = { ...alert(5, 'resolved'), notes: [{ at: '', text: 'It was the logs' }] };
+	const got = mergeById(loaded, [alert(12, 'resolved'), alert(9, 'resolved'), noted]);
+	expect(got.map((a) => [a.id, a.notes.length])).toEqual([
+		[12, 0],
+		[9, 0],
+		[5, 1],
+		[2, 0]
+	]);
 });
 
 test('mapServices sums up projects, loose containers and units', () => {

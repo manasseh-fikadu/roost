@@ -4,7 +4,7 @@
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { activeAlerts, parseAlertTab, type AlertTab } from '#lib/alerts.js';
+	import { activeAlerts, mergeById, parseAlertTab, type AlertTab } from '#lib/alerts.js';
 	import AlertCard from '#lib/alerts/AlertCard.svelte';
 	import { getResolvedAlerts } from '#lib/api/client.js';
 	import type { Alert } from '#lib/api/types.js';
@@ -51,10 +51,18 @@
 		let current = true;
 		getResolvedAlerts()
 			.then((list) => {
-				if (current) {
+				if (!current) {
+					return;
+				}
+				if (resolved === null) {
 					resolved = list.alerts;
 					more = list.more;
+					return;
 				}
+				// The first page joins the alerts loaded, so older ones stay
+				// where they are.
+				resolved = mergeById(resolved, list.alerts);
+				more ||= list.more;
 			})
 			.catch(() => {
 				if (current) {

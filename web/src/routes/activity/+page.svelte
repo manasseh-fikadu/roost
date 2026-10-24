@@ -4,7 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { isAdmin } from '#lib/access.js';
-	import { eventKindLabels, eventLevelStatus, mergeEvents } from '#lib/alerts.js';
+	import { eventKindLabels, eventLevelStatus, mergeById } from '#lib/alerts.js';
 	import { getEvents } from '#lib/api/client.js';
 	import type { CollectorState, Event, EventKind } from '#lib/api/types.js';
 	import { ago, dateTime } from '#lib/format.js';
@@ -90,8 +90,16 @@
 		let current = true;
 		getEvents({ ...query(k), after: newest })
 			.then((list) => {
-				if (current && events) {
-					events = mergeEvents(events, list.events);
+				if (!current || !events) {
+					return;
+				}
+				// Over a page of newer events are the first page, and there are
+				// more since the ones loaded, so they start the list again.
+				if (list.more) {
+					events = list.events;
+					more = true;
+				} else {
+					events = mergeById(events, list.events);
 				}
 			})
 			.catch(() => {
