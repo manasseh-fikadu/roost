@@ -19,11 +19,15 @@ import (
 	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/agents"
+	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/config"
+	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
+	"github.com/manasseh-fikadu/roost/internal/settings"
 	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/roost/internal/systemd"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/usage"
 	"github.com/manasseh-fikadu/roost/web"
@@ -167,6 +171,10 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		return errors.Join(fmt.Errorf("load the checks: %w", err), res.ln.Close(), srvs.stop(ctx))
 	}
 	wg.Go(func() { runner.Run(ctx) })
+	engine := alerts.NewEngine(st, logger)
+	if err := engine.Load(ctx); err != nil {
+		return errors.Join(fmt.Errorf("load the open alerts: %w", err), res.ln.Close(), srvs.stop(ctx))
+	}
 
 	poller := tailnet.NewPoller(node, logger)
 	wg.Go(func() { poller.Run(ctx) })
@@ -176,6 +184,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		TailnetChanged: poller.Changes(),
 		Agents:         registry,
 		Checks:         runner,
+		Alerts:         engine,
 		Store:          st,
 		Logger:         logger,
 	}
@@ -187,6 +196,20 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		wg.Go(func() {
 			sampler.Run(ctx, logger, func(s usage.Sample) { recorder.Record(ctx, store.HubID, s) })
 		})
+	}
+	if socket, ok := docker.Socket(); ok {
+		containers := docker.NewCollector(docker.NewClient(docker.SocketDialer(socket)), logger)
+		wg.Go(func() { containers.Run(ctx) })
+		feedOpts.Docker, feedOpts.DockerChanged = containers.Reading, containers.Changes()
+	}
+	if systemd.Available() {
+		units := systemd.NewCollector(systemd.Options{
+			UserScope: systemd.HasUserScope(),
+			Watched:   watchedUnits(ctx, st, logger),
+			Logger:    logger,
+		})
+		wg.Go(func() { units.Run(ctx) })
+		feedOpts.Systemd, feedOpts.SystemdChanged = units.Reading, units.Changes()
 	}
 	feed := api.NewFeed(feedOpts)
 	// The app checks requests against Roost's own names, from the first status.
@@ -209,6 +232,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		Agents:   registry,
 		Usage:    recorder,
 		Checks:   runner,
+		Alerts:   engine,
 		AppURL:   res.url,
 		Stopping: stopping,
 		Logger:   logger,
@@ -225,6 +249,26 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		logger.Info("shutting down")
 	}
 	return srvs.stop(ctx)
+}
+
+// watchedUnits returns a function that returns the systemd units the
+// settings say to watch, or the last ones it read if the store can't say.
+func watchedUnits(ctx context.Context, st *store.Store, logger *slog.Logger) func() []string {
+	var last []string
+	return func() []string {
+		s, err := settings.Load(ctx, st)
+		if err != nil {
+			if ctx.Err() == nil {
+				logger.Warn("read the watched units", "error", err)
+			}
+			if last == nil {
+				return settings.Defaults().WatchedUnits
+			}
+			return last
+		}
+		last = s.WatchedUnits
+		return last
+	}
 }
 
 // addFirstAdmins makes the owner of Roost's node and the logins in admins

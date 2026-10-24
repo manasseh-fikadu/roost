@@ -137,6 +137,18 @@ type Snapshot struct {
 	Checks []Check `json:"checks"`
 	// Health sums up the checks.
 	Health HealthScore `json:"health"`
+	// Alerts are the alerts that are open, acknowledged or snoozed, the most
+	// severe first. GET /api/alerts has the resolved ones.
+	Alerts []Alert `json:"alerts"`
+	// Containers are the Docker containers on the machine Roost runs on, by
+	// name. Other machines' come with #29.
+	Containers []Container `json:"containers"`
+	// Units are the systemd units Roost watches on the machine it runs on,
+	// and the ones that failed, the system's first, by name.
+	Units []Unit `json:"units"`
+	// LastEventID is the ID of the activity log's latest event, so the app
+	// can tell when GET /api/events has more.
+	LastEventID int64 `json:"lastEventId"`
 }
 
 // Hub is the Roost server itself.
@@ -821,3 +833,263 @@ type HealthHistory struct {
 	// samples it every minute.
 	Score []Point `json:"score"`
 }
+
+// An Alert is a condition that needs attention, such as a disk that's nearly
+// full, from when Roost saw it until it cleared. It resolves by itself when
+// the condition clears.
+type Alert struct {
+	ID     int64       `json:"id"`
+	Source AlertSource `json:"source"`
+	// DeviceID is the device it's on, if any.
+	DeviceID string `json:"deviceId,omitempty"`
+	// CheckID is the check it's about, if any.
+	CheckID  string        `json:"checkId,omitempty"`
+	Severity AlertSeverity `json:"severity"`
+	State    AlertState    `json:"state"`
+	// Title and Detail say what's wrong, such as "Disk 91% full on laptop".
+	// While the alert is open, they say what Roost sees now.
+	Title  string `json:"title"`
+	Detail string `json:"detail"`
+	// OpenedAt is when Roost first saw the condition, and LastSeen when it
+	// last did.
+	OpenedAt time.Time `json:"openedAt"`
+	LastSeen time.Time `json:"lastSeen"`
+	// ResolvedAt is when the condition cleared, if it has.
+	ResolvedAt *time.Time `json:"resolvedAt,omitempty"`
+	// AckedAt is when an admin acknowledged the alert, if one did, and
+	// AckedBy their login, which only admins get.
+	AckedAt *time.Time `json:"ackedAt,omitempty"`
+	AckedBy string     `json:"ackedBy,omitempty" roost:"secret"`
+	// SnoozedUntil is when a snoozed alert wakes, and SnoozedBy the login of
+	// the admin who snoozed it, which only admins get.
+	SnoozedUntil *time.Time `json:"snoozedUntil,omitempty"`
+	SnoozedBy    string     `json:"snoozedBy,omitempty" roost:"secret"`
+	// Notes are what admins wrote on it, oldest first.
+	Notes []AlertNote `json:"notes"`
+}
+
+// AlertNote is what an admin wrote on an alert.
+type AlertNote struct {
+	At time.Time `json:"at"`
+	// By is the admin's login. Only admins get it.
+	By   string `json:"by,omitempty" roost:"secret"`
+	Text string `json:"text"`
+}
+
+// AlertSource says what an alert is about.
+type AlertSource string
+
+// The sources of an Alert.
+const (
+	// AlertSourceDevice is a device that's offline, or whose Tailscale key
+	// expires soon.
+	AlertSourceDevice AlertSource = "device"
+	// AlertSourceAgent is an agent that stopped reporting.
+	AlertSourceAgent AlertSource = "agent"
+	// AlertSourceMetrics is a device's disk, memory or CPU.
+	AlertSourceMetrics AlertSource = "metrics"
+	// AlertSourceCheck is a check that's failing.
+	AlertSourceCheck AlertSource = "check"
+	// AlertSourceContainer is a Docker container that crashed, stopped or
+	// is unhealthy.
+	AlertSourceContainer AlertSource = "container"
+	// AlertSourceUnit is a systemd unit that failed, or a watched one that
+	// isn't running.
+	AlertSourceUnit AlertSource = "unit"
+	// AlertSourceCollector is one of Roost's collectors that keeps failing.
+	AlertSourceCollector AlertSource = "collector"
+)
+
+// AlertSeverity says how much an alert matters.
+type AlertSeverity string
+
+// The severities of an Alert, most first.
+const (
+	AlertSeverityCritical AlertSeverity = "critical"
+	AlertSeverityWarning  AlertSeverity = "warning"
+	AlertSeverityInfo     AlertSeverity = "info"
+)
+
+// AlertState says where an alert is.
+type AlertState string
+
+// The states of an Alert.
+const (
+	AlertStateOpen AlertState = "open"
+	// AlertStateAcknowledged means an admin is on it.
+	AlertStateAcknowledged AlertState = "acknowledged"
+	// AlertStateSnoozed means an admin hid it until SnoozedUntil.
+	AlertStateSnoozed  AlertState = "snoozed"
+	AlertStateResolved AlertState = "resolved"
+)
+
+// AlertList is the response to GET /api/alerts?before=&limit=: resolved
+// alerts, the latest opened first, kept for 30 days. Before is the ID to
+// list from, for the next page.
+type AlertList struct {
+	Alerts []Alert `json:"alerts"`
+	// More reports whether there are older ones.
+	More bool `json:"more"`
+}
+
+// SnoozeAlert is the body of PUT /api/alerts/{id}/snooze, which snoozes an
+// open alert. DELETE wakes it.
+type SnoozeAlert struct {
+	// Minutes is how long to snooze it for, up to 30 days.
+	Minutes int `json:"minutes"`
+}
+
+// AddNote is the body of POST /api/alerts/{id}/notes, which adds a note to
+// an alert, open or resolved, and answers with the AlertNote.
+type AddNote struct {
+	Text string `json:"text"`
+}
+
+// Event is a line in the activity log: something Roost saw happen, or
+// something someone did.
+type Event struct {
+	ID      int64      `json:"id"`
+	At      time.Time  `json:"at"`
+	Level   EventLevel `json:"level"`
+	Kind    EventKind  `json:"kind"`
+	Message string     `json:"message"`
+	// DeviceID is the device it's about, if any.
+	DeviceID string `json:"deviceId,omitempty"`
+	// Actor is the login of who did it, if someone did. Only admins get it.
+	Actor string `json:"actor,omitempty" roost:"secret"`
+}
+
+// EventLevel says how an event went.
+type EventLevel string
+
+// The levels of an Event.
+const (
+	EventLevelInfo    EventLevel = "info"
+	EventLevelSuccess EventLevel = "success"
+	EventLevelWarning EventLevel = "warning"
+	EventLevelError   EventLevel = "error"
+)
+
+// EventKind says what an event is about.
+type EventKind string
+
+// The kinds of Event.
+const (
+	// EventKindDevice is a device that joined, left, went offline or came
+	// online, or whose settings an admin changed.
+	EventKindDevice EventKind = "device"
+	// EventKindAgent is an agent that enrolled, was revoked or uninstalled,
+	// or started or stopped reporting.
+	EventKindAgent EventKind = "agent"
+	// EventKindAlert is an alert that opened or resolved, or that an admin
+	// acknowledged, snoozed or wrote on.
+	EventKindAlert EventKind = "alert"
+	// EventKindCheck is a check an admin added, changed or deleted.
+	EventKindCheck EventKind = "check"
+	// EventKindContainer is a container that started, stopped or was
+	// removed.
+	EventKindContainer EventKind = "container"
+	// EventKindAccess is a change to who has a role in Roost.
+	EventKindAccess EventKind = "access"
+)
+
+// EventList is the response to GET /api/events?before=&after=&limit=&kind=&device=:
+// events, newest first. Before and After are event IDs.
+type EventList struct {
+	Events []Event `json:"events"`
+	// More reports whether there are older ones than the last.
+	More bool `json:"more"`
+}
+
+// A Container is a Docker container.
+type Container struct {
+	// ID is the first 12 characters of Docker's ID.
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Image string `json:"image"`
+	// Project and Service are its Docker Compose project and service, if
+	// it has them.
+	Project string         `json:"project,omitempty"`
+	Service string         `json:"service,omitempty"`
+	State   ContainerState `json:"state"`
+	// Status says it in Docker's words, such as "Up 2 hours (healthy)".
+	Status string `json:"status"`
+	// Health is "healthy", "unhealthy" or "starting", or missing if it has
+	// no health check.
+	Health   string `json:"health,omitempty"`
+	ExitCode int    `json:"exitCode"`
+	// OOMKilled reports whether it was killed for using too much memory.
+	OOMKilled    bool `json:"oomKilled,omitempty"`
+	RestartCount int  `json:"restartCount"`
+	// RestartPolicy is "no", "always", "unless-stopped" or "on-failure".
+	RestartPolicy string     `json:"restartPolicy"`
+	StartedAt     *time.Time `json:"startedAt,omitempty"`
+	FinishedAt    *time.Time `json:"finishedAt,omitempty"`
+	// Ports are the ports it listens on.
+	Ports []ContainerPort `json:"ports"`
+	// Problem says what's wrong with it, if anything, such as "crashed
+	// (exit 1)". Then it has an alert.
+	Problem string `json:"problem,omitempty"`
+	// DeviceID is the device it runs on.
+	DeviceID string `json:"deviceId"`
+	// CheckIDs are the checks of a port it publishes on its machine.
+	CheckIDs []string `json:"checkIds"`
+}
+
+// ContainerState is the state Docker says a container is in.
+type ContainerState string
+
+// The states of a Container.
+const (
+	ContainerStateCreated    ContainerState = "created"
+	ContainerStateRunning    ContainerState = "running"
+	ContainerStatePaused     ContainerState = "paused"
+	ContainerStateRestarting ContainerState = "restarting"
+	ContainerStateRemoving   ContainerState = "removing"
+	ContainerStateExited     ContainerState = "exited"
+	ContainerStateDead       ContainerState = "dead"
+)
+
+// ContainerPort is a port a container listens on.
+type ContainerPort struct {
+	// IP is the host address it's published on, if it is.
+	IP string `json:"ip,omitempty"`
+	// Private is the container's port, and Public the host's, if it's
+	// published.
+	Private int    `json:"private"`
+	Public  int    `json:"public,omitempty"`
+	Type    string `json:"type"`
+}
+
+// A Unit is a systemd unit.
+type Unit struct {
+	// Name is its ID, such as "ssh.service".
+	Name        string    `json:"name"`
+	Scope       UnitScope `json:"scope"`
+	Description string    `json:"description"`
+	// Active is systemd's ActiveState, such as "active", "inactive" or
+	// "failed", and Sub its SubState, such as "running".
+	Active string `json:"active"`
+	Sub    string `json:"sub"`
+	// Since is when it entered its active state, if systemd says.
+	Since   *time.Time `json:"since,omitempty"`
+	MainPID int        `json:"mainPid,omitempty"`
+	// Memory is the memory it uses, in bytes, if systemd counts it.
+	Memory uint64 `json:"memory,omitempty"`
+	// Watched reports whether Roost watches it. Other units are only
+	// listed while they've failed.
+	Watched bool `json:"watched"`
+	// DeviceID is the device it runs on.
+	DeviceID string `json:"deviceId"`
+}
+
+// UnitScope says whose a unit is.
+type UnitScope string
+
+// The scopes of a Unit.
+const (
+	// UnitScopeSystem is the machine's.
+	UnitScopeSystem UnitScope = "system"
+	// UnitScopeUser is the user Roost runs as.
+	UnitScopeUser UnitScope = "user"
+)

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"text/tabwriter"
+	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/config"
 	"github.com/manasseh-fikadu/roost/internal/store"
@@ -97,6 +98,7 @@ func admin(ctx context.Context, args []string, stdout, stderr io.Writer) (err er
 		}
 		if removed {
 			fmt.Fprintf(stdout, "%s no longer has a role\n", login)
+			logAccess(ctx, st, "Took "+login+"'s role away", stdout)
 		} else {
 			fmt.Fprintf(stdout, "%s had no role\n", login)
 		}
@@ -144,6 +146,7 @@ func setRole(ctx context.Context, st *store.Store, login string, role store.Role
 	}
 	if changed {
 		fmt.Fprintf(stdout, "%s is now %s\n", login, name)
+		logAccess(ctx, st, "Made "+login+" "+name, stdout)
 	} else {
 		fmt.Fprintf(stdout, "%s was already %s\n", login, name)
 	}
@@ -160,13 +163,29 @@ func whoCanView(ctx context.Context, st *store.Store, who string, stdout io.Writ
 		fmt.Fprintln(stdout, who)
 		return nil
 	}
-	if _, err := st.SetWhoCanView(ctx, who); err != nil {
+	changed, err := st.SetWhoCanView(ctx, who)
+	if err != nil {
 		return err
 	}
+	msg := "Let only the users with a role view Roost"
 	if who == store.Tailnet {
 		fmt.Fprintln(stdout, "Anyone who signs in from the tailnet can view Roost")
+		msg = "Let anyone on the tailnet view Roost"
 	} else {
 		fmt.Fprintln(stdout, "Only Roost's admins and viewers can view it")
 	}
+	if changed {
+		logAccess(ctx, st, msg, stdout)
+	}
 	return nil
+}
+
+// logAccess adds a change to who has a role to the activity log, as the
+// API does for one an admin makes. It only warns if it can't, since the
+// change is made.
+func logAccess(ctx context.Context, st *store.Store, msg string, stdout io.Writer) {
+	err := st.AddEvents(ctx, store.Event{At: time.Now(), Level: "info", Kind: "access", Message: msg + " with roost admin"})
+	if err != nil {
+		fmt.Fprintf(stdout, "Roost couldn't add this to its activity log: %v\n", err)
+	}
 }

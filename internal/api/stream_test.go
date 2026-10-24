@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/agents"
+	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
@@ -54,7 +55,7 @@ func TestStream(t *testing.T) {
 				h := api.New(api.Options{
 					Version: "v1.2.3", WhoIs: tn.WhoIs, Snapshot: snapshot, Feed: feed, Store: st,
 					Agents: agents.NewRegistry(st, nil), Usage: usage.NewRecorder(st, nil),
-					Checks: checks.NewRunner(st, checks.Options{Dial: tn.Dial}),
+					Checks: checks.NewRunner(st, checks.Options{Dial: tn.Dial}), Alerts: alerts.NewEngine(st, nil),
 				})
 				events := openStream(t, tn, h, tt.from, tt.gzip)
 

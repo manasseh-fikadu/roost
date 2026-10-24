@@ -1,7 +1,7 @@
 <script lang="ts">
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
-	import Bell from '@lucide/svelte/icons/bell';
 	import { resolve } from '$app/paths';
+	import AlertsCard from '#lib/alerts/AlertsCard.svelte';
 	import type { CollectorState } from '#lib/api/types.js';
 	import HealthCard from '#lib/checks/HealthCard.svelte';
 	import DevicesTable from '#lib/devices/DevicesTable.svelte';
@@ -11,7 +11,6 @@
 	import NetworkMap from '#lib/map/NetworkMap.svelte';
 	import type { Status } from '#lib/status.js';
 	import Card from '#lib/ui/Card.svelte';
-	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import PageHeader from '#lib/ui/PageHeader.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import StatusDot from '#lib/ui/StatusDot.svelte';
@@ -83,9 +82,7 @@
 	</Card>
 	<div class="space-y-4">
 		<HealthCard health={live.snapshot?.health ?? null} />
-		<Card title="Alerts">
-			<EmptyState title="No alerts" icon={Bell}>Roost starts raising alerts with #26.</EmptyState>
-		</Card>
+		<AlertsCard alerts={live.snapshot?.alerts ?? null} {devices} {now} />
 	</div>
 </div>
 
