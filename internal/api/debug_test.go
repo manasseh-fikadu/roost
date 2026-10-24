@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/agents"
+	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
@@ -46,6 +47,7 @@ func TestNew_debugTailnet(t *testing.T) {
 		h := api.New(api.Options{
 			WhoIs: tn.WhoIs, Snapshot: poller.Snapshot, Feed: feed, Store: st, Agents: agents.NewRegistry(st, nil),
 			Usage: usage.NewRecorder(st, nil), Checks: checks.NewRunner(st, checks.Options{Dial: tn.Dial}),
+			Alerts: alerts.NewEngine(st, nil),
 		})
 		rec := serve(h, newRequest(t, http.MethodGet, "/api/debug/tailnet", laptop))
 

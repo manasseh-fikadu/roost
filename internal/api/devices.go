@@ -78,6 +78,7 @@ func (h *handler) setDeviceSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.log.Info("changed a device's settings", "device", d.ID, "by", callerOf(r).who.LoginName)
+	h.logAction(r, EventKindDevice, d.ID, "Changed the settings of "+h.deviceName(r, d.ID))
 	h.opts.Feed.Poke()
 	h.writeJSON(w, r, http.StatusOK, DeviceSettings{
 		DisplayName:  ds.DisplayName,

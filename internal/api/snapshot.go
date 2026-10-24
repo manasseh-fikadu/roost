@@ -12,24 +12,12 @@ import (
 	"github.com/manasseh-fikadu/roost/agent"
 	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/checks"
+	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
+	"github.com/manasseh-fikadu/roost/internal/settings"
 	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/roost/internal/systemd"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
-)
-
-// When a device needs attention. The Settings page (#10) makes these
-// settings.
-const (
-	// diskWarn is how full a disk can get, in percent.
-	diskWarn = 85
-	// memoryWarn is how much memory can be used, in percent.
-	memoryWarn = 92
-	// cpuWarn is how busy the CPUs can be, in percent, on average over
-	// hostmetrics.SustainedWindow.
-	cpuWarn = 90
-	// keyExpiryWarn is how soon before a device's Tailscale key expires to
-	// warn about it.
-	keyExpiryWarn = 14 * 24 * time.Hour
 )
 
 // sources is what a Snapshot is built from.
@@ -50,10 +38,29 @@ type sources struct {
 	checks []checks.Status
 	// pings holds the latest pings of each peer, by device ID.
 	pings map[string]checks.PingStatus
+	// thresholds are when a device needs attention, from the settings.
+	thresholds settings.Thresholds
+	// docker is what Roost read of the containers on its machine, and
+	// systemd of its units, or nil if it doesn't read them.
+	docker  *docker.Reading
+	systemd *systemd.Reading
 }
 
-// newSnapshot builds a Snapshot of what Roost knows at now.
-func newSnapshot(src sources, now time.Time) Snapshot {
+// A machine is a device that Roost measures, once for each machine. The
+// machine Roost runs on can be two nodes, and only Roost's own counts.
+type machine struct {
+	deviceID string
+	// sustained is its CPU, averaged over hostmetrics.SustainedWindow, if
+	// Roost knows it.
+	sustained *float64
+	// current reports whether its metrics say what's true now: Roost's
+	// own, while it can measure, or its agent's, while it reports.
+	current bool
+}
+
+// newSnapshot builds a Snapshot of what Roost knows at now, without its
+// alerts, and returns the machines Roost measures.
+func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 	s := src.tailnet
 	out := Snapshot{
 		GeneratedAt: now,
@@ -70,12 +77,19 @@ func newSnapshot(src sources, now time.Time) Snapshot {
 		out.Collectors = append(out.Collectors, newCollector("Hub metrics", at, h.Err))
 	}
 	out.Collectors = append(out.Collectors, newCollector("Tailscale netcheck", s.ConnectivityAt, s.ConnectivityErr))
+	if r := src.docker; r != nil {
+		out.Collectors = append(out.Collectors, newCollector("Docker", r.At, r.Err))
+	}
+	if r := src.systemd; r != nil {
+		out.Collectors = append(out.Collectors, newCollector("systemd units", r.At, r.Err))
+	}
+	out.Alerts, out.Containers, out.Units = []Alert{}, []Container{}, []Unit{}
 
 	st := s.Status
 	if st == nil {
 		out.Checks = newChecks(src, nil)
 		out.Health = newHealthScore(out.Checks)
-		return out
+		return out, nil
 	}
 	out.Hub.DNSName, out.Hub.Tailnet = st.Self.DNSName, st.Tailnet
 	devices := append([]tailnet.Device{st.Self}, st.Peers...)
@@ -89,8 +103,9 @@ func newSnapshot(src sources, now time.Time) Snapshot {
 			enrolled[id] = e
 		}
 	}
+	var machines []machine
 	for i, d := range devices {
-		dev := deviceInput{device: d, self: i == 0, settings: src.settings[d.ID]}
+		dev := deviceInput{device: d, self: i == 0, settings: src.settings[d.ID], thresholds: src.thresholds}
 		// Roost measures the machine it runs on, and on a machine it can't
 		// measure, an agent can. In embedded mode, that machine's own node
 		// is a peer.
@@ -104,7 +119,12 @@ func newSnapshot(src sources, now time.Time) Snapshot {
 		if e, ok := enrolled[id]; ok {
 			dev.enrollment = &e
 		}
-		out.Devices = append(out.Devices, newDevice(s, dev, now))
+		device, m := newDevice(s, dev, now)
+		out.Devices = append(out.Devices, device)
+		// In embedded mode, the machine's own node shows what Roost's does.
+		if m.deviceID != "" && (dev.self || !d.SameMachine) {
+			machines = append(machines, m)
+		}
 	}
 	slices.SortStableFunc(out.Devices, func(a, b Device) int {
 		switch {
@@ -123,7 +143,14 @@ func newSnapshot(src sources, now time.Time) Snapshot {
 	})
 	out.Checks = newChecks(src, out.Devices)
 	out.Health = newHealthScore(out.Checks)
-	return out
+	hub := hubNames(st)
+	if r := src.docker; r != nil {
+		out.Containers = newContainers(*r, st.Self.ID, out.Checks, hub)
+	}
+	if r := src.systemd; r != nil {
+		out.Units = newUnits(*r, st.Self.ID)
+	}
+	return out, machines
 }
 
 // newCollector reports on a collector that last worked at lastOK, if that
@@ -170,9 +197,12 @@ type deviceInput struct {
 	// when it enrolled, if it has. They're only used if host is nil.
 	agent      *agents.Report
 	enrollment *store.Enrollment
+	thresholds settings.Thresholds
 }
 
-func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) Device {
+// newDevice returns the device of in, and the machine it is, if Roost
+// measures it.
+func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) (Device, machine) {
 	d := in.device
 	ips := make([]string, len(d.IPs))
 	for i, ip := range d.IPs {
@@ -195,14 +225,16 @@ func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) Device {
 		Created:   timePtr(d.Created),
 		ExitNode:  d.ExitNode,
 	}
-	var sustained *float64
+	var m machine
 	switch {
 	case in.host != nil:
 		h := in.host
 		out.MeasuredBy = MeasuredByHub
+		m.deviceID = d.ID
 		if h.Sample != nil {
 			out.Metrics = newMetrics(*h.Sample)
-			sustained = h.Sample.CPUSustained
+			m.sustained = h.Sample.CPUSustained
+			m.current = h.Err == nil && now.Sub(h.Sample.At) < freshFor
 		}
 		out.Info = newInfo(h.Info)
 	case in.agent != nil || in.enrollment != nil:
@@ -216,6 +248,7 @@ func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) Device {
 			break
 		}
 		out.MeasuredBy = MeasuredByAgent
+		m.deviceID = d.ID
 		out.Metrics = newMetrics(a.Sample)
 		if b := a.Battery; b != nil {
 			out.Metrics.Battery = &Battery{Percent: b.Percent, Charging: b.Charging, OnAC: b.OnAC}
@@ -227,8 +260,9 @@ func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) Device {
 		out.Agent.Outdated = agent.Older(a.Version)
 		// The CPU of an agent that stopped is out of date.
 		if !out.Agent.Stale {
-			sustained = a.Sample.CPUSustained
+			m.sustained = a.Sample.CPUSustained
 		}
+		m.current = d.Online && !a.Stale(now)
 	}
 	model := ""
 	if out.Info != nil {
@@ -247,8 +281,8 @@ func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) Device {
 	if !validKind(out.Settings.Kind) {
 		out.Settings.Kind = ""
 	}
-	out.Status, out.StatusReason = deviceStatus(out, sustained, now)
-	return out
+	out.Status, out.StatusReason = deviceStatus(out, m.sustained, in.thresholds, now)
+	return out, m
 }
 
 func newPath(p tailnet.Path, d tailnet.Device) Path {
@@ -311,29 +345,30 @@ func historyID(d tailnet.Device, self bool) string {
 	return d.ID
 }
 
-// deviceStatus works out whether d needs attention at now, and why. sustained
-// is its CPU averaged over hostmetrics.SustainedWindow, if Roost knows it.
-func deviceStatus(d Device, sustained *float64, now time.Time) (Status, string) {
+// deviceStatus works out whether d needs attention at now, by the
+// thresholds t, and why. sustained is its CPU averaged over
+// hostmetrics.SustainedWindow, if Roost knows it.
+func deviceStatus(d Device, sustained *float64, t settings.Thresholds, now time.Time) (Status, string) {
 	if !d.Online {
 		return StatusOffline, "Not connected to the tailnet"
 	}
 	var reasons []string
 	if m := d.Metrics; m != nil {
-		if pct, ok := percent(m.Disk); ok && pct >= diskWarn {
+		if pct, ok := percent(m.Disk); ok && pct >= t.DiskWarn {
 			reasons = append(reasons, fmt.Sprintf("Disk %.0f%% full", pct))
 		}
-		if pct, ok := percent(m.Memory); ok && pct >= memoryWarn {
+		if pct, ok := percent(m.Memory); ok && pct >= t.MemoryWarn {
 			reasons = append(reasons, fmt.Sprintf("Memory %.0f%% used", pct))
 		}
 	}
-	if sustained != nil && *sustained >= cpuWarn {
+	if sustained != nil && *sustained >= t.CPUWarn {
 		reasons = append(reasons, fmt.Sprintf("CPU %.0f%% for %v", *sustained, shortDuration(hostmetrics.SustainedWindow)))
 	}
 	if d.KeyExpiry != nil {
 		switch left := d.KeyExpiry.Sub(now); {
 		case left <= 0:
 			reasons = append(reasons, "Tailscale key expired")
-		case left < keyExpiryWarn:
+		case left < t.KeyExpiryWarn():
 			reasons = append(reasons, fmt.Sprintf("Tailscale key expires in %dd", int(math.Ceil(left.Hours()/24))))
 		}
 	}

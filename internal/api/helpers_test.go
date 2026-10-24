@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/manasseh-fikadu/roost/internal/agents"
+	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/store"
@@ -98,8 +99,11 @@ func withStore(tn *tailnettest.Tailnet, st *store.Store, opts api.Options) api.O
 	if opts.Checks == nil {
 		opts.Checks = checks.NewRunner(st, checks.Options{Dial: tn.Dial})
 	}
+	if opts.Alerts == nil {
+		opts.Alerts = alerts.NewEngine(st, nil)
+	}
 	if opts.Feed == nil {
-		opts.Feed = api.NewFeed(api.FeedOptions{Tailnet: opts.Snapshot, Agents: opts.Agents, Checks: opts.Checks, Store: st})
+		opts.Feed = api.NewFeed(api.FeedOptions{Tailnet: opts.Snapshot, Agents: opts.Agents, Checks: opts.Checks, Alerts: opts.Alerts, Store: st})
 	}
 	return opts
 }

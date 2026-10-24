@@ -12,9 +12,13 @@ import (
 	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/agents"
+	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/checks"
+	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
+	"github.com/manasseh-fikadu/roost/internal/settings"
 	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/roost/internal/systemd"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 )
 
@@ -50,6 +54,19 @@ type FeedOptions struct {
 	// Checks runs the checks, and keeps the pings of each peer. Nil means
 	// there are none.
 	Checks *checks.Runner
+	// Alerts opens and resolves alerts from what each snapshot shows. Nil
+	// means there are none.
+	Alerts *alerts.Engine
+	// Docker returns what Roost last read of the containers on its machine.
+	// It's nil if Roost doesn't read them.
+	Docker func() docker.Reading
+	// DockerChanged receives a value when Docker's answer changes.
+	DockerChanged <-chan struct{}
+	// Systemd returns what Roost last read of the systemd units on its
+	// machine. It's nil if Roost doesn't read them.
+	Systemd func() systemd.Reading
+	// SystemdChanged receives a value when Systemd's answer changes.
+	SystemdChanged <-chan struct{}
 	// Store holds the devices' settings and history. Required.
 	Store *store.Store
 	// Logger receives errors. Nil discards them.
@@ -84,6 +101,14 @@ type Feed struct {
 	metricsAt  map[string]time.Time
 	metricsErr error
 	healthErr  error
+	// thresholds are from the settings, as last read.
+	thresholds    settings.Thresholds
+	thresholdsErr error
+	activity      activity
+	eventsErr     error
+	lastEventID   int64
+	// started is when the feed was made, which is about when Roost started.
+	started time.Time
 
 	mu  sync.Mutex
 	cur *published
@@ -107,7 +132,10 @@ func NewFeed(opts FeedOptions) *Feed {
 	if opts.Tailnet == nil || opts.Store == nil {
 		panic("api.NewFeed: FeedOptions.Tailnet and Store are required")
 	}
-	f := &Feed{opts: opts, log: opts.Logger, poked: make(chan struct{}, 1), metricsAt: map[string]time.Time{}}
+	f := &Feed{
+		opts: opts, log: opts.Logger, poked: make(chan struct{}, 1), metricsAt: map[string]time.Time{},
+		thresholds: settings.Defaults().Thresholds, started: time.Now(),
+	}
 	if f.log == nil {
 		f.log = slog.New(slog.DiscardHandler)
 	}
@@ -140,6 +168,8 @@ func (f *Feed) Run(ctx context.Context) {
 		case <-f.opts.HostChanged:
 		case <-agentsChanged:
 		case <-checksChanged:
+		case <-f.opts.DockerChanged:
+		case <-f.opts.SystemdChanged:
 		case <-f.poked:
 		case <-heartbeat.C:
 		case <-health.C:
@@ -177,7 +207,10 @@ func (f *Feed) measuresHub() bool { return f.opts.Host != nil }
 
 // drain takes the changes waiting to be heard of.
 func (f *Feed) drain() {
-	for _, ch := range []<-chan struct{}{f.opts.TailnetChanged, f.opts.HostChanged, f.agentsChanged(), f.checksChanged(), f.poked} {
+	for _, ch := range []<-chan struct{}{
+		f.opts.TailnetChanged, f.opts.HostChanged, f.agentsChanged(), f.checksChanged(),
+		f.opts.DockerChanged, f.opts.SystemdChanged, f.poked,
+	} {
 		select {
 		case <-ch:
 		default:
@@ -228,8 +261,24 @@ func (f *Feed) publish(ctx context.Context) *published {
 		c.ObservePings(src.tailnet)
 		src.checks, src.pings = c.Checks(), c.Pings()
 	}
+	src.thresholds = f.loadThresholds(ctx)
+	if f.opts.Docker != nil {
+		r := f.opts.Docker()
+		src.docker = &r
+	}
+	if f.opts.Systemd != nil {
+		r := f.opts.Systemd()
+		src.systemd = &r
+	}
 
-	snap := newSnapshot(src, now)
+	snap, machines := newSnapshot(src, now)
+	if e := f.opts.Alerts; e != nil {
+		conds, isFresh := alertConditions(snap, machines, src, f.started, now)
+		e.Apply(ctx, conds, isFresh, now)
+		snap.Alerts = newAlerts(e.Open(), now)
+	}
+	f.logActivity(ctx, f.activity.observe(snap, src, now))
+	snap.LastEventID = f.loadLastEventID(ctx)
 	p := &published{snap: snap, next: make(chan struct{})}
 	admin, err := f.newEvent("snapshot", snap)
 	if err == nil {
@@ -404,6 +453,50 @@ func (f *Feed) recordHealth(ctx context.Context, snap Snapshot) {
 		f.log.Info("recorded the health score again")
 	}
 	f.healthErr = err
+}
+
+// loadThresholds returns the thresholds in the settings, or the last ones it
+// read if the store can't say.
+func (f *Feed) loadThresholds(ctx context.Context) settings.Thresholds {
+	s, err := settings.Load(ctx, f.opts.Store)
+	switch {
+	case err != nil && ctx.Err() == nil && f.thresholdsErr == nil:
+		f.log.Warn("read the settings", "error", err)
+	case err == nil && f.thresholdsErr != nil:
+		f.log.Info("read the settings again")
+	}
+	f.thresholdsErr = err
+	if err == nil {
+		f.thresholds = s.Thresholds
+	}
+	return f.thresholds
+}
+
+// logActivity adds events to the activity log.
+func (f *Feed) logActivity(ctx context.Context, events []store.Event) {
+	if len(events) == 0 {
+		return
+	}
+	if err := f.opts.Store.AddEvents(ctx, events...); err != nil && ctx.Err() == nil {
+		f.log.Warn("add to the activity log", "error", err)
+	}
+}
+
+// loadLastEventID returns the ID of the activity log's latest event, or the
+// last one it read if the store can't say.
+func (f *Feed) loadLastEventID(ctx context.Context) int64 {
+	id, err := f.opts.Store.LastEventID(ctx)
+	switch {
+	case err != nil && ctx.Err() == nil && f.eventsErr == nil:
+		f.log.Warn("read the activity log", "error", err)
+	case err == nil && f.eventsErr != nil:
+		f.log.Info("read the activity log again")
+	}
+	f.eventsErr = err
+	if err == nil {
+		f.lastEventID = id
+	}
+	return f.lastEventID
 }
 
 // loadSettings returns the devices' settings, or the last ones it read if

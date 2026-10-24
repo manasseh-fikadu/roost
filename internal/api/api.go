@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/agents"
+	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
@@ -47,6 +48,8 @@ type Options struct {
 	Usage *usage.Recorder
 	// Checks runs the checks. Required.
 	Checks *checks.Runner
+	// Alerts keeps the open alerts. Required.
+	Alerts *alerts.Engine
 	// AppURL is where the app is on the tailnet, such as
 	// https://roost.example.ts.net, which the agent sends its heartbeats to.
 	// If it's empty, it's worked out from each request.
@@ -72,8 +75,8 @@ func New(opts Options) http.Handler {
 
 func newHandler(opts Options) *handler {
 	if opts.WhoIs == nil || opts.Snapshot == nil || opts.Feed == nil || opts.Store == nil || opts.Agents == nil ||
-		opts.Usage == nil || opts.Checks == nil {
-		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents, Usage and Checks are required")
+		opts.Usage == nil || opts.Checks == nil || opts.Alerts == nil {
+		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents, Usage, Checks and Alerts are required")
 	}
 	h := &handler{opts: opts, log: opts.Logger}
 	if h.log == nil {
@@ -103,6 +106,14 @@ func (h *handler) routes(rt *router) {
 	rt.write("DELETE /api/checks/{id}", h.deleteCheck)
 	rt.write("POST /api/checks/{id}/run", h.runCheck)
 	rt.read("GET /api/health/history", viewers, h.healthHistory)
+
+	rt.read("GET /api/alerts", viewers, h.listAlerts)
+	rt.write("PUT /api/alerts/{id}/ack", h.ackAlert)
+	rt.write("DELETE /api/alerts/{id}/ack", h.ackAlert)
+	rt.write("PUT /api/alerts/{id}/snooze", h.snoozeAlert)
+	rt.write("DELETE /api/alerts/{id}/snooze", h.snoozeAlert)
+	rt.write("POST /api/alerts/{id}/notes", h.addAlertNote)
+	rt.read("GET /api/events", viewers, h.listEvents)
 
 	rt.read("GET /api/agent", admins, h.agentSetup)
 	rt.write("POST /api/agent/codes", h.newEnrollmentCode)

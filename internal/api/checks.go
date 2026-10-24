@@ -245,6 +245,7 @@ func (h *handler) addCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.log.Info("added a check", "check", c.ID, "name", c.Name, "by", callerOf(r).who.LoginName)
+	h.logAction(r, EventKindCheck, "", "Added the check "+c.Name)
 	h.writeJSON(w, r, http.StatusCreated, h.checkAnswer(c))
 }
 
@@ -275,6 +276,7 @@ func (h *handler) changeCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.log.Info("changed a check", "check", c.ID, "name", c.Name, "by", callerOf(r).who.LoginName)
+	h.logAction(r, EventKindCheck, "", "Changed the check "+c.Name)
 	h.writeJSON(w, r, http.StatusOK, h.checkAnswer(c))
 }
 
@@ -285,6 +287,7 @@ func (h *handler) deleteCheck(w http.ResponseWriter, r *http.Request) {
 	if h.pingCheck(w, r, id) {
 		return
 	}
+	old, _ := h.opts.Checks.Check(id)
 	err := h.opts.Checks.Delete(r.Context(), id)
 	switch {
 	case errors.Is(err, checks.ErrNotFound):
@@ -295,6 +298,7 @@ func (h *handler) deleteCheck(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.log.Info("deleted a check", "check", id, "by", callerOf(r).who.LoginName)
+	h.logAction(r, EventKindCheck, "", "Deleted the check "+old.Check.Name)
 	w.WriteHeader(http.StatusNoContent)
 }
 

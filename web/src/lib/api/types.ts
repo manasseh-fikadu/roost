@@ -191,6 +191,26 @@ export interface Snapshot {
    * Health sums up the checks.
    */
   health: HealthScore;
+  /**
+   * Alerts are the alerts that are open, acknowledged or snoozed, the most
+   * severe first. GET /api/alerts has the resolved ones.
+   */
+  alerts: Alert[];
+  /**
+   * Containers are the Docker containers on the machine Roost runs on, by
+   * name. Other machines' come with #29.
+   */
+  containers: Container[];
+  /**
+   * Units are the systemd units Roost watches on the machine it runs on,
+   * and the ones that failed, the system's first, by name.
+   */
+  units: Unit[];
+  /**
+   * LastEventID is the ID of the activity log's latest event, so the app
+   * can tell when GET /api/events has more.
+   */
+  lastEventId: number /* int64 */;
 }
 /**
  * Hub is the Roost server itself.
@@ -1218,3 +1238,371 @@ export interface HealthHistory {
    */
   score: Point[];
 }
+/**
+ * An Alert is a condition that needs attention, such as a disk that's nearly
+ * full, from when Roost saw it until it cleared. It resolves by itself when
+ * the condition clears.
+ */
+export interface Alert {
+  id: number /* int64 */;
+  source: AlertSource;
+  /**
+   * DeviceID is the device it's on, if any.
+   */
+  deviceId?: string;
+  /**
+   * CheckID is the check it's about, if any.
+   */
+  checkId?: string;
+  severity: AlertSeverity;
+  state: AlertState;
+  /**
+   * Title and Detail say what's wrong, such as "Disk 91% full on laptop".
+   * While the alert is open, they say what Roost sees now.
+   */
+  title: string;
+  detail: string;
+  /**
+   * OpenedAt is when Roost first saw the condition, and LastSeen when it
+   * last did.
+   */
+  openedAt: string /* RFC 3339 */;
+  lastSeen: string /* RFC 3339 */;
+  /**
+   * ResolvedAt is when the condition cleared, if it has.
+   */
+  resolvedAt?: string /* RFC 3339 */;
+  /**
+   * AckedAt is when an admin acknowledged the alert, if one did, and
+   * AckedBy their login, which only admins get.
+   */
+  ackedAt?: string /* RFC 3339 */;
+  ackedBy?: string;
+  /**
+   * SnoozedUntil is when a snoozed alert wakes, and SnoozedBy the login of
+   * the admin who snoozed it, which only admins get.
+   */
+  snoozedUntil?: string /* RFC 3339 */;
+  snoozedBy?: string;
+  /**
+   * Notes are what admins wrote on it, oldest first.
+   */
+  notes: AlertNote[];
+}
+/**
+ * AlertNote is what an admin wrote on an alert.
+ */
+export interface AlertNote {
+  at: string /* RFC 3339 */;
+  /**
+   * By is the admin's login. Only admins get it.
+   */
+  by?: string;
+  text: string;
+}
+/**
+ * AlertSource says what an alert is about.
+ */
+/**
+ * AlertSourceDevice is a device that's offline, or whose Tailscale key
+ * expires soon.
+ */
+export const AlertSourceDevice = "device";
+/**
+ * AlertSourceAgent is an agent that stopped reporting.
+ */
+export const AlertSourceAgent = "agent";
+/**
+ * AlertSourceMetrics is a device's disk, memory or CPU.
+ */
+export const AlertSourceMetrics = "metrics";
+/**
+ * AlertSourceCheck is a check that's failing.
+ */
+export const AlertSourceCheck = "check";
+/**
+ * AlertSourceContainer is a Docker container that crashed, stopped or
+ * is unhealthy.
+ */
+export const AlertSourceContainer = "container";
+/**
+ * AlertSourceUnit is a systemd unit that failed, or a watched one that
+ * isn't running.
+ */
+export const AlertSourceUnit = "unit";
+/**
+ * AlertSourceCollector is one of Roost's collectors that keeps failing.
+ */
+export const AlertSourceCollector = "collector";
+/**
+ * The sources of an Alert.
+ */
+export type AlertSource = typeof AlertSourceDevice | typeof AlertSourceAgent | typeof AlertSourceMetrics | typeof AlertSourceCheck | typeof AlertSourceContainer | typeof AlertSourceUnit | typeof AlertSourceCollector;
+/**
+ * AlertSeverity says how much an alert matters.
+ */
+export const AlertSeverityCritical = "critical";
+export const AlertSeverityWarning = "warning";
+export const AlertSeverityInfo = "info";
+/**
+ * The severities of an Alert, most first.
+ */
+export type AlertSeverity = typeof AlertSeverityCritical | typeof AlertSeverityWarning | typeof AlertSeverityInfo;
+/**
+ * AlertState says where an alert is.
+ */
+export const AlertStateOpen = "open";
+/**
+ * AlertStateAcknowledged means an admin is on it.
+ */
+export const AlertStateAcknowledged = "acknowledged";
+/**
+ * AlertStateSnoozed means an admin hid it until SnoozedUntil.
+ */
+export const AlertStateSnoozed = "snoozed";
+export const AlertStateResolved = "resolved";
+/**
+ * The states of an Alert.
+ */
+export type AlertState = typeof AlertStateOpen | typeof AlertStateAcknowledged | typeof AlertStateSnoozed | typeof AlertStateResolved;
+/**
+ * AlertList is the response to GET /api/alerts?before=&limit=: resolved
+ * alerts, the latest opened first, kept for 30 days. Before is the ID to
+ * list from, for the next page.
+ */
+export interface AlertList {
+  alerts: Alert[];
+  /**
+   * More reports whether there are older ones.
+   */
+  more: boolean;
+}
+/**
+ * SnoozeAlert is the body of PUT /api/alerts/{id}/snooze, which snoozes an
+ * open alert. DELETE wakes it.
+ */
+export interface SnoozeAlert {
+  /**
+   * Minutes is how long to snooze it for, up to 30 days.
+   */
+  minutes: number /* int */;
+}
+/**
+ * AddNote is the body of POST /api/alerts/{id}/notes, which adds a note to
+ * an alert, open or resolved, and answers with the AlertNote.
+ */
+export interface AddNote {
+  text: string;
+}
+/**
+ * Event is a line in the activity log: something Roost saw happen, or
+ * something someone did.
+ */
+export interface Event {
+  id: number /* int64 */;
+  at: string /* RFC 3339 */;
+  level: EventLevel;
+  kind: EventKind;
+  message: string;
+  /**
+   * DeviceID is the device it's about, if any.
+   */
+  deviceId?: string;
+  /**
+   * Actor is the login of who did it, if someone did. Only admins get it.
+   */
+  actor?: string;
+}
+/**
+ * EventLevel says how an event went.
+ */
+export const EventLevelInfo = "info";
+export const EventLevelSuccess = "success";
+export const EventLevelWarning = "warning";
+export const EventLevelError = "error";
+/**
+ * The levels of an Event.
+ */
+export type EventLevel = typeof EventLevelInfo | typeof EventLevelSuccess | typeof EventLevelWarning | typeof EventLevelError;
+/**
+ * EventKind says what an event is about.
+ */
+/**
+ * EventKindDevice is a device that joined, left, went offline or came
+ * online, or whose settings an admin changed.
+ */
+export const EventKindDevice = "device";
+/**
+ * EventKindAgent is an agent that enrolled, was revoked or uninstalled,
+ * or started or stopped reporting.
+ */
+export const EventKindAgent = "agent";
+/**
+ * EventKindAlert is an alert that opened or resolved, or that an admin
+ * acknowledged, snoozed or wrote on.
+ */
+export const EventKindAlert = "alert";
+/**
+ * EventKindCheck is a check an admin added, changed or deleted.
+ */
+export const EventKindCheck = "check";
+/**
+ * EventKindContainer is a container that started, stopped or was
+ * removed.
+ */
+export const EventKindContainer = "container";
+/**
+ * EventKindAccess is a change to who has a role in Roost.
+ */
+export const EventKindAccess = "access";
+/**
+ * The kinds of Event.
+ */
+export type EventKind = typeof EventKindDevice | typeof EventKindAgent | typeof EventKindAlert | typeof EventKindCheck | typeof EventKindContainer | typeof EventKindAccess;
+/**
+ * EventList is the response to GET /api/events?before=&after=&limit=&kind=&device=:
+ * events, newest first. Before and After are event IDs.
+ */
+export interface EventList {
+  events: Event[];
+  /**
+   * More reports whether there are older ones than the last.
+   */
+  more: boolean;
+}
+/**
+ * A Container is a Docker container.
+ */
+export interface Container {
+  /**
+   * ID is the first 12 characters of Docker's ID.
+   */
+  id: string;
+  name: string;
+  image: string;
+  /**
+   * Project and Service are its Docker Compose project and service, if
+   * it has them.
+   */
+  project?: string;
+  service?: string;
+  state: ContainerState;
+  /**
+   * Status says it in Docker's words, such as "Up 2 hours (healthy)".
+   */
+  status: string;
+  /**
+   * Health is "healthy", "unhealthy" or "starting", or missing if it has
+   * no health check.
+   */
+  health?: string;
+  exitCode: number /* int */;
+  /**
+   * OOMKilled reports whether it was killed for using too much memory.
+   */
+  oomKilled?: boolean;
+  restartCount: number /* int */;
+  /**
+   * RestartPolicy is "no", "always", "unless-stopped" or "on-failure".
+   */
+  restartPolicy: string;
+  startedAt?: string /* RFC 3339 */;
+  finishedAt?: string /* RFC 3339 */;
+  /**
+   * Ports are the ports it listens on.
+   */
+  ports: ContainerPort[];
+  /**
+   * Problem says what's wrong with it, if anything, such as "crashed
+   * (exit 1)". Then it has an alert.
+   */
+  problem?: string;
+  /**
+   * DeviceID is the device it runs on.
+   */
+  deviceId: string;
+  /**
+   * CheckIDs are the checks of a port it publishes on its machine.
+   */
+  checkIds: string[];
+}
+/**
+ * ContainerState is the state Docker says a container is in.
+ */
+export const ContainerStateCreated = "created";
+export const ContainerStateRunning = "running";
+export const ContainerStatePaused = "paused";
+export const ContainerStateRestarting = "restarting";
+export const ContainerStateRemoving = "removing";
+export const ContainerStateExited = "exited";
+export const ContainerStateDead = "dead";
+/**
+ * The states of a Container.
+ */
+export type ContainerState = typeof ContainerStateCreated | typeof ContainerStateRunning | typeof ContainerStatePaused | typeof ContainerStateRestarting | typeof ContainerStateRemoving | typeof ContainerStateExited | typeof ContainerStateDead;
+/**
+ * ContainerPort is a port a container listens on.
+ */
+export interface ContainerPort {
+  /**
+   * IP is the host address it's published on, if it is.
+   */
+  ip?: string;
+  /**
+   * Private is the container's port, and Public the host's, if it's
+   * published.
+   */
+  private: number /* int */;
+  public?: number /* int */;
+  type: string;
+}
+/**
+ * A Unit is a systemd unit.
+ */
+export interface Unit {
+  /**
+   * Name is its ID, such as "ssh.service".
+   */
+  name: string;
+  scope: UnitScope;
+  description: string;
+  /**
+   * Active is systemd's ActiveState, such as "active", "inactive" or
+   * "failed", and Sub its SubState, such as "running".
+   */
+  active: string;
+  sub: string;
+  /**
+   * Since is when it entered its active state, if systemd says.
+   */
+  since?: string /* RFC 3339 */;
+  mainPid?: number /* int */;
+  /**
+   * Memory is the memory it uses, in bytes, if systemd counts it.
+   */
+  memory?: number /* uint64 */;
+  /**
+   * Watched reports whether Roost watches it. Other units are only
+   * listed while they've failed.
+   */
+  watched: boolean;
+  /**
+   * DeviceID is the device it runs on.
+   */
+  deviceId: string;
+}
+/**
+ * UnitScope says whose a unit is.
+ */
+/**
+ * UnitScopeSystem is the machine's.
+ */
+export const UnitScopeSystem = "system";
+/**
+ * UnitScopeUser is the user Roost runs as.
+ */
+export const UnitScopeUser = "user";
+/**
+ * The scopes of a Unit.
+ */
+export type UnitScope = typeof UnitScopeSystem | typeof UnitScopeUser;

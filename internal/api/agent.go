@@ -84,6 +84,7 @@ func (h *handler) newEnrollmentCode(w http.ResponseWriter, r *http.Request) {
 		h.fail(w, r, "make an enrollment code", err)
 		return
 	}
+	h.logAction(r, EventKindAgent, "", "Made an install command for the agent")
 	h.writeJSON(w, r, http.StatusCreated, AgentCode{
 		InstallCommand: "curl -fsSL " + shellWord(h.appURL(r)+"/api/agent/install/"+code) + " | bash",
 		CreatedAt:      now,
@@ -151,6 +152,11 @@ func (h *handler) enroll(w http.ResponseWriter, r *http.Request) {
 	}
 	h.opts.Feed.Poke()
 	h.log.Info("enrolled an agent", "device", d.ID, "code_by", e.By)
+	// The admin who made the code let it enroll.
+	h.logEvent(r, store.Event{
+		Level: string(EventLevelSuccess), Kind: string(EventKindAgent), DeviceID: d.ID, Actor: e.By,
+		Message: "The agent on " + h.deviceName(r, d.ID) + " enrolled",
+	})
 	h.writeJSON(w, r, http.StatusOK, AgentSecret{Secret: secret})
 }
 
@@ -175,6 +181,7 @@ func (h *handler) unenroll(w http.ResponseWriter, r *http.Request) {
 	}
 	h.opts.Feed.Poke()
 	h.log.Info("an agent was uninstalled", "device", node)
+	h.logEvent(r, store.Event{Kind: string(EventKindAgent), DeviceID: node, Message: "The agent on " + h.deviceName(r, node) + " was uninstalled"})
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -215,6 +222,7 @@ func (h *handler) revokeAgent(w http.ResponseWriter, r *http.Request) {
 	}
 	h.opts.Feed.Poke()
 	h.log.Info("revoked a device's agent", "device", d.ID, "by", callerOf(r).who.LoginName)
+	h.logAction(r, EventKindAgent, d.ID, "Revoked the agent on "+h.deviceName(r, d.ID))
 	w.WriteHeader(http.StatusNoContent)
 }
 
