@@ -11,6 +11,7 @@ import type {
 	CheckResult,
 	DeviceHistory,
 	DeviceSettings,
+	DeviceSSH,
 	DeviceUsage,
 	ErrorBody,
 	EventKind,
@@ -20,6 +21,9 @@ import type {
 	Me,
 	RecentResults,
 	SetDeviceSettings,
+	SetSSH,
+	SSHSetup,
+	TerminalSessions,
 	UsageHistory
 } from './types.js';
 
@@ -159,6 +163,60 @@ export function putDeviceSettings(
 	return mutate('PUT', `devices/${encodeURIComponent(id)}/settings`, settings, {
 		success: 'Saved'
 	});
+}
+
+function sshPath(id: string, rest = ''): string {
+	return `devices/${encodeURIComponent(id)}/ssh${rest}`;
+}
+
+/** How to let Roost log in to a device over SSH. Admins only. */
+export function getSSHSetup(id: string): Promise<SSHSetup> {
+	return request('GET', sshPath(id));
+}
+
+/** Sets up how Roost logs in to a device, and says so in a toast. Admins only. */
+export function putSSH(id: string, body: SetSSH): Promise<DeviceSSH> {
+	return mutate('PUT', sshPath(id), body, { success: 'Saved' });
+}
+
+/**
+ * Adds Roost's key for the user it runs as, on the machine it runs on, and
+ * sets up access with it. Admins only.
+ */
+export function authorizeSSH(id: string): Promise<DeviceSSH> {
+	return mutate('POST', sshPath(id, '/authorize'), undefined, { success: 'Roost can log in here' });
+}
+
+/** Logs in to a device afresh and finds out what it offers. Admins only. */
+export function checkSSH(id: string): Promise<DeviceSSH> {
+	return mutate('POST', sshPath(id, '/check'));
+}
+
+/** Forgets a device's pinned host key, and says so in a toast. Admins only. */
+export function resetHostKey(id: string): Promise<DeviceSSH> {
+	return mutate('DELETE', sshPath(id, '/host-key'), undefined, {
+		success: 'Roost trusts the next key it sees'
+	});
+}
+
+/** Removes Roost's SSH access to a device, and says so in a toast. Admins only. */
+export function removeSSH(id: string): Promise<void> {
+	return mutate('DELETE', sshPath(id), undefined, { success: 'SSH access removed' });
+}
+
+/** The tmux sessions on a device. Admins only. */
+export function getTerminalSessions(id: string): Promise<TerminalSessions> {
+	return request('GET', `devices/${encodeURIComponent(id)}/terminal/sessions`);
+}
+
+/** Ends a tmux session and what runs in it, and says so in a toast. Admins only. */
+export function killTerminalSession(id: string, name: string): Promise<void> {
+	return mutate(
+		'DELETE',
+		`devices/${encodeURIComponent(id)}/terminal/sessions/${encodeURIComponent(name)}`,
+		undefined,
+		{ success: `Ended ${name}` }
+	);
 }
 
 function checkPath(id: string): string {

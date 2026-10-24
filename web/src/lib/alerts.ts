@@ -155,8 +155,13 @@ export const eventKindLabels: Record<EventKind, string> = {
 	alert: 'Alerts',
 	check: 'Checks',
 	container: 'Containers',
-	access: 'Access'
+	access: 'Access',
+	ssh: 'SSH',
+	terminal: 'Terminals'
 };
+
+/** The kinds of event only admins see: who has a role, SSH access and terminals. */
+export const adminEventKinds: EventKind[] = ['access', 'ssh', 'terminal'];
 
 /** The text class of an event's level. */
 export const eventLevelText: Record<EventLevel, string> = {
