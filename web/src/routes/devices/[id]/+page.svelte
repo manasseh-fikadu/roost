@@ -9,12 +9,15 @@
 	import { page } from '$app/state';
 	import AdminOnly from '#lib/AdminOnly.svelte';
 	import { agentRuns } from '#lib/agent.js';
+	import { onDevice } from '#lib/alerts.js';
+	import AlertsCard from '#lib/alerts/AlertsCard.svelte';
 	import type { Device } from '#lib/api/types.js';
 	import { deviceIcon } from '#lib/device.js';
 	import AddAgent from '#lib/devices/AddAgent.svelte';
 	import DeviceHistory from '#lib/devices/DeviceHistory.svelte';
 	import DeviceSettingsDialog from '#lib/devices/DeviceSettingsDialog.svelte';
 	import MetricTile from '#lib/devices/MetricTile.svelte';
+	import ServicesCard from '#lib/devices/ServicesCard.svelte';
 	import UsagePanel from '#lib/devices/UsagePanel.svelte';
 	import {
 		ago,
@@ -43,6 +46,14 @@
 
 	const device = $derived(live.snapshot?.devices.find((d) => d.id === page.params.id));
 	const now = $derived(live.snapshot ? Date.parse(live.snapshot.generatedAt) : Date.now());
+	const devices = $derived(live.snapshot?.devices ?? []);
+	// On the machine Roost runs on, which can be two nodes, either's alerts
+	// and services count.
+	const alerts = $derived(device ? onDevice(live.snapshot?.alerts ?? [], device, devices) : []);
+	const units = $derived(device ? onDevice(live.snapshot?.units ?? [], device, devices) : []);
+	const containers = $derived(
+		device ? onDevice(live.snapshot?.containers ?? [], device, devices) : []
+	);
 
 	let editing = $state(false);
 	let range: HistoryRange = $state('24h');
@@ -213,6 +224,9 @@
 
 	<div class="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
 		<div class="min-w-0 space-y-4">
+			{#if alerts.length > 0}
+				<AlertsCard {alerts} {devices} {now} />
+			{/if}
 			{#if device.agent && !device.measuredBy}
 				<Card
 					title="Waiting for the agent"
@@ -347,6 +361,9 @@
 					<p class="px-4 py-4 text-[13px] text-fg-subtle">No system details without the agent.</p>
 				{/if}
 			</Card>
+			{#if device.measuredBy === 'hub' && (live.snapshot?.collectors ?? []).some((c) => c.name === 'systemd units')}
+				<ServicesCard {units} {containers} {now} />
+			{/if}
 			{#if device.settings.notes}
 				<Card title="Notes">
 					<p class="px-4 py-3 text-[13px] whitespace-pre-wrap text-fg-muted">

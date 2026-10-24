@@ -81,7 +81,7 @@
 			<label for="{id}-alert">
 				<span class="block text-[13px] font-medium text-fg">Alert when offline</span>
 				<span class="block text-[12px] text-fg-subtle">
-					Roost starts raising alerts with #26. Until then, this is only saved.
+					Roost raises an alert once it's been offline for 10 minutes.
 				</span>
 			</label>
 			<Switch id="{id}-alert" bind:checked={alertOffline} />

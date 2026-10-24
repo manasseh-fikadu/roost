@@ -1,16 +1,30 @@
 <!--
 	The network map: the internet and Tailscale's DERP relays above the hub,
-	and every peer below it, with a line from the hub to each. A line flows
-	while the hub can see the link, and is dashed while it can't. On a phone,
-	the map is a list instead.
+	every peer below it, and the hub's services, its containers and systemd
+	units, beside it, with a line from the hub to each. A line flows while
+	the hub can see the link, and is dashed while it can't. On a phone, the
+	map is a list instead.
 -->
 <script lang="ts">
+	import Boxes from '@lucide/svelte/icons/boxes';
+	import ContainerIcon from '@lucide/svelte/icons/container';
 	import Globe from '@lucide/svelte/icons/globe';
 	import RadioTower from '@lucide/svelte/icons/radio-tower';
+	import ServerCog from '@lucide/svelte/icons/server-cog';
 	import { resolve } from '$app/paths';
+	import { mapServices, type MapService } from '#lib/alerts.js';
 	import type { Device, Snapshot } from '#lib/api/types.js';
 	import { deviceIcon } from '#lib/device.js';
-	import { dateTime, duration, latency, osLabel, percent, rateShort, ratio } from '#lib/format.js';
+	import {
+		bytes,
+		dateTime,
+		duration,
+		latency,
+		osLabel,
+		percent,
+		rateShort,
+		ratio
+	} from '#lib/format.js';
 	import {
 		derpStatus,
 		linkLabel,
@@ -33,9 +47,14 @@
 	const listBelow = 560;
 	const upstreamHeight = 90;
 	const deviceHeight = 132;
+	const serviceHeight = 96;
 
 	/** What a card on the map shows. */
-	type View = { kind: 'internet' } | { kind: 'derp' } | { kind: 'device'; device: Device };
+	type View =
+		| { kind: 'internet' }
+		| { kind: 'derp' }
+		| { kind: 'device'; device: Device }
+		| { kind: 'service'; service: MapService };
 
 	interface Node {
 		id: string;
@@ -103,6 +122,29 @@
 			nodes: peers.map((d) => ({ id: d.id, h: deviceHeight, view: { kind: 'device', device: d } })),
 			edges: peers.map(peerEdge)
 		});
+		const failing = new Set(snapshot.checks.filter((c) => c.state === 'failing').map((c) => c.id));
+		const services = mapServices(snapshot.containers, snapshot.units, failing);
+		const edgeLabels: Record<MapService['kind'], string> = {
+			compose: 'compose',
+			container: 'docker',
+			unit: 'systemd'
+		};
+		out.push({
+			id: 'services',
+			title: 'Services',
+			link: 'side-left',
+			busLabel: 'services',
+			nodes: services.map((s) => ({
+				id: s.id,
+				h: serviceHeight,
+				view: { kind: 'service', service: s }
+			})),
+			edges: services.map((s) => ({
+				to: s.id,
+				label: edgeLabels[s.kind],
+				state: edgeState(s.status)
+			}))
+		});
 		return out;
 	});
 
@@ -153,6 +195,24 @@
 		>
 			<MapFact label="region">{uplink.derp?.code ?? '—'}</MapFact>
 			<MapFact label="udp">{uplink.checkedAt ? (uplink.udp ? 'yes' : 'blocked') : '—'}</MapFact>
+		</MapCard>
+	{:else if view.kind === 'service'}
+		{@const s = view.service}
+		<MapCard
+			icon={s.kind === 'unit' ? ServerCog : s.kind === 'compose' ? Boxes : ContainerIcon}
+			title={s.name}
+			status={s.status}
+			subtitle={s.subtitle}
+			href={s.kind === 'unit' && hub
+				? resolve('/devices/[id]', { id: hub.id })
+				: resolve('/docker')}
+		>
+			{#if s.kind === 'unit'}
+				<MapFact label="memory">{s.memory ? bytes(s.memory) : '—'}</MapFact>
+			{:else}
+				<MapFact label="ports" wide>{s.ports.length ? s.ports.join(', ') : 'internal only'}</MapFact
+				>
+			{/if}
 		</MapCard>
 	{:else}
 		{@const d = view.device}

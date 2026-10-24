@@ -2,6 +2,9 @@ import { toast } from '#lib/toast.svelte.js';
 import type {
 	AgentCode,
 	AgentSetup,
+	Alert,
+	AlertList,
+	AlertNote,
 	Check,
 	CheckHistory,
 	CheckInput,
@@ -10,6 +13,8 @@ import type {
 	DeviceSettings,
 	DeviceUsage,
 	ErrorBody,
+	EventKind,
+	EventList,
 	Health,
 	HealthHistory,
 	Me,
@@ -193,4 +198,53 @@ export function deleteCheck(id: string): Promise<void> {
 /** Runs a check now and returns its result. Admins only. */
 export function runCheck(id: string): Promise<CheckResult> {
 	return mutate('POST', `${checkPath(id)}/run`);
+}
+
+/** Resolved alerts, the latest opened first, older than the alert `before` if it's given. */
+export function getResolvedAlerts(before?: number): Promise<AlertList> {
+	return request('GET', `alerts${before ? `?before=${before}` : ''}`);
+}
+
+function alertPath(id: number): string {
+	return `alerts/${encodeURIComponent(String(id))}`;
+}
+
+/** Acknowledges an open alert, or with `ack` false, takes that back. Admins only. */
+export function ackAlert(id: number, ack: boolean): Promise<Alert> {
+	return mutate(ack ? 'PUT' : 'DELETE', `${alertPath(id)}/ack`);
+}
+
+/** Snoozes an open alert for some minutes, or with null, wakes it. Admins only. */
+export function snoozeAlert(id: number, minutes: number | null): Promise<Alert> {
+	return minutes === null
+		? mutate('DELETE', `${alertPath(id)}/snooze`)
+		: mutate('PUT', `${alertPath(id)}/snooze`, { minutes });
+}
+
+/** Adds a note to an alert. Admins only. */
+export function addAlertNote(id: number, text: string): Promise<AlertNote> {
+	return mutate('POST', `${alertPath(id)}/notes`, { text });
+}
+
+/** What to read of the activity log. */
+export interface EventQuery {
+	/** Events older than this one. */
+	before?: number;
+	/** Events newer than this one. */
+	after?: number;
+	kind?: EventKind;
+	deviceId?: string;
+	limit?: number;
+}
+
+/** A page of the activity log, newest first. */
+export function getEvents(q: EventQuery = {}): Promise<EventList> {
+	const params = new URLSearchParams();
+	if (q.before) params.set('before', String(q.before));
+	if (q.after) params.set('after', String(q.after));
+	if (q.kind) params.set('kind', q.kind);
+	if (q.deviceId) params.set('device', q.deviceId);
+	if (q.limit) params.set('limit', String(q.limit));
+	const query = params.toString();
+	return request('GET', `events${query ? `?${query}` : ''}`);
 }
