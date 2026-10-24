@@ -186,7 +186,11 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 		case AlertSourceDevice, AlertSourceAgent:
 			return tailnetFresh
 		case AlertSourceMetrics:
-			return current[deviceID]
+			// A device nothing measures, such as one whose agent was revoked,
+			// has no metrics left to wait for. One with an agent that stopped,
+			// or hasn't reported since it enrolled, waits for its next report.
+			d := byID[deviceID]
+			return current[deviceID] || (d.MeasuredBy == "" && d.Agent == nil)
 		case AlertSourceContainer:
 			return dockerFresh
 		case AlertSourceUnit:

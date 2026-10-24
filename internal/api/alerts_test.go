@@ -286,6 +286,56 @@ func TestFeed_alertsOpenAndResolve(t *testing.T) {
 	})
 }
 
+// A device's metric alerts wait for its agent while it's stopped, and
+// resolve once the agent is revoked, since nothing measures the device then.
+func TestFeed_metricAlertsAfterRevoke(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		st := checksStore(t)
+		synctest.Wait()
+		status := &tailnet.Status{
+			State: tailnet.StateRunning,
+			Self:  tailnet.Device{ID: "roost", HostName: "roost", Online: true},
+			Peers: []tailnet.Device{{ID: "laptop", HostName: "laptop", Online: true}},
+		}
+		reg := agents.NewRegistry(st, nil)
+		var hb agents.Heartbeat
+		if err := json.Unmarshal([]byte(`{"v":1,"metrics":{"diskUsed":99,"diskTotal":100}}`), &hb); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := reg.Record(t.Context(), "laptop", hb, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		feed := api.NewFeed(api.FeedOptions{
+			Tailnet: func() tailnet.Snapshot { return tailnet.Snapshot{Status: status, StatusAt: time.Now()} },
+			Agents:  reg, Alerts: alerts.NewEngine(st, nil), Store: st,
+		})
+		go feed.Run(t.Context())
+		synctest.Wait()
+		if got := alertSummary(feed.Latest().Alerts); !slices.Equal(got, []string{"critical: Disk 99% full on laptop"}) {
+			t.Fatalf("alerts = %q, want the laptop's disk", got)
+		}
+
+		// The agent stopped, so Roost can't say the disk was cleaned up.
+		time.Sleep(3 * time.Minute)
+		want := []string{"critical: Disk 99% full on laptop", "warning: Agent on laptop stopped reporting"}
+		if got := alertSummary(feed.Latest().Alerts); !slices.Equal(got, want) {
+			t.Errorf("while the agent was stopped, alerts = %q, want %q", got, want)
+		}
+
+		if err := reg.Forget(t.Context(), "laptop"); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(30 * time.Second)
+		if got := feed.Latest().Alerts; len(got) != 2 {
+			t.Errorf("30 seconds after the revoke, alerts = %q, want them still open", alertSummary(got))
+		}
+		time.Sleep(time.Minute)
+		if got := feed.Latest().Alerts; len(got) != 0 {
+			t.Errorf("a minute after the revoke, alerts = %q, want none", alertSummary(got))
+		}
+	})
+}
+
 // Once the tailnet's status has been known for a minute, devices joining,
 // leaving, going offline and coming online are in the activity log.
 func TestFeed_deviceActivity(t *testing.T) {
