@@ -817,3 +817,28 @@ func TestDocker_deviceFlag(t *testing.T) {
 		t.Error("the laptop has Docker after a check that found no socket")
 	}
 }
+
+// In embedded mode, the machine Roost runs on is two nodes. Only the machine's
+// own has Docker, so a list of machines with Docker has it once.
+func TestDocker_deviceFlagOfTheHostMachine(t *testing.T) {
+	t.Parallel()
+	e := newDockerEnv(t, testStore(t), false)
+	status, err := e.tn.Status(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The test tailnet's server is the machine Roost runs on.
+	for i := range status.Peers {
+		status.Peers[i].SameMachine = status.Peers[i].ID == "server"
+	}
+	e.tn.SetStatus(*status)
+	snap := api.NewFeed(api.FeedOptions{
+		Tailnet: e.opts.Snapshot, Store: e.st, SSH: e.opts.SSH.Access,
+		Docker: func() docker.Reading { return docker.Reading{} },
+	}).Latest()
+	for id, want := range map[string]bool{"roost": false, "server": true, "laptop": true, "phone": false} {
+		if got := findDevice(t, snap, id).Docker; got != want {
+			t.Errorf("%s has Docker: %v, want %v", id, got, want)
+		}
+	}
+}
