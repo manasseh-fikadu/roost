@@ -1822,11 +1822,13 @@ type DockerSubnet struct {
 	Gateway string `json:"gateway,omitempty"`
 }
 
-// DockerNetworkContainer is a container on a network.
+// DockerNetworkContainer is a container on a network, with its address there.
 type DockerNetworkContainer struct {
-	DockerRef
-	IP  string `json:"ip,omitempty"`
-	MAC string `json:"mac,omitempty"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Running bool   `json:"running"`
+	IP      string `json:"ip,omitempty"`
+	MAC     string `json:"mac,omitempty"`
 }
 
 // DockerHistory is the response to GET

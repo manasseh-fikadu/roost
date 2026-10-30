@@ -2582,10 +2582,12 @@ export interface DockerSubnet {
   gateway?: string;
 }
 /**
- * DockerNetworkContainer is a container on a network.
+ * DockerNetworkContainer is a container on a network, with its address there.
  */
 export interface DockerNetworkContainer {
-  DockerRef: DockerRef;
+  id: string;
+  name: string;
+  running: boolean;
   ip?: string;
   mac?: string;
 }
