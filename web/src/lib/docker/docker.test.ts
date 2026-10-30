@@ -62,7 +62,12 @@ describe('stateBadge', () => {
 		['restarting', { state: 'restarting' }, 'restarting', 'amber'],
 		['paused', { state: 'paused' }, 'paused', 'blue'],
 		['crashed', { state: 'exited', exitCode: 3 }, 'exited (3)', 'red'],
-		['killed for memory', { state: 'exited', exitCode: 137, oomKilled: true }, 'out of memory', 'red'],
+		[
+			'killed for memory',
+			{ state: 'exited', exitCode: 137, oomKilled: true },
+			'out of memory',
+			'red'
+		],
 		['stopped', { state: 'exited', exitCode: 137 }, 'stopped', 'gray'],
 		['created', { state: 'created' }, 'created', 'gray'],
 		['dead', { state: 'dead' }, 'dead', 'red']

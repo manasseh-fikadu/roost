@@ -24,7 +24,9 @@ export function isUp(state: string): boolean {
  * offline, and one that stopped cleanly is unknown, since stopping is a thing
  * to do.
  */
-export function rowStatus(c: Pick<DockerContainerRow, 'state' | 'health' | 'exitCode' | 'oomKilled'>): Status {
+export function rowStatus(
+	c: Pick<DockerContainerRow, 'state' | 'health' | 'exitCode' | 'oomKilled'>
+): Status {
 	switch (c.state) {
 		case 'running':
 			return c.health === 'unhealthy' ? 'attention' : 'online';
@@ -161,4 +163,3 @@ export function totals(rows: DockerContainerRow[]) {
 		cpus: running.find((c) => c.stats)?.stats?.cpus ?? null
 	};
 }
-

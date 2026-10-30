@@ -76,7 +76,11 @@
 		<Button variant="ghost" disabled={busy} onclick={() => (open = false)}>Cancel</Button>
 		{#if shown}
 			{@const Icon = actionIcons[shown.action]}
-			<Button variant={shown.action === 'start' ? 'primary' : 'danger'} loading={busy} onclick={run}>
+			<Button
+				variant={shown.action === 'start' ? 'primary' : 'danger'}
+				loading={busy}
+				onclick={run}
+			>
 				{#snippet icon()}<Icon class="size-3.5" />{/snippet}
 				{actionCopy[shown.action].label}
 			</Button>
