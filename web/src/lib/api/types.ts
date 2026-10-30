@@ -198,7 +198,7 @@ export interface Snapshot {
   alerts: Alert[];
   /**
    * Containers are the Docker containers on the machine Roost runs on, by
-   * name. Other machines' come with #29.
+   * name. GET /api/devices/{id}/docker/containers has any machine's.
    */
   containers: Container[];
   /**

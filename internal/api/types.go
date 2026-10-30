@@ -141,7 +141,7 @@ type Snapshot struct {
 	// severe first. GET /api/alerts has the resolved ones.
 	Alerts []Alert `json:"alerts"`
 	// Containers are the Docker containers on the machine Roost runs on, by
-	// name. Other machines' come with #29.
+	// name. GET /api/devices/{id}/docker/containers has any machine's.
 	Containers []Container `json:"containers"`
 	// Units are the systemd units Roost watches on the machine it runs on,
 	// and the ones that failed, the system's first, by name.
