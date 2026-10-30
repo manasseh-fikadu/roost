@@ -262,10 +262,27 @@ func (m *Manager) dialUnix(ctx context.Context, t target, path string) (net.Conn
 	conn, err := client.DialContext(ctx, "unix", path)
 	if err != nil {
 		release()
+		if _, ok := errors.AsType[*gossh.OpenChannelError](err); ok {
+			return nil, &SocketError{Path: path, Err: err}
+		}
 		return nil, err
 	}
 	return &releasingConn{Conn: conn, release: release}, nil
 }
+
+// A SocketError is the error for a Unix socket on a machine that sshd
+// wouldn't open: nothing listens on it, or the user Roost logs in as may not
+// use it.
+type SocketError struct {
+	Path string
+	Err  error
+}
+
+func (e *SocketError) Error() string {
+	return "can't open " + e.Path + " on the machine: " + e.Err.Error()
+}
+
+func (e *SocketError) Unwrap() error { return e.Err }
 
 // releasingConn calls release when it's closed.
 type releasingConn struct {
