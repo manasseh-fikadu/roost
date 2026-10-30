@@ -8,27 +8,53 @@ import (
 )
 
 // sshd runs each command Roost sends with the login shell of the user Roost
-// logs in as, which may be sh, bash, zsh or fish. Fish reads a backslash in
-// single quotes differently from the others, so Roost never sends one there:
-// every command is a fixed sh script with no backslashes, and the values it
-// works on, such as a session's name, go to sh as its arguments, each in
-// single quotes. A value can't have a backslash or a control character, such
-// as a newline. A single quote in a value becomes '\'', whose backslash is
-// outside the quotes, where every one of those shells reads it the same.
+// logs in as, which may be sh, bash, zsh or fish. They read single quotes the
+// same way, except that fish also reads a backslash inside them as an escape,
+// so Roost never leaves a backslash inside single quotes: every command is a
+// fixed sh script, and the values it works on, such as a session's name or a
+// file's path, go to sh as its arguments, each in single quotes. A single
+// quote in a value becomes '\'', and a backslash becomes '\\', where the
+// backslashes are outside the quotes, and every one of those shells reads
+// them the same. Any other character, even a newline, stays as it is in the
+// quotes. Only a NUL can't be in a command at all.
 
 // Quote returns s in single quotes for a POSIX shell, or fish, as one word.
-// It panics if s has a backslash or a control character, which the shells
-// don't agree on: check values with Clean first.
+// It panics if s has a NUL, which no command can hold: check values that
+// come from outside with CheckArg first.
 func Quote(s string) string {
-	if strings.ContainsFunc(s, func(r rune) bool { return r == '\\' || unicode.IsControl(r) }) {
-		panic("ssh.Quote: a backslash or control character in " + s)
+	if strings.ContainsRune(s, 0) {
+		panic("ssh.Quote: a NUL in " + s)
 	}
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	return "'" + quoter.Replace(s) + "'"
+}
+
+// quoter turns what single quotes can't hold into what they can, in one pass
+// so that the backslashes it adds aren't doubled.
+var quoter = strings.NewReplacer(`'`, `'\''`, `\`, `'\\'`)
+
+// ErrBadArg is why CheckArg refuses a value.
+var ErrBadArg = errors.New("a name can't have a NUL")
+
+// checkArgs returns ErrBadArg if any of args has a NUL.
+func checkArgs(args []string) error {
+	for _, a := range args {
+		if err := CheckArg(a); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CheckArg returns ErrBadArg if s has a NUL, which Quote can't quote.
+func CheckArg(s string) error {
+	if strings.ContainsRune(s, 0) {
+		return ErrBadArg
+	}
+	return nil
 }
 
 // command returns a command that runs script in sh with args as $1, $2 and
-// so on, whatever the user's login shell is. The script must have no
-// backslashes or control characters, which Quote checks.
+// so on, whatever the user's login shell is.
 func command(script string, args ...string) string {
 	var b strings.Builder
 	b.WriteString("exec sh -c " + Quote(script) + " sh")

@@ -16,6 +16,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/checks"
+	"github.com/manasseh-fikadu/roost/internal/files"
 	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
@@ -85,6 +86,13 @@ func newHandler(opts Options) *handler {
 	if h.log == nil {
 		h.log = slog.New(slog.DiscardHandler)
 	}
+	if opts.Stopping != nil {
+		// Uploads wait for a quiet moment to write their line.
+		go func() {
+			<-opts.Stopping
+			h.audit.flushAll(h)
+		}()
+	}
 	return h
 }
 
@@ -113,6 +121,23 @@ func (h *handler) routes(rt *router) {
 	rt.read("GET /api/devices/{id}/terminal", admins, h.terminal)
 	rt.read("GET /api/devices/{id}/terminal/sessions", admins, h.terminalSessions)
 	rt.write("DELETE /api/devices/{id}/terminal/sessions/{name}", h.killSession)
+
+	// A file's content is served from Roost's own origin, so the raw route
+	// sandboxes it. All of these are for admins, who can open shells already.
+	rt.read("GET /api/devices/{id}/files/list", admins, h.listFiles)
+	rt.read("GET /api/devices/{id}/files/stat", admins, h.statFile)
+	rt.read("GET /api/devices/{id}/files/raw", admins, h.rawFile)
+	rt.read("GET /api/devices/{id}/files/archive", admins, h.archive)
+	rt.read("GET /api/devices/{id}/files/search", admins, h.searchFiles)
+	rt.write("POST /api/devices/{id}/files/archive", h.parkArchive)
+	rt.write("POST /api/devices/{id}/files/exists", h.namesExist)
+	rt.write("PUT /api/devices/{id}/files/upload", h.uploadFile)
+	rt.write("PUT /api/devices/{id}/files/write", h.writeFile)
+	rt.write("POST /api/devices/{id}/files/mkdir", h.makeFolder)
+	rt.write("POST /api/devices/{id}/files/rename", h.renameFile)
+	rt.write("POST /api/devices/{id}/files/move", h.transferFiles("Moved", (*files.Remote).Move))
+	rt.write("POST /api/devices/{id}/files/copy", h.transferFiles("Copied", (*files.Remote).Copy))
+	rt.write("POST /api/devices/{id}/files/delete", h.deleteFiles)
 
 	rt.read("GET /api/checks/recent", viewers, h.recentResults)
 	rt.read("GET /api/checks/{id}/history", viewers, h.checkHistory)
@@ -166,6 +191,10 @@ type handler struct {
 	// to read while a heartbeat is recorded, so a heartbeat that was on its
 	// way can't bring the agent's report back.
 	agentsMu sync.RWMutex
+	// archives are the selections parked for a download, and audit what the
+	// activity log is waiting to write about files.
+	archives files.Archives
+	audit    fileAudit
 }
 
 func (h *handler) health(w http.ResponseWriter, r *http.Request) {
@@ -214,7 +243,12 @@ func (h *handler) writeJSON(w http.ResponseWriter, r *http.Request, status int, 
 // readJSON decodes r's JSON body into v. If it can't, it answers with an
 // error and returns false.
 func (h *handler) readJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxBody))
+	return h.readJSONUpTo(w, r, v, maxBody)
+}
+
+// readJSONUpTo is readJSON for a body of up to limit bytes.
+func (h *handler) readJSONUpTo(w http.ResponseWriter, r *http.Request, v any, limit int64) bool {
+	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, limit))
 	dec.DisallowUnknownFields()
 	err := dec.Decode(v)
 	if err == nil {

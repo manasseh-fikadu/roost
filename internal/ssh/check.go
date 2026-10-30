@@ -238,8 +238,15 @@ func (m *Manager) due(now time.Time) []target {
 	return out
 }
 
+// doneChecking marks a check of a machine as over, and wakes Run: an admin
+// who changed the machine's access while it ran has no check yet, since due
+// skips a machine that's being checked, and would wait for the next sweep.
 func (m *Manager) doneChecking(id string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	delete(m.checking, id)
+	select {
+	case m.wake <- struct{}{}:
+	default:
+	}
 }

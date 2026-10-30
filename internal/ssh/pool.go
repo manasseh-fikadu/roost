@@ -24,6 +24,10 @@ type pooled struct {
 	active    int
 	idleSince time.Time
 	closeOnce sync.Once
+	// sftp is the SFTP client on the connection, which is made when
+	// something first asks for it. sftpMu guards it.
+	sftpMu sync.Mutex
+	sftp   *SFTP
 }
 
 func (p *pooled) close() {
@@ -40,6 +44,15 @@ func (p *pooled) close() {
 // sharedTo returns the shared connection to t, connecting if there's none,
 // and a function to call once done with it.
 func (m *Manager) sharedTo(ctx context.Context, t target) (*gossh.Client, func(), error) {
+	p, release, err := m.sharedPool(ctx, t)
+	if err != nil {
+		return nil, nil, err
+	}
+	return p.client, release, nil
+}
+
+// sharedPool is sharedTo for the pooled connection that holds the client.
+func (m *Manager) sharedPool(ctx context.Context, t target) (*pooled, func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -77,15 +90,12 @@ func (m *Manager) sharedTo(ctx context.Context, t target) (*gossh.Client, func()
 		release()
 		return nil, nil, p.err
 	}
-	return p.client, release, nil
+	return p, release, nil
 }
 
 // dialShared connects p to t with a, and takes it out of the pool when it
 // fails or closes. gen is t's generation when a was read.
 func (m *Manager) dialShared(ctx context.Context, t target, a store.SSHAccess, gen uint64, p *pooled) {
-	p.client, p.err = m.connect(ctx, t, a)
-	close(p.ready)
-	m.record(t.id, gen, p.err)
 	drop := func() {
 		m.mu.Lock()
 		defer m.mu.Unlock()
@@ -93,8 +103,17 @@ func (m *Manager) dialShared(ctx context.Context, t target, a store.SSHAccess, g
 			delete(m.pool, t.id)
 		}
 	}
-	if p.err != nil {
+	client, err := m.connect(ctx, t, a)
+	// What a caller finds once it stops waiting has to be settled by then. A
+	// caller that retries at once must dial afresh, not join the attempt that
+	// failed, and one that asks what happened must find out.
+	m.record(t.id, gen, err)
+	if err != nil {
 		drop()
+	}
+	p.client, p.err = client, err
+	close(p.ready)
+	if err != nil {
 		return
 	}
 	_ = p.client.Wait()
@@ -149,11 +168,13 @@ const (
 )
 
 // Exec runs a sh script on a device, with args as $1, $2 and so on, over its
-// shared connection, and waits for it to finish or ctx to end. The script
-// must have no backslashes or control characters, and neither can args
-// (see Quote). It runs with the PATH extended to where package managers put
-// tools such as tmux.
+// shared connection, and waits for it to finish or ctx to end. The args can
+// be anything but a NUL, which fails with ErrBadArg (see Quote). It runs with
+// the PATH extended to where package managers put tools such as tmux.
 func (m *Manager) Exec(ctx context.Context, deviceID, script string, args ...string) (Result, error) {
+	if err := checkArgs(args); err != nil {
+		return Result{}, err
+	}
 	t, err := m.target(deviceID)
 	if err != nil {
 		return Result{}, err
@@ -167,6 +188,9 @@ func (m *Manager) exec(ctx context.Context, t target, script string, args ...str
 		return Result{}, err
 	}
 	defer release()
+	if err := checkArgs(args); err != nil {
+		return Result{}, err
+	}
 	return run(ctx, client, command(extraPath+script, args...))
 }
 

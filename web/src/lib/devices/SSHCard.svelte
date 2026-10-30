@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
+	import FolderOpen from '@lucide/svelte/icons/folder-open';
 	import KeyRound from '@lucide/svelte/icons/key-round';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
@@ -335,6 +336,12 @@
 						class={buttonClass('secondary', 'sm')}
 					>
 						<SquareTerminal class="size-3.5" /> Terminal
+					</a>
+					<a
+						href="{resolve('/files')}?device={encodeURIComponent(device.id)}"
+						class={buttonClass('secondary', 'sm')}
+					>
+						<FolderOpen class="size-3.5" /> Files
 					</a>
 				{/if}
 				<Button

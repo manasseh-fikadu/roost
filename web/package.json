@@ -16,6 +16,10 @@
 		"format": "prettier --write ."
 	},
 	"devDependencies": {
+		"@codemirror/language-data": "^6.5.2",
+		"@codemirror/state": "^6.7.6",
+		"@codemirror/theme-one-dark": "^6.1.3",
+		"@codemirror/view": "^6.43.15",
 		"@fontsource-variable/geist": "^5.3.0",
 		"@fontsource-variable/geist-mono": "^5.3.0",
 		"@internationalized/date": "^3.12.4",
@@ -29,6 +33,8 @@
 		"@xterm/addon-web-links": "^0.12.0",
 		"@xterm/xterm": "^6.0.0",
 		"bits-ui": "^2.20.0",
+		"codemirror": "^6.0.2",
+		"docx-preview": "^0.4.1",
 		"prettier": "^3.8.3",
 		"prettier-plugin-svelte": "^4.1.0",
 		"prettier-plugin-tailwindcss": "^0.8.0",
@@ -36,7 +42,8 @@
 		"svelte-check": "^4.6.0",
 		"tailwindcss": "^4.3.0",
 		"typescript": "^6.0.3",
-		"vite": "^8.3.0"
+		"vite": "^8.3.0",
+		"xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
 	},
 	"imports": {
 		"#lib": "./src/lib/index.js",

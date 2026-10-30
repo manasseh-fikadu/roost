@@ -1000,6 +1000,9 @@ const (
 	// EventKindTerminal is a terminal an admin opened, or a tmux session
 	// they ended.
 	EventKindTerminal EventKind = "terminal"
+	// EventKindFiles is a change an admin made to a device's files, or a
+	// folder they downloaded.
+	EventKindFiles EventKind = "files"
 )
 
 // EventList is the response to GET /api/events?before=&after=&limit=&kind=&device=:
@@ -1263,3 +1266,176 @@ const (
 	TerminalMessageTypeExit  TerminalMessageType = "exit"
 	TerminalMessageTypeError TerminalMessageType = "error"
 )
+
+// FileType says what a file is.
+type FileType string
+
+// The types of file.
+const (
+	FileTypeFile    FileType = "file"
+	FileTypeDir     FileType = "dir"
+	FileTypeSymlink FileType = "symlink"
+	FileTypeOther   FileType = "other"
+)
+
+// FileEntry is a file, folder or link on a device.
+type FileEntry struct {
+	Name string `json:"name"`
+	// Path is absolute on the device.
+	Path string `json:"path"`
+	// Type is what the entry itself is, without following a link.
+	Type FileType `json:"type"`
+	// TargetType is what a link points to. It's left out for a broken link
+	// and for what isn't a link.
+	TargetType FileType `json:"targetType,omitempty"`
+	// Target is where a link points, as written.
+	Target string `json:"target,omitempty"`
+	// Size is in bytes. For a link to a file, it's the file's.
+	Size int64 `json:"size"`
+	// ModifiedAt is whole seconds, as SFTP reports it.
+	ModifiedAt time.Time `json:"modifiedAt"`
+	// Mode is the permissions as ls shows them, such as "drwxr-xr-x".
+	Mode string `json:"mode"`
+	// Owner and Group are names, or numbers where the device has none.
+	Owner string `json:"owner"`
+	Group string `json:"group"`
+}
+
+// FileListing is the response to GET /api/devices/{id}/files/list?path=: a
+// folder and what's in it, in no order. Without a path, it's the home folder
+// of the user Roost logs in as.
+type FileListing struct {
+	// Path is the folder with links resolved, and Parent the folder above
+	// it, which the root doesn't have.
+	Path   string `json:"path"`
+	Parent string `json:"parent,omitempty"`
+	// Home is the home folder of the user Roost logs in as.
+	Home    string      `json:"home"`
+	Entries []FileEntry `json:"entries"`
+	// Space is the room on the file system that holds the folder, if the
+	// device says.
+	Space *FileSpace `json:"space,omitempty"`
+}
+
+// FileSpace is the free and total bytes of a file system.
+type FileSpace struct {
+	Free  uint64 `json:"free"`
+	Total uint64 `json:"total"`
+}
+
+// FileStat is the response to GET /api/devices/{id}/files/stat?path=.
+type FileStat struct {
+	Entry FileEntry `json:"entry"`
+	Home  string    `json:"home"`
+}
+
+// FileSearch is the response to GET
+// /api/devices/{id}/files/search?path=&q=&limit=&depth=: the files under a
+// folder whose names match. A plain word matches anywhere in a name, ignoring
+// case, and one with * ? or [ is a pattern. Limit is 300 by default and 1000
+// at most, and depth 12 and 30.
+type FileSearch struct {
+	Root    string      `json:"root"`
+	Query   string      `json:"query"`
+	Entries []FileEntry `json:"entries"`
+	// Truncated says there were more than the limit, or the search ran out
+	// of its 20 seconds.
+	Truncated bool `json:"truncated"`
+}
+
+// ConflictMode says what to do when a file moved, copied or uploaded to a
+// folder has the name of one that's there.
+type ConflictMode string
+
+// The ways to settle a conflict. A folder is never replaced.
+const (
+	// ConflictModeFail refuses, with a 409. It's the default.
+	ConflictModeFail ConflictMode = "fail"
+	// ConflictModeOverwrite replaces the file.
+	ConflictModeOverwrite ConflictMode = "overwrite"
+	// ConflictModeRename gives the new file a free name, such as "a (1).txt".
+	ConflictModeRename ConflictMode = "rename"
+)
+
+// FileBulk is the response to the requests that change several paths at once.
+// One failing doesn't stop the rest, but if there's only one path, its failure
+// is the response.
+type FileBulk struct {
+	Done   int           `json:"done"`
+	Failed []FileFailure `json:"failed"`
+	// Paths are where the ones that worked ended up, in order. A copy or move
+	// with ConflictModeRename may name them differently.
+	Paths []string `json:"paths"`
+}
+
+// FileFailure is a path that a request couldn't change, and why.
+type FileFailure struct {
+	Path  string `json:"path"`
+	Error string `json:"error"`
+}
+
+// FileUpload is the response to PUT
+// /api/devices/{id}/files/upload?dir=&name=&conflict=, whose body is the
+// file. The name may be a relative path from a folder upload, such as
+// "photos/2024/a.jpg", whose folders are made.
+type FileUpload struct {
+	Path string `json:"path"`
+	Name string `json:"name"`
+	Size int64  `json:"size"`
+}
+
+// ArchiveFiles is the body of POST /api/devices/{id}/files/archive, which
+// parks a selection of names in a folder, for a selection too big for a URL.
+// GET /api/devices/{id}/files/archive?token= downloads it as a .tar.gz, for
+// five minutes, and so does GET ?dir=&name=&name= for a short one.
+type ArchiveFiles struct {
+	Dir   string   `json:"dir"`
+	Names []string `json:"names"`
+}
+
+// ArchiveToken is the response to ArchiveFiles.
+type ArchiveToken struct {
+	Token string `json:"token"`
+}
+
+// CheckNames is the body of POST /api/devices/{id}/files/exists, which asks
+// which names are in a folder already. A name may be a relative path.
+type CheckNames struct {
+	Dir   string   `json:"dir"`
+	Names []string `json:"names"`
+}
+
+// ExistingNames is the response to CheckNames.
+type ExistingNames struct {
+	Existing []string `json:"existing"`
+}
+
+// MakeFolder is the body of POST /api/devices/{id}/files/mkdir, and answers
+// with the new folder's FileEntry.
+type MakeFolder struct {
+	Dir  string `json:"dir"`
+	Name string `json:"name"`
+}
+
+// RenameFile is the body of POST /api/devices/{id}/files/rename, and answers
+// with the FileEntry as it is then.
+type RenameFile struct {
+	Path string `json:"path"`
+	Name string `json:"name"`
+}
+
+// MoveFiles is the body of POST /api/devices/{id}/files/move and .../copy,
+// which put paths in the folder Dest, and answer with a FileBulk.
+type MoveFiles struct {
+	Paths []string `json:"paths"`
+	Dest  string   `json:"dest"`
+	// Conflict is ConflictModeFail if it's left out.
+	Conflict ConflictMode `json:"conflict,omitempty"`
+}
+
+// DeleteFiles is the body of POST /api/devices/{id}/files/delete, which
+// deletes the paths and what's in the folders among them, and answers with a
+// FileBulk. A link goes without what it points to.
+type DeleteFiles struct {
+	Paths []string `json:"paths"`
+}
