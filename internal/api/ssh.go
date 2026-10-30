@@ -52,12 +52,13 @@ func (h *handler) sshError(w http.ResponseWriter, r *http.Request, err error) bo
 	case errors.Is(err, ssh.ErrStarting):
 		status = http.StatusServiceUnavailable
 	case errors.Is(err, ssh.ErrNotSetUp), errors.Is(err, ssh.ErrOffline), errors.Is(err, ssh.ErrHostKeyChange),
-		errors.Is(err, ssh.ErrNoTmux), errors.Is(err, ssh.ErrNoChangedKey), errors.Is(err, ssh.ErrOfferedKeyChanged):
+		errors.Is(err, ssh.ErrNoTmux), errors.Is(err, ssh.ErrNoChangedKey), errors.Is(err, ssh.ErrOfferedKeyChanged),
+		errors.Is(err, ssh.ErrNoSFTP):
 		status = http.StatusConflict
 	case errors.As(err, &ce), errors.Is(err, ssh.ErrTmux), errors.Is(err, context.DeadlineExceeded):
 		status = http.StatusBadGateway
 	case errors.Is(err, ssh.ErrUnsupported), errors.Is(err, ssh.ErrNotHub), errors.Is(err, ssh.ErrBadUser),
-		errors.Is(err, ssh.ErrBadPort), errors.Is(err, ssh.ErrBadSession), errors.Is(err, ssh.ErrBadDir):
+		errors.Is(err, ssh.ErrBadPort), errors.Is(err, ssh.ErrBadSession), errors.Is(err, ssh.ErrBadDir), errors.Is(err, ssh.ErrBadArg):
 	default:
 		h.fail(w, r, "use SSH", err)
 		return true

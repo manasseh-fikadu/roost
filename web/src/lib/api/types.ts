@@ -1471,9 +1471,14 @@ export const EventKindSSH = "ssh";
  */
 export const EventKindTerminal = "terminal";
 /**
+ * EventKindFiles is a change an admin made to a device's files, or a
+ * folder they downloaded.
+ */
+export const EventKindFiles = "files";
+/**
  * The kinds of Event.
  */
-export type EventKind = typeof EventKindDevice | typeof EventKindAgent | typeof EventKindAlert | typeof EventKindCheck | typeof EventKindContainer | typeof EventKindAccess | typeof EventKindSSH | typeof EventKindTerminal;
+export type EventKind = typeof EventKindDevice | typeof EventKindAgent | typeof EventKindAlert | typeof EventKindCheck | typeof EventKindContainer | typeof EventKindAccess | typeof EventKindSSH | typeof EventKindTerminal | typeof EventKindFiles;
 /**
  * EventList is the response to GET /api/events?before=&after=&limit=&kind=&device=:
  * events, newest first. Before and After are event IDs.
@@ -1843,3 +1848,226 @@ export const TerminalMessageTypeError = "error";
  * The types of TerminalMessage.
  */
 export type TerminalMessageType = typeof TerminalMessageTypeInput | typeof TerminalMessageTypeResize | typeof TerminalMessageTypeAck | typeof TerminalMessageTypeReady | typeof TerminalMessageTypeExit | typeof TerminalMessageTypeError;
+/**
+ * FileType says what a file is.
+ */
+export const FileTypeFile = "file";
+export const FileTypeDir = "dir";
+export const FileTypeSymlink = "symlink";
+export const FileTypeOther = "other";
+/**
+ * The types of file.
+ */
+export type FileType = typeof FileTypeFile | typeof FileTypeDir | typeof FileTypeSymlink | typeof FileTypeOther;
+/**
+ * FileEntry is a file, folder or link on a device.
+ */
+export interface FileEntry {
+  name: string;
+  /**
+   * Path is absolute on the device.
+   */
+  path: string;
+  /**
+   * Type is what the entry itself is, without following a link.
+   */
+  type: FileType;
+  /**
+   * TargetType is what a link points to. It's left out for a broken link
+   * and for what isn't a link.
+   */
+  targetType?: FileType;
+  /**
+   * Target is where a link points, as written.
+   */
+  target?: string;
+  /**
+   * Size is in bytes. For a link to a file, it's the file's.
+   */
+  size: number /* int64 */;
+  /**
+   * ModifiedAt is whole seconds, as SFTP reports it.
+   */
+  modifiedAt: string /* RFC 3339 */;
+  /**
+   * Mode is the permissions as ls shows them, such as "drwxr-xr-x".
+   */
+  mode: string;
+  /**
+   * Owner and Group are names, or numbers where the device has none.
+   */
+  owner: string;
+  group: string;
+}
+/**
+ * FileListing is the response to GET /api/devices/{id}/files/list?path=: a
+ * folder and what's in it, in no order. Without a path, it's the home folder
+ * of the user Roost logs in as.
+ */
+export interface FileListing {
+  /**
+   * Path is the folder with links resolved, and Parent the folder above
+   * it, which the root doesn't have.
+   */
+  path: string;
+  parent?: string;
+  /**
+   * Home is the home folder of the user Roost logs in as.
+   */
+  home: string;
+  entries: FileEntry[];
+  /**
+   * Space is the room on the file system that holds the folder, if the
+   * device says.
+   */
+  space?: FileSpace;
+}
+/**
+ * FileSpace is the free and total bytes of a file system.
+ */
+export interface FileSpace {
+  free: number /* uint64 */;
+  total: number /* uint64 */;
+}
+/**
+ * FileStat is the response to GET /api/devices/{id}/files/stat?path=.
+ */
+export interface FileStat {
+  entry: FileEntry;
+  home: string;
+}
+/**
+ * FileSearch is the response to GET
+ * /api/devices/{id}/files/search?path=&q=&limit=&depth=: the files under a
+ * folder whose names match. A plain word matches anywhere in a name, ignoring
+ * case, and one with * ? or [ is a pattern. Limit is 300 by default and 1000
+ * at most, and depth 12 and 30.
+ */
+export interface FileSearch {
+  root: string;
+  query: string;
+  entries: FileEntry[];
+  /**
+   * Truncated says there were more than the limit, or the search ran out
+   * of its 20 seconds.
+   */
+  truncated: boolean;
+}
+/**
+ * ConflictMode says what to do when a file moved, copied or uploaded to a
+ * folder has the name of one that's there.
+ */
+/**
+ * ConflictModeFail refuses, with a 409. It's the default.
+ */
+export const ConflictModeFail = "fail";
+/**
+ * ConflictModeOverwrite replaces the file.
+ */
+export const ConflictModeOverwrite = "overwrite";
+/**
+ * ConflictModeRename gives the new file a free name, such as "a (1).txt".
+ */
+export const ConflictModeRename = "rename";
+/**
+ * The ways to settle a conflict. A folder is never replaced.
+ */
+export type ConflictMode = typeof ConflictModeFail | typeof ConflictModeOverwrite | typeof ConflictModeRename;
+/**
+ * FileBulk is the response to the requests that change several paths at once.
+ * One failing doesn't stop the rest, but if there's only one path, its failure
+ * is the response.
+ */
+export interface FileBulk {
+  done: number /* int */;
+  failed: FileFailure[];
+  /**
+   * Paths are where the ones that worked ended up, in order. A copy or move
+   * with ConflictModeRename may name them differently.
+   */
+  paths: string[];
+}
+/**
+ * FileFailure is a path that a request couldn't change, and why.
+ */
+export interface FileFailure {
+  path: string;
+  error: string;
+}
+/**
+ * FileUpload is the response to PUT
+ * /api/devices/{id}/files/upload?dir=&name=&conflict=, whose body is the
+ * file. The name may be a relative path from a folder upload, such as
+ * "photos/2024/a.jpg", whose folders are made.
+ */
+export interface FileUpload {
+  path: string;
+  name: string;
+  size: number /* int64 */;
+}
+/**
+ * ArchiveFiles is the body of POST /api/devices/{id}/files/archive, which
+ * parks a selection of names in a folder, for a selection too big for a URL.
+ * GET /api/devices/{id}/files/archive?token= downloads it as a .tar.gz, for
+ * five minutes, and so does GET ?dir=&name=&name= for a short one.
+ */
+export interface ArchiveFiles {
+  dir: string;
+  names: string[];
+}
+/**
+ * ArchiveToken is the response to ArchiveFiles.
+ */
+export interface ArchiveToken {
+  token: string;
+}
+/**
+ * CheckNames is the body of POST /api/devices/{id}/files/exists, which asks
+ * which names are in a folder already. A name may be a relative path.
+ */
+export interface CheckNames {
+  dir: string;
+  names: string[];
+}
+/**
+ * ExistingNames is the response to CheckNames.
+ */
+export interface ExistingNames {
+  existing: string[];
+}
+/**
+ * MakeFolder is the body of POST /api/devices/{id}/files/mkdir, and answers
+ * with the new folder's FileEntry.
+ */
+export interface MakeFolder {
+  dir: string;
+  name: string;
+}
+/**
+ * RenameFile is the body of POST /api/devices/{id}/files/rename, and answers
+ * with the FileEntry as it is then.
+ */
+export interface RenameFile {
+  path: string;
+  name: string;
+}
+/**
+ * MoveFiles is the body of POST /api/devices/{id}/files/move and .../copy,
+ * which put paths in the folder Dest, and answer with a FileBulk.
+ */
+export interface MoveFiles {
+  paths: string[];
+  dest: string;
+  /**
+   * Conflict is ConflictModeFail if it's left out.
+   */
+  conflict?: ConflictMode;
+}
+/**
+ * DeleteFiles is the body of POST /api/devices/{id}/files/delete, which
+ * deletes the paths and what's in the folders among them, and answers with a
+ * FileBulk. A link goes without what it points to.
+ */
+export interface DeleteFiles {
+  paths: string[];
+}

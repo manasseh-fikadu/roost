@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strconv"
@@ -215,7 +216,7 @@ func (h *handler) listEvents(w http.ResponseWriter, r *http.Request) {
 	// Who has a role is for admins, like GET /api/access, and so are SSH
 	// access and terminals, which only admins can use.
 	if callerOf(r).level < admins {
-		query.HideKinds = []string{string(EventKindAccess), string(EventKindSSH), string(EventKindTerminal)}
+		query.HideKinds = []string{string(EventKindAccess), string(EventKindSSH), string(EventKindTerminal), string(EventKindFiles)}
 	}
 	events, err := h.opts.Store.Events(r.Context(), query)
 	if err != nil {
@@ -240,11 +241,16 @@ func (h *handler) logAction(r *http.Request, kind EventKind, deviceID, message s
 // logEvent adds an event to the activity log, now and at the info level
 // unless it says.
 func (h *handler) logEvent(r *http.Request, e store.Event) {
+	h.addEvent(r.Context(), e)
+}
+
+// addEvent is logEvent for code that has no request.
+func (h *handler) addEvent(ctx context.Context, e store.Event) {
 	e.At = time.Now()
 	if e.Level == "" {
 		e.Level = string(EventLevelInfo)
 	}
-	if err := h.opts.Store.AddEvents(r.Context(), e); err != nil {
+	if err := h.opts.Store.AddEvents(ctx, e); err != nil {
 		h.log.Warn("add to the activity log", "error", err)
 	}
 	h.opts.Feed.Poke()
