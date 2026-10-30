@@ -96,9 +96,6 @@ func (m *Manager) sharedPool(ctx context.Context, t target) (*pooled, func(), er
 // dialShared connects p to t with a, and takes it out of the pool when it
 // fails or closes. gen is t's generation when a was read.
 func (m *Manager) dialShared(ctx context.Context, t target, a store.SSHAccess, gen uint64, p *pooled) {
-	p.client, p.err = m.connect(ctx, t, a)
-	close(p.ready)
-	m.record(t.id, gen, p.err)
 	drop := func() {
 		m.mu.Lock()
 		defer m.mu.Unlock()
@@ -106,8 +103,17 @@ func (m *Manager) dialShared(ctx context.Context, t target, a store.SSHAccess, g
 			delete(m.pool, t.id)
 		}
 	}
-	if p.err != nil {
+	client, err := m.connect(ctx, t, a)
+	// What a caller finds once it stops waiting has to be settled by then. A
+	// caller that retries at once must dial afresh, not join the attempt that
+	// failed, and one that asks what happened must find out.
+	m.record(t.id, gen, err)
+	if err != nil {
 		drop()
+	}
+	p.client, p.err = client, err
+	close(p.ready)
+	if err != nil {
 		return
 	}
 	_ = p.client.Wait()
