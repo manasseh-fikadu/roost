@@ -149,10 +149,9 @@ const (
 )
 
 // Exec runs a sh script on a device, with args as $1, $2 and so on, over its
-// shared connection, and waits for it to finish or ctx to end. The script
-// must have no backslashes or control characters, and neither can args
-// (see Quote). It runs with the PATH extended to where package managers put
-// tools such as tmux.
+// shared connection, and waits for it to finish or ctx to end. The args can
+// be anything but a NUL, which fails with ErrBadArg (see Quote). It runs with
+// the PATH extended to where package managers put tools such as tmux.
 func (m *Manager) Exec(ctx context.Context, deviceID, script string, args ...string) (Result, error) {
 	t, err := m.target(deviceID)
 	if err != nil {
@@ -167,6 +166,9 @@ func (m *Manager) exec(ctx context.Context, t target, script string, args ...str
 		return Result{}, err
 	}
 	defer release()
+	if err := checkArgs(args); err != nil {
+		return Result{}, err
+	}
 	return run(ctx, client, command(extraPath+script, args...))
 }
 

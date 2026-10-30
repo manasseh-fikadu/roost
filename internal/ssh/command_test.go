@@ -21,6 +21,10 @@ func TestQuote(t *testing.T) {
 		{name: "single quote", in: "it's", want: `'it'\''s'`},
 		{name: "only quotes", in: "''", want: `''\'''\'''`},
 		{name: "shell syntax", in: "$(reboot) `id` ; | & > *", want: "'$(reboot) `id` ; | & > *'"},
+		{name: "backslash", in: `a\b`, want: `'a'\\'b'`},
+		{name: "backslash and quote", in: `a\'b`, want: `'a'\\''\''b'`},
+		{name: "trailing backslash", in: `a\`, want: `'a'\\''`},
+		{name: "newline", in: "a\nb", want: "'a\nb'"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -33,16 +37,109 @@ func TestQuote(t *testing.T) {
 
 func TestQuote_panics(t *testing.T) {
 	t.Parallel()
-	for _, in := range []string{`a\b`, "a\nb", "a\tb", "a\x00b"} {
-		func() {
-			defer func() {
-				if recover() == nil {
-					t.Errorf("Quote(%q) didn't panic", in)
-				}
-			}()
-			Quote(in)
-		}()
+	defer func() {
+		if recover() == nil {
+			t.Error("Quote didn't panic for a NUL")
+		}
+	}()
+	Quote("a\x00b")
+}
+
+func TestCheckArg(t *testing.T) {
+	t.Parallel()
+	for _, in := range []string{"", "plain", `a\b`, "a\nb", "a\tb\x1b[0m", "'", "\xff"} {
+		if err := CheckArg(in); err != nil {
+			t.Errorf("CheckArg(%q) = %v, want nil", in, err)
+		}
 	}
+	if err := CheckArg("a\x00b"); !errors.Is(err, ErrBadArg) {
+		t.Errorf("CheckArg with a NUL = %v, want ErrBadArg", err)
+	}
+}
+
+// hostile are values that shells would read as more than one word, as
+// syntax, or with a different backslash, unless they're quoted right.
+var hostile = []string{
+	"plain",
+	"",
+	"it's",
+	"'",
+	"''",
+	`\`,
+	`\\`,
+	`a\b`,
+	`a\'b`,
+	`\'`,
+	`'\`,
+	`a\nb`,
+	`C:\dir\file`,
+	"two\nlines",
+	"\nleading and trailing\n",
+	"tab\there",
+	"\r\n",
+	"\x1b[31mred\x1b[0m",
+	"bell\a",
+	"$(touch pwned)",
+	"`touch pwned`",
+	"$HOME ${HOME} $1 $@ $*",
+	"; touch pwned #",
+	"a|b&c>d<e",
+	"* ? [a-z] {a,b} ~ !!",
+	"-n",
+	"--",
+	"two  words",
+	`"double"`,
+	"työ ☃ \xf0\x9f\x90\x93",
+	"bad \xff utf-8",
+}
+
+// A value comes out of every shell as it went in, whatever it is.
+func TestQuote_shells(t *testing.T) {
+	t.Parallel()
+	for _, shell := range shells {
+		t.Run(shell, func(t *testing.T) {
+			t.Parallel()
+			bin := fakeTools(t)
+			// The script has a backslash, which it must also get through.
+			const script = `for a in "$@"; do printf '%s\0' "$a"; done`
+			start := startDir(t)
+			for _, arg := range hostile {
+				cmd := command(script, arg, arg+"x", "last")
+				got := runRaw(t, shell, bin, start, cmd)
+				if want := []string{arg, arg + "x", "last"}; !slices.Equal(got, want) {
+					t.Errorf("command(%q) gave %q, want %q", arg, got, want)
+				}
+			}
+			// All of them at once, as the arguments of one command.
+			got := runRaw(t, shell, bin, start, command(script, hostile...))
+			if !slices.Equal(got, hostile) {
+				t.Errorf("all the values gave %q, want %q", got, hostile)
+			}
+		})
+	}
+}
+
+// runRaw is runIn for output that is NUL-terminated, which may have newlines.
+func runRaw(t *testing.T, shell, bin, start, cmd string) []string {
+	t.Helper()
+	path, err := exec.LookPath(shell)
+	if err != nil {
+		t.Skipf("%s isn't installed", shell)
+	}
+	c := exec.CommandContext(t.Context(), path, "-c", cmd) //nolint:gosec // G204: the test runs Roost's commands in each shell.
+	c.Dir = start
+	c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
+	var stderr bytes.Buffer
+	c.Stderr = &stderr
+	out, err := c.Output()
+	if err != nil {
+		t.Fatalf("%s -c %q: %v\n%s", shell, cmd, err, stderr.String())
+	}
+	if _, err := os.Stat(filepath.Join(start, "pwned")); err == nil {
+		t.Errorf("%s -c %q ran a command it was given as a value", shell, cmd)
+	}
+	words := strings.Split(string(out), "\x00")
+	return words[:len(words)-1]
 }
 
 func TestCheckSession(t *testing.T) {
@@ -329,18 +426,6 @@ func TestKillScript(t *testing.T) {
 				}
 			}
 		})
-	}
-}
-
-func TestScripts_noBackslashes(t *testing.T) {
-	t.Parallel()
-	// Fish reads a backslash in single quotes as an escape.
-	for name, script := range map[string]string{
-		"tmux": tmuxScript, "shell": shellScript, "list": listScript, "kill": killScript, "check": checkScript,
-	} {
-		if strings.ContainsFunc(script, func(r rune) bool { return r == '\\' || r < ' ' }) {
-			t.Errorf("the %s script has a backslash or control character: %s", name, script)
-		}
 	}
 }
 
