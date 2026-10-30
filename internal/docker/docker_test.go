@@ -96,7 +96,7 @@ func newFakeDocker() *fakeDocker {
 }
 
 // client returns a Client for a fake Docker on the in-memory network.
-func client(t *testing.T, f *fakeDocker) *docker.Client {
+func client(t *testing.T, f http.Handler) *docker.Client {
 	t.Helper()
 	srv := httptest.NewTestServer(t, f)
 	tr, ok := srv.Client().Transport.(*http.Transport)

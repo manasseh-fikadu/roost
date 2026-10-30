@@ -5,14 +5,11 @@ package docker
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -111,51 +108,23 @@ func SocketDialer(path string) func(ctx context.Context, network, addr string) (
 	var d net.Dialer
 	return func(ctx context.Context, _, _ string) (net.Conn, error) {
 		conn, err := d.DialContext(ctx, "unix", path)
-		if errors.Is(err, syscall.EACCES) || errors.Is(err, os.ErrPermission) {
-			return nil, fmt.Errorf("%w; add the user Roost runs as to the docker group, and restart Roost", err)
+		switch {
+		case err == nil:
+		case errors.Is(err, syscall.EACCES) || errors.Is(err, os.ErrPermission):
+			return nil, fmt.Errorf("%w: Roost can't use %s; add the user Roost runs as to the docker group, and restart Roost", ErrUnreachable, path)
+		case errors.Is(err, os.ErrNotExist):
+			return nil, fmt.Errorf("%w: there's no socket at %s", ErrUnreachable, path)
+		case errors.Is(err, syscall.ECONNREFUSED):
+			return nil, fmt.Errorf("%w: nothing listens on %s", ErrUnreachable, path)
 		}
 		return conn, err
 	}
 }
 
-type listed struct {
-	ID      string            `json:"Id"`
-	Names   []string          `json:"Names"`
-	Image   string            `json:"Image"`
-	State   string            `json:"State"`
-	Status  string            `json:"Status"`
-	Created int64             `json:"Created"`
-	Labels  map[string]string `json:"Labels"`
-	Ports   []struct {
-		IP          string `json:"IP"`
-		PrivatePort uint16 `json:"PrivatePort"`
-		PublicPort  uint16 `json:"PublicPort"`
-		Type        string `json:"Type"`
-	} `json:"Ports"`
-}
-
-type inspected struct {
-	RestartCount int `json:"RestartCount"`
-	State        struct {
-		ExitCode   int    `json:"ExitCode"`
-		OOMKilled  bool   `json:"OOMKilled"`
-		StartedAt  string `json:"StartedAt"`
-		FinishedAt string `json:"FinishedAt"`
-		Health     *struct {
-			Status string `json:"Status"`
-		} `json:"Health"`
-	} `json:"State"`
-	HostConfig struct {
-		RestartPolicy struct {
-			Name string `json:"Name"`
-		} `json:"RestartPolicy"`
-	} `json:"HostConfig"`
-}
-
 // Containers returns every container, running or not, by name.
 func (c *Client) Containers(ctx context.Context) ([]Container, error) {
-	var list []listed
-	if err := c.get(ctx, "/containers/json?all=1", &list); err != nil {
+	list, err := c.List(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("list the containers: %w", err)
 	}
 	out := make([]Container, len(list))
@@ -168,9 +137,8 @@ func (c *Client) Containers(ctx context.Context) ([]Container, error) {
 		wg.Go(func() {
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			var in inspected
 			// A container removed since the list just keeps what the list said.
-			if err := c.get(ctx, "/containers/"+url.PathEscape(l.ID)+"/json", &in); err == nil {
+			if in, err := c.Inspect(ctx, l.ID); err == nil {
 				addInspect(&out[i], in)
 			}
 		})
@@ -183,7 +151,7 @@ func (c *Client) Containers(ctx context.Context) ([]Container, error) {
 	return out, nil
 }
 
-func fromList(l listed) Container {
+func fromList(l RawContainer) Container {
 	name := l.ID
 	if len(name) > 12 {
 		name = name[:12]
@@ -217,7 +185,7 @@ func fromList(l listed) Container {
 
 func anyAddr(ip string) bool { return ip == "0.0.0.0" || ip == "::" || ip == "" }
 
-func addInspect(c *Container, in inspected) {
+func addInspect(c *Container, in *RawInspect) {
 	c.RestartCount = in.RestartCount
 	c.ExitCode = in.State.ExitCode
 	c.OOMKilled = in.State.OOMKilled
@@ -248,32 +216,6 @@ func healthFromStatus(status string) string {
 		}
 	}
 	return ""
-}
-
-func (c *Client) get(ctx context.Context, path string, v any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://docker"+path, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		if ue, ok := errors.AsType[*url.Error](err); ok {
-			err = ue.Err
-		}
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		var e struct {
-			Message string `json:"message"`
-		}
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		if json.Unmarshal(body, &e) == nil && e.Message != "" {
-			return fmt.Errorf("docker answered %d: %s", resp.StatusCode, e.Message)
-		}
-		return fmt.Errorf("docker answered %d", resp.StatusCode)
-	}
-	return json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(v)
 }
 
 // A Reading is what a Collector last learned.
