@@ -36,7 +36,7 @@
 	let { deviceId, container, memLimit }: Props = $props();
 
 	let range = $state<HistoryRange>('1h');
-	let history = $state<DockerHistory | null>(null);
+	let history = $state.raw<DockerHistory | null>(null);
 	let failed = $state(false);
 
 	// Only the IDs and the range matter, so a new `memLimit` doesn't load it all again.

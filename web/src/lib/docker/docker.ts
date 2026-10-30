@@ -154,8 +154,9 @@ export function totals(rows: DockerContainerRow[]) {
 	return {
 		total: rows.length,
 		running: running.length,
-		stopped: rows.length - running.length,
-		unhealthy: rows.filter((c) => c.health === 'unhealthy').length,
+		notRunning: rows.length - running.length,
+		// Docker keeps the last health of a container that stopped.
+		unhealthy: running.filter((c) => c.health === 'unhealthy').length,
 		cpu: sum((s) => s.cpu),
 		mem: sum((s) => s.memUsed),
 		rx: sum((s) => s.netRx),

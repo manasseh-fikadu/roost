@@ -179,20 +179,54 @@ export class LogStream {
 			this.status = 'failed';
 			this.message = reason<DockerStreamFailure>(e.data, 'message') ?? 'The log failed';
 		});
-		// The connection broke: the network dropped, or Roost restarted.
+		// The connection broke: the network dropped, or Roost restarted, or
+		// Roost answered with an error, which an EventSource can't read.
 		source.onerror = () => {
 			if (this.#source !== source) return;
 			source.close();
 			this.#flush();
-			if (++this.#attempts > maxAttempts) {
-				this.status = 'failed';
-				this.message = 'Lost the connection to Roost.';
-				return;
-			}
 			this.status = 'reconnecting';
 			this.message = 'Lost the connection. Trying again…';
-			this.#retryTimer = setTimeout(() => this.#open(true), backoff(this.#attempts - 1));
+			void this.#whyNot().then((why) => {
+				if (this.#source !== source) return;
+				if (why !== null) {
+					// Asking again won't help.
+					this.status = 'failed';
+					this.message = why;
+					return;
+				}
+				if (++this.#attempts > maxAttempts) {
+					this.status = 'failed';
+					this.message = 'Lost the connection to Roost.';
+					return;
+				}
+				this.#retryTimer = setTimeout(() => this.#open(true), backoff(this.#attempts - 1));
+			});
 		};
+	}
+
+	/**
+	 * Asks for no lines of the log, to learn why the stream broke: Roost's
+	 * answer to an error is a message, and an EventSource only says it
+	 * failed. It returns the message, or null if the request worked or never
+	 * got to Roost, which is a break that asking again may mend.
+	 */
+	async #whyNot(): Promise<string | null> {
+		try {
+			const res = await fetch(
+				dockerLogsUrl(this.#device, this.#container, { follow: false, tail: 0 }),
+				{ headers: { accept: 'application/json' } }
+			);
+			if (res.ok) {
+				await res.body?.cancel();
+				return null;
+			}
+			const body: { error?: string } = await res.json().catch(() => ({}));
+			// A hub that is starting or stopping answers 502 to a proxy, with no message.
+			return body.error ?? null;
+		} catch {
+			return null;
+		}
 	}
 
 	#receive(lines: DockerLogLine[]) {

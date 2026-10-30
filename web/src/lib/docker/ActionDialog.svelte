@@ -41,19 +41,24 @@
 	});
 
 	async function run() {
-		if (!shown) {
+		// A slow stop can outlast the dialog: it may be closed and opened for
+		// another container by the time Docker answers, so this one's answer is
+		// about this one.
+		const target = shown;
+		if (!target) {
 			return;
 		}
 		busy = true;
 		try {
-			const res = await runDockerAction(deviceId, shown.id, shown.action);
-			const copy = actionCopy[shown.action];
+			const res = await runDockerAction(deviceId, target.id, target.action);
 			toast(
 				res.changed
-					? `${copy.done} ${shown.name}`
-					: `${shown.name} was ${shown.action === 'start' ? 'running' : 'stopped'} already`
+					? `${actionCopy[target.action].done} ${target.name}`
+					: `${target.name} was ${target.action === 'start' ? 'running' : 'stopped'} already`
 			);
-			open = false;
+			if (shown === target) {
+				open = false;
+			}
 			ondone?.();
 		} catch {
 			// A toast said why.

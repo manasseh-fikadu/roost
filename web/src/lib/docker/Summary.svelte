@@ -25,7 +25,9 @@
 	const cpus = $derived(overview?.cpus || sum?.cpus || null);
 	const disk = $derived(overview?.disk ?? null);
 	const stoppedLine = $derived(
-		sum ? `${sum.stopped} stopped${sum.unhealthy > 0 ? ` · ${sum.unhealthy} unhealthy` : ''}` : ''
+		sum
+			? `${sum.notRunning} not running${sum.unhealthy > 0 ? ` · ${sum.unhealthy} unhealthy` : ''}`
+			: ''
 	);
 </script>
 

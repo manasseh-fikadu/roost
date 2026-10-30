@@ -8,8 +8,11 @@
  * `$effect`, which gives back what stops it.
  */
 export class Poll<T> {
-	/** The latest answer, or null before the first. */
-	data = $state<T | null>(null);
+	/**
+	 * The latest answer, or null before the first. It's replaced as a whole,
+	 * never changed in place, so it isn't made reactive piece by piece.
+	 */
+	data = $state.raw<T | null>(null);
 	/** Why the latest load failed, or null if it worked. */
 	error = $state<string | null>(null);
 	/** When the latest load worked, in Unix milliseconds, or 0. */

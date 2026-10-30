@@ -106,7 +106,7 @@
 			{@render label('State')}
 			<StateBadge container={c} />
 			<div class="mt-0.5 truncate num text-[11px] text-fg-subtle" title={c.error || c.status}>
-				{#if c.health === 'healthy'}
+				{#if c.state === 'running' && c.health === 'healthy'}
 					<span class="text-green-fg">healthy</span> ·
 				{/if}
 				{uptimeLabel(c, now)}

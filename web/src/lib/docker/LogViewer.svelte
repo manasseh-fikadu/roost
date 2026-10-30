@@ -45,11 +45,16 @@
 		/** The container's name. */
 		container: string;
 		running: boolean;
+		/**
+		 * When the container last started, as the hub says it. A restart doesn't
+		 * change `running`, so a new time is how the log knows to pick up again.
+		 */
+		startedAt?: string;
 		/** Whether the container has a terminal, which merges its standard output and error. */
 		tty: boolean;
 	}
 
-	let { deviceId, container, running, tty }: Props = $props();
+	let { deviceId, container, running, startedAt, tty }: Props = $props();
 
 	/** How many more lines a click on "earlier lines" draws when lines wrap. */
 	const wrapStep = 1_000;
@@ -109,8 +114,10 @@
 		);
 	});
 
-	// A container that starts again picks its stream up where it ended.
+	// A container that starts again, or is restarted, picks its stream up where
+	// it ended.
 	$effect(() => {
+		void startedAt;
 		if (running) {
 			untrack(() => {
 				if (stream.status === 'ended') {

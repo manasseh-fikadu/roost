@@ -150,7 +150,13 @@
 		<TabPanel value="logs">
 			{#if tab === 'logs'}
 				<AdminOnly>
-					<LogViewer {deviceId} container={containerName} {running} tty={d.tty} />
+					<LogViewer
+						{deviceId}
+						container={containerName}
+						{running}
+						startedAt={d.state.startedAt}
+						tty={d.tty}
+					/>
 					{#snippet fallback()}<AdminNotice what="read container logs" />{/snippet}
 				</AdminOnly>
 			{/if}

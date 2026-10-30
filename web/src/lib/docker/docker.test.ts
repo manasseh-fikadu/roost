@@ -167,13 +167,14 @@ test('totals adds up the running containers', () => {
 	const got = totals([
 		row({ name: 'a', stats: stats(10, 100) }),
 		row({ name: 'b', stats: stats(20, 200), health: 'unhealthy' }),
-		row({ name: 'c', state: 'exited', stats: null }),
-		row({ name: 'd', stats: null })
+		row({ name: 'c', state: 'exited', health: 'unhealthy', stats: null }),
+		row({ name: 'd', stats: null }),
+		row({ name: 'e', state: 'restarting' })
 	]);
 	expect(got).toEqual({
-		total: 4,
+		total: 5,
 		running: 3,
-		stopped: 1,
+		notRunning: 2,
 		unhealthy: 1,
 		cpu: 30,
 		mem: 300,

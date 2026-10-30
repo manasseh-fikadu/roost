@@ -8,6 +8,13 @@ import { dockerStatsUrl } from './api.js';
 /** How many samples are kept: five minutes. */
 export const keptSamples = 300;
 
+/**
+ * How many times in a row the stream fails to open before it is given up on:
+ * a container that was removed, or a daemon that is gone, won't be back soon,
+ * and the page says so elsewhere.
+ */
+const maxFailures = 6;
+
 /** Streams a container's stats. Make one, and call `connect` in an `$effect`. */
 export class LiveStats {
 	/** The latest samples, oldest first. */
@@ -58,9 +65,14 @@ export class LiveStats {
 			source.onerror = () => {
 				source?.close();
 				this.live = false;
-				if (!stopped && this.ended === null) {
-					retry = setTimeout(open, backoff(failures++));
+				if (stopped || this.ended !== null) {
+					return;
 				}
+				if (failures >= maxFailures) {
+					this.ended = "Roost couldn't keep the stats stream open";
+					return;
+				}
+				retry = setTimeout(open, backoff(failures++));
 			};
 		};
 		open();

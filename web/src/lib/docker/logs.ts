@@ -75,6 +75,13 @@ export const noSearch: Search = { test: null, ranges: null, error: null };
 /** The most matches of one line that are marked. */
 const maxMarks = 100;
 
+/**
+ * How much of a line a regular expression is run on. A pattern that backtracks
+ * badly takes time that grows with the line, and the viewer cuts lines at 8,192
+ * characters anyway.
+ */
+const maxRegexText = 2_048;
+
 export function escapeRegExp(s: string): string {
 	return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -98,10 +105,13 @@ export function compileSearch(query: string, regex: boolean): Search {
 	} catch {
 		return { test: null, ranges: null, error: 'Not a valid regular expression' };
 	}
+	const limit = (plain: string) =>
+		regex && plain.length > maxRegexText ? plain.slice(0, maxRegexText) : plain;
 	return {
 		error: null,
-		test: (plain) => tester.test(plain),
-		ranges: (plain) => {
+		test: (plain) => tester.test(limit(plain)),
+		ranges: (full) => {
+			const plain = limit(full);
 			const out: Range[] = [];
 			finder.lastIndex = 0;
 			for (let m = finder.exec(plain); m && out.length < maxMarks; m = finder.exec(plain)) {

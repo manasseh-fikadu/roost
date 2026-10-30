@@ -148,7 +148,31 @@ describe('compileSearch', () => {
 		{ name: 'a regex is a regex', query: 'a.c', regex: true, text: 'abc', want: true },
 		{ name: 'a regex ignores case', query: '^GET', regex: true, text: 'get /', want: true },
 		{ name: 'a regex that is not there', query: '^GET', regex: true, text: 'a GET', want: false },
-		{ name: 'alternatives', query: 'warn|fatal', regex: true, text: 'fatal: x', want: true }
+		{ name: 'alternatives', query: 'warn|fatal', regex: true, text: 'fatal: x', want: true },
+		// A regex runs on the start of a line, so a pattern that backtracks badly
+		// can't take time that grows with a line of any length. A text search
+		// has no such limit.
+		{
+			name: 'a regex stops at 2,048 characters',
+			query: 'needle',
+			regex: true,
+			text: 'x'.repeat(3_000) + 'needle',
+			want: false
+		},
+		{
+			name: 'a regex finds what is within 2,048 characters',
+			query: 'needle',
+			regex: true,
+			text: 'x'.repeat(2_000) + 'needle',
+			want: true
+		},
+		{
+			name: 'a text search reads the whole line',
+			query: 'needle',
+			regex: false,
+			text: 'x'.repeat(3_000) + 'needle',
+			want: true
+		}
 	];
 	for (const c of matches) {
 		test(c.name, () => {
