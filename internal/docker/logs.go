@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/url"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -62,7 +63,7 @@ func (d *LogDecoder) Push(chunk []byte, out []LogLine) []LogLine {
 	}
 	data := chunk
 	if len(d.pending) > 0 {
-		data = append(d.pending, chunk...)
+		data = slices.Concat(d.pending, chunk)
 	}
 	for len(data) >= 8 {
 		kind, size := data[0], binary.BigEndian.Uint32(data[4:8])
@@ -118,7 +119,7 @@ func (d *LogDecoder) take(stream int, tail []byte) []byte {
 	if len(d.partial[stream]) == 0 {
 		return tail
 	}
-	line := append(d.partial[stream], tail...)
+	line := slices.Concat(d.partial[stream], tail)
 	d.partial[stream] = nil
 	return line
 }
@@ -139,7 +140,7 @@ func (d *LogDecoder) emit(stream int, line []byte, out []LogLine) []LogLine {
 	return append(out, l)
 }
 
-// ansi matches the escape sequences that colour and move a terminal's text.
+// ansi matches the escape sequences that color and move a terminal's text.
 var ansi = regexp.MustCompile("\x1b\\[[0-?]*[ -/]*[@-~]|\x1b\\][^\x07\x1b]*(?:\x07|\x1b\\\\)|\x1b[@-Z\\\\-_]")
 
 // StripANSI removes the terminal escape sequences from s.

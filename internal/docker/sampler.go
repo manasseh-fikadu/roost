@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"log/slog"
+	"maps"
 	"sync"
 	"time"
 
@@ -96,9 +97,7 @@ func (s *Sampler) sample(ctx context.Context) {
 			mu.Lock()
 			defer mu.Unlock()
 			rows = append(rows, got...)
-			for k, c := range counters {
-				seen[k] = c
-			}
+			maps.Copy(seen, counters)
 			s.noteFailure(ctx, t.ID, err)
 		})
 	}

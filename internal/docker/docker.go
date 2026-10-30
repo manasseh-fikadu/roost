@@ -1,5 +1,8 @@
-// Package docker reads the containers on the machine Roost runs on, from the
-// Docker Engine API on its socket. Managing them comes with #29.
+// Package docker talks to the Docker Engine API: on the socket of the machine
+// Roost runs on, and on other machines' sockets over SSH (see Fleet). A Client
+// asks Docker; a Host caches what it says and shares live stats between
+// viewers; a Collector reads the containers of the machine Roost runs on for
+// alerts; and a Sampler records what they use, for history.
 package docker
 
 import (
@@ -152,54 +155,58 @@ func (c *Client) Containers(ctx context.Context) ([]Container, error) {
 }
 
 func fromList(l RawContainer) Container {
-	name := l.ID
-	if len(name) > 12 {
-		name = name[:12]
-	}
-	if len(l.Names) > 0 {
-		name = strings.TrimPrefix(l.Names[0], "/")
-	}
-	c := Container{
+	return Container{
 		ID:      l.ID,
-		Name:    name,
+		Name:    l.Name(),
 		Image:   l.Image,
 		State:   l.State,
 		Status:  l.Status,
-		Health:  healthFromStatus(l.Status),
+		Health:  HealthFromStatus(l.Status),
 		Created: time.Unix(l.Created, 0),
 		Project: l.Labels["com.docker.compose.project"],
 		Service: l.Labels["com.docker.compose.service"],
+		Ports:   l.PortList(),
 	}
-	for _, p := range l.Ports {
-		port := Port{IP: p.IP, Private: p.PrivatePort, Public: p.PublicPort, Type: p.Type}
-		// Docker lists a port published on every address twice, for IPv4 and
-		// IPv6.
-		if !slices.ContainsFunc(c.Ports, func(q Port) bool {
-			return q.Private == port.Private && q.Public == port.Public && q.Type == port.Type && anyAddr(q.IP) && anyAddr(port.IP)
-		}) {
-			c.Ports = append(c.Ports, port)
-		}
-	}
-	return c
 }
 
-func anyAddr(ip string) bool { return ip == "0.0.0.0" || ip == "::" || ip == "" }
+// PortList returns the ports the container listens on, by the container's
+// port and then the host's. Docker lists a port that's published on every
+// address twice, for IPv4 and IPv6, and it's one port here.
+func (c RawContainer) PortList() []Port {
+	var out []Port
+	for _, p := range c.Ports {
+		port := Port{IP: p.IP, Private: p.PrivatePort, Public: p.PublicPort, Type: p.Type}
+		if !slices.ContainsFunc(out, func(q Port) bool {
+			return q.Private == port.Private && q.Public == port.Public && q.Type == port.Type && AnyAddr(q.IP) && AnyAddr(port.IP)
+		}) {
+			out = append(out, port)
+		}
+	}
+	slices.SortStableFunc(out, func(a, b Port) int {
+		return cmp.Or(cmp.Compare(a.Private, b.Private), cmp.Compare(a.Public, b.Public))
+	})
+	return out
+}
+
+// AnyAddr reports whether a host address means every address.
+func AnyAddr(ip string) bool { return ip == "0.0.0.0" || ip == "::" || ip == "" }
 
 func addInspect(c *Container, in *RawInspect) {
 	c.RestartCount = in.RestartCount
 	c.ExitCode = in.State.ExitCode
 	c.OOMKilled = in.State.OOMKilled
 	c.RestartPolicy = cmp.Or(in.HostConfig.RestartPolicy.Name, "no")
-	c.StartedAt = dockerTime(in.State.StartedAt)
-	c.FinishedAt = dockerTime(in.State.FinishedAt)
+	c.StartedAt = ParseTime(in.State.StartedAt)
+	c.FinishedAt = ParseTime(in.State.FinishedAt)
 	if h := in.State.Health; h != nil && h.Status != "none" {
 		c.Health = h.Status
 	}
 }
 
-// dockerTime reads a time as Docker writes it, which is the zero year when
-// something hasn't happened.
-func dockerTime(s string) time.Time {
+// ParseTime reads a time as Docker writes it, which is the zero year when
+// something hasn't happened. It returns the zero time for that, and for a
+// time it can't read.
+func ParseTime(s string) time.Time {
 	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil || t.Year() < 2000 {
 		return time.Time{}
@@ -207,9 +214,9 @@ func dockerTime(s string) time.Time {
 	return t
 }
 
-// healthFromStatus reads the health from a status such as "Up 2 hours
+// HealthFromStatus reads the health from a status such as "Up 2 hours
 // (healthy)", for when inspecting the container fails.
-func healthFromStatus(status string) string {
+func HealthFromStatus(status string) string {
 	for _, h := range []string{"unhealthy", "healthy", "health: starting"} {
 		if strings.Contains(status, "("+h+")") {
 			return strings.TrimPrefix(h, "health: ")

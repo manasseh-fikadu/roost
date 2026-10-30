@@ -101,3 +101,13 @@ func parseDf(df *RawDf, at time.Time) *DiskUsage {
 	out.Total = img.Size + ctr.Size + vol.Size + bc.Size
 	return out
 }
+
+// VolumeUse returns how much of the disk the volume with a name uses, if the
+// daemon measured it. It is safe to call on nil.
+func (d *DiskUsage) VolumeUse(name string) (VolumeUse, bool) {
+	if d == nil {
+		return VolumeUse{}, false
+	}
+	u, ok := d.Volume[name]
+	return u, ok
+}

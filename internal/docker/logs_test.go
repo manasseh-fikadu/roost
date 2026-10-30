@@ -15,7 +15,7 @@ import (
 // frame returns text as a frame of a multiplexed stream.
 func frame(stream byte, text string) []byte {
 	b := []byte{stream, 0, 0, 0, 0, 0, 0, 0}
-	binary.BigEndian.PutUint32(b[4:], uint32(len(text)))
+	binary.BigEndian.PutUint32(b[4:], uint32(len(text))) //nolint:gosec // G115: a test's frame is small.
 	return append(b, text...)
 }
 

@@ -9,8 +9,8 @@ import (
 )
 
 // A Dialer connects to the Docker socket of a machine that Roost reaches over
-// SSH, by the ID its SSH access is kept under. It returns ErrNoDocker if the
-// machine has no Docker socket that Roost knows of.
+// SSH, by the ID its SSH access is kept under, such as ssh.Manager's
+// DialDocker.
 type Dialer func(ctx context.Context, accessID string) (net.Conn, error)
 
 // A Fleet finds the Docker of each machine: the machine Roost runs on, on its
@@ -25,8 +25,12 @@ type Fleet struct {
 }
 
 // NewFleet returns a Fleet. local reaches the Docker of the machine Roost runs
-// on, and is nil if there's none. dial reaches the others'.
+// on, and is nil if there's none. dial reaches the others', and is nil if
+// there are none.
 func NewFleet(local *Client, dial Dialer) *Fleet {
+	if dial == nil {
+		dial = func(context.Context, string) (net.Conn, error) { return nil, ErrNoDocker }
+	}
 	return &Fleet{local: local, dial: dial, hosts: map[string]*Host{}}
 }
 

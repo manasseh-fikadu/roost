@@ -2,6 +2,7 @@ package docker
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -40,6 +41,17 @@ type RawContainer struct {
 		Type string `json:"Type"`
 		Name string `json:"Name"`
 	} `json:"Mounts"`
+}
+
+// UsesVolume reports whether the container has the volume with a name
+// mounted.
+func (c RawContainer) UsesVolume(name string) bool {
+	for _, m := range c.Mounts {
+		if m.Type == "volume" && m.Name == name {
+			return true
+		}
+	}
+	return false
 }
 
 // RawInspect is a container as it is inspected.
@@ -147,6 +159,16 @@ type RawInspect struct {
 		RW          bool   `json:"RW"`
 		Propagation string `json:"Propagation"`
 	} `json:"Mounts"`
+}
+
+// HasVolume reports whether the container has a volume mounted.
+func (i *RawInspect) HasVolume() bool {
+	for _, m := range i.Mounts {
+		if m.Type == "volume" {
+			return true
+		}
+	}
+	return false
 }
 
 // RawInfo is what the Docker daemon says of itself.
@@ -296,6 +318,16 @@ func (c *Client) Inspect(ctx context.Context, id string) (*RawInspect, error) {
 		return nil, err
 	}
 	return &out, nil
+}
+
+// InspectRaw returns a container's whole inspection as the daemon wrote it,
+// not only the fields Roost reads.
+func (c *Client) InspectRaw(ctx context.Context, id string) (json.RawMessage, error) {
+	var out json.RawMessage
+	if err := c.getContainer(ctx, id, "/json", nil, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // Info returns what the daemon says of itself.

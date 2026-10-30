@@ -18,7 +18,7 @@ var (
 	// ErrNoDocker means Roost knows of no Docker to ask on a machine.
 	ErrNoDocker = errors.New("no Docker socket was found on the machine")
 	// ErrUnreachable means Docker didn't answer where Roost looked for it.
-	ErrUnreachable = errors.New("Docker isn't reachable")
+	ErrUnreachable = errors.New("can't reach Docker")
 )
 
 // An Error is a failure Docker answered with.
@@ -136,14 +136,14 @@ func (c *Client) getJSONWithin(ctx context.Context, d time.Duration, path string
 }
 
 // stream starts a request whose answer goes on, such as a container's logs,
-// and returns it once Docker starts to answer. Cancelling ctx, or closing the
+// and returns it once Docker starts to answer. Canceling ctx, or closing the
 // body, ends it.
 func (c *Client) stream(ctx context.Context, path string, query url.Values) (*http.Response, error) {
 	ctx, cancel := context.WithCancel(ctx)
 	timer := time.AfterFunc(headerTimeout, cancel)
 	resp, err := c.request(ctx, http.MethodGet, path, query, nil)
 	if !timer.Stop() && err == nil {
-		// The timer cancelled the request just as it was answered.
+		// The timer canceled the request just as it was answered.
 		_ = resp.Body.Close()
 		err = context.DeadlineExceeded
 	}
@@ -155,14 +155,16 @@ func (c *Client) stream(ctx context.Context, path string, query url.Values) (*ht
 	return resp, nil
 }
 
-// cancelBody cancels a context when it's closed.
+// cancelBody cancels a context when it's closed. It cancels first: a Read
+// that waits for more of a stream holds the body, so closing it would wait for
+// the Read, which would wait for the stream.
 type cancelBody struct {
 	io.ReadCloser
 	cancel context.CancelFunc
 }
 
 func (b *cancelBody) Close() error {
-	defer b.cancel()
+	b.cancel()
 	return b.ReadCloser.Close()
 }
 
