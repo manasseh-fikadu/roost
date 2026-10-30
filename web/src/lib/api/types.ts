@@ -414,6 +414,13 @@ export interface Device {
    * FreeBSD machines. Only admins get it.
    */
   ssh?: DeviceSSH;
+  /**
+   * Docker reports whether Roost can read the Docker on the device: on the
+   * machine Roost runs on, if it has a Docker socket, and on another, if
+   * Roost has SSH access and found one there. Viewers get it too, since
+   * they can see Docker's overview, but not how Roost logs in.
+   */
+  docker: boolean;
 }
 /**
  * MeasuredBy says how Roost measures a device.
@@ -2070,4 +2077,589 @@ export interface MoveFiles {
  */
 export interface DeleteFiles {
   paths: string[];
+}
+/**
+ * DockerOverview is the response to GET /api/devices/{id}/docker/overview:
+ * the Docker daemon on a device, and what it holds.
+ */
+export interface DockerOverview {
+  /**
+   * Name is the machine's name as Docker knows it.
+   */
+  name: string;
+  version: string;
+  /**
+   * APIVersion is the Engine API version the daemon speaks.
+   */
+  apiVersion?: string;
+  os: string;
+  /**
+   * Kernel is the kernel's version. Only admins get it, as with a device's.
+   */
+  kernel: string;
+  arch: string;
+  /**
+   * CPUs and MemTotal are the machine's CPU cores and bytes of memory.
+   */
+  cpus: number /* int */;
+  memTotal: number /* int64 */;
+  storageDriver: string;
+  loggingDriver: string;
+  /**
+   * Cgroup is the cgroup version and driver, such as "v2 (systemd)".
+   */
+  cgroup?: string;
+  /**
+   * RootDir is where Docker keeps its data. Only admins get it.
+   */
+  rootDir: string;
+  containers: DockerCounts;
+  images: number /* int */;
+  warnings?: string[];
+  /**
+   * Disk is the disk space Docker uses. It's null until the daemon has
+   * worked it out, which takes a while on a big machine, so ask again soon.
+   */
+  disk: DockerDisk | null;
+}
+/**
+ * DockerCounts is how many containers there are, by what they're doing.
+ */
+export interface DockerCounts {
+  total: number /* int */;
+  running: number /* int */;
+  paused: number /* int */;
+  stopped: number /* int */;
+}
+/**
+ * DockerDisk is the disk space Docker uses, in bytes.
+ */
+export interface DockerDisk {
+  images: DockerDiskGroup;
+  containers: DockerDiskGroup;
+  volumes: DockerDiskGroup;
+  buildCache: DockerDiskGroup;
+  total: number /* int64 */;
+  /**
+   * At is when the daemon worked it out.
+   */
+  at: string /* RFC 3339 */;
+}
+/**
+ * DockerDiskGroup is the disk space one kind of thing uses.
+ */
+export interface DockerDiskGroup {
+  size: number /* int64 */;
+  /**
+   * Count is how many there are, and Active how many are in use.
+   */
+  count: number /* int64 */;
+  active: number /* int64 */;
+  /**
+   * Reclaimable is the space that removing what isn't in use would free.
+   */
+  reclaimable: number /* int64 */;
+}
+/**
+ * DockerStats is what a container uses at a moment. CPU is a percentage of
+ * one CPU, as `docker stats` says it. A value is null if the container's
+ * sample can't say it, such as a rate from its first sample.
+ */
+export interface DockerStats {
+  /**
+   * TS is when Docker took the sample, in Unix milliseconds.
+   */
+  ts: number /* int64 */;
+  cpu: number | null;
+  /**
+   * MemUsed is the bytes of memory in use, without the page cache that the
+   * kernel can drop. MemLimit is the container's limit, or the machine's
+   * memory if it has none.
+   */
+  memUsed: number | null;
+  memLimit: number | null;
+  /**
+   * NetRx and NetTx are the bytes per second received and sent, and
+   * NetRxTotal and NetTxTotal the bytes since it started.
+   */
+  netRx: number | null;
+  netTx: number | null;
+  netRxTotal: number | null;
+  netTxTotal: number | null;
+  /**
+   * BlkRead and BlkWrite are the bytes read from and written to disks since
+   * it started, and BlkReadRate and BlkWriteRate the bytes per second.
+   */
+  blkRead: number | null;
+  blkWrite: number | null;
+  blkReadRate: number | null;
+  blkWriteRate: number | null;
+  /**
+   * Pids is how many processes run in it.
+   */
+  pids: number | null;
+  /**
+   * CPUs is how many CPUs it can see: 100% is one of them.
+   */
+  cpus: number /* int */;
+}
+/**
+ * DockerContainerList is the response to GET
+ * /api/devices/{id}/docker/containers: every container on the device, by
+ * name.
+ */
+export interface DockerContainerList {
+  fetchedAt: string /* RFC 3339 */;
+  containers: DockerContainerRow[];
+}
+/**
+ * DockerContainerRow is a container in the list.
+ */
+export interface DockerContainerRow {
+  /**
+   * ID is Docker's full ID.
+   */
+  id: string;
+  name: string;
+  image: string;
+  imageId: string;
+  created: string /* RFC 3339 */;
+  state: ContainerState;
+  /**
+   * Status says it in Docker's words, such as "Up 2 hours (healthy)".
+   */
+  status: string;
+  /**
+   * Health is "healthy", "unhealthy" or "starting", or missing if it has
+   * no health check.
+   */
+  health?: string;
+  startedAt?: string /* RFC 3339 */;
+  finishedAt?: string /* RFC 3339 */;
+  /**
+   * RestartCount is how many times Docker restarted it.
+   */
+  restartCount: number /* int */;
+  /**
+   * ExitCode is how it last exited, if it isn't running.
+   */
+  exitCode?: number /* int */;
+  /**
+   * OOMKilled reports whether it was killed for using too much memory.
+   */
+  oomKilled?: boolean;
+  /**
+   * Error is Docker's error from starting it, if it had one.
+   */
+  error?: string;
+  restartPolicy?: string;
+  /**
+   * Project and Service are its Docker Compose project and service, if
+   * it has them.
+   */
+  project?: string;
+  service?: string;
+  ports: ContainerPort[];
+  /**
+   * Networks are the names of the networks it is on.
+   */
+  networks: string[];
+  /**
+   * Mounts is how many mounts it has.
+   */
+  mounts: number /* int */;
+  /**
+   * MemLimitSet reports whether it has a memory limit of its own. If it
+   * hasn't, the limit in its Stats is the machine's memory.
+   */
+  memLimitSet: boolean;
+  /**
+   * Stats is what it uses now, if it's running.
+   */
+  stats: DockerStats | null;
+}
+/**
+ * DockerContainerDetail is the response to GET
+ * /api/devices/{id}/docker/containers/{id}: one container, inspected. What
+ * can carry a secret is only for admins: environment variables, commands,
+ * labels that look like credentials, and the output of health checks.
+ */
+export interface DockerContainerDetail {
+  id: string;
+  name: string;
+  /**
+   * Image is the image as it was named when the container was made, and
+   * ImageID its ID.
+   */
+  image: string;
+  imageId: string;
+  imageDigest?: string;
+  imageCreated?: string /* RFC 3339 */;
+  imageSize?: number /* int64 */;
+  created: string /* RFC 3339 */;
+  platform?: string;
+  driver?: string;
+  state: DockerState;
+  restartCount: number /* int */;
+  health?: DockerHealth;
+  healthcheck?: DockerHealthcheck;
+  /**
+   * Path and Args are what it runs, and Cmd and Entrypoint what it was
+   * told to. A command line can have credentials in it, so admins get
+   * them all.
+   */
+  path: string;
+  args?: string[];
+  cmd?: string[];
+  entrypoint?: string[];
+  workingDir?: string;
+  user?: string;
+  hostname?: string;
+  tty: boolean;
+  /**
+   * Env are its environment variables. Only admins get them.
+   */
+  env?: DockerEnvVar[];
+  /**
+   * Labels are its labels, except those that look like credentials, which
+   * are in SecretLabels, for admins.
+   */
+  labels: { [key: string]: string};
+  secretLabels?: { [key: string]: string};
+  /**
+   * Project and Service are its Docker Compose project and service, and
+   * ComposeDir and ComposeFiles where the project's files are.
+   */
+  project?: string;
+  service?: string;
+  composeDir?: string;
+  composeFiles?: string;
+  restartPolicy?: DockerRestartPolicy;
+  autoRemove: boolean;
+  resources: DockerResources;
+  security: DockerSecurity;
+  logDriver?: string;
+  networkMode?: string;
+  ports: ContainerPort[];
+  /**
+   * Exposed are the ports the image says it listens on, such as 80/tcp.
+   */
+  exposed: string[];
+  networks: DockerContainerNetwork[];
+  mounts: DockerMount[];
+  dns: string[];
+  extraHosts: string[];
+}
+/**
+ * DockerState is what a container is doing, in detail.
+ */
+export interface DockerState {
+  /**
+   * Status is "created", "running", "paused", "restarting", "removing",
+   * "exited" or "dead".
+   */
+  status: string;
+  running: boolean;
+  paused: boolean;
+  restarting: boolean;
+  oomKilled: boolean;
+  dead: boolean;
+  /**
+   * Pid is its main process's ID on the machine, if it runs.
+   */
+  pid?: number /* int */;
+  /**
+   * ExitCode is how it last exited, if it isn't running.
+   */
+  exitCode?: number /* int */;
+  error?: string;
+  startedAt?: string /* RFC 3339 */;
+  finishedAt?: string /* RFC 3339 */;
+}
+/**
+ * DockerHealth is the result of a container's health checks so far.
+ */
+export interface DockerHealth {
+  /**
+   * Status is "healthy", "unhealthy" or "starting".
+   */
+  status: string;
+  /**
+   * FailingStreak is how many checks in a row failed.
+   */
+  failingStreak: number /* int */;
+  /**
+   * Log is the latest checks, oldest first.
+   */
+  log: DockerHealthResult[];
+}
+/**
+ * DockerHealthResult is one run of a container's health check.
+ */
+export interface DockerHealthResult {
+  start: string /* RFC 3339 */;
+  end: string /* RFC 3339 */;
+  exitCode: number /* int */;
+  /**
+   * Output is what the check printed. Only admins get it.
+   */
+  output: string;
+}
+/**
+ * DockerHealthcheck is how Docker checks a container's health. The
+ * intervals are in milliseconds.
+ */
+export interface DockerHealthcheck {
+  /**
+   * Test is the command, such as ["CMD-SHELL", "curl -f localhost"]. Only
+   * admins get it.
+   */
+  test?: string[];
+  interval?: number /* int64 */;
+  timeout?: number /* int64 */;
+  startPeriod?: number /* int64 */;
+  retries?: number /* int */;
+}
+/**
+ * DockerEnvVar is an environment variable of a container.
+ */
+export interface DockerEnvVar {
+  key: string;
+  value: string;
+}
+/**
+ * DockerRestartPolicy says when Docker restarts a container.
+ */
+export interface DockerRestartPolicy {
+  /**
+   * Name is "no", "always", "unless-stopped" or "on-failure".
+   */
+  name: string;
+  maxRetries?: number /* int */;
+}
+/**
+ * DockerResources are the limits on a container. A limit is missing if there
+ * is none.
+ */
+export interface DockerResources {
+  /**
+   * Memory, MemoryReservation and MemorySwap are in bytes. A MemorySwap of
+   * -1 means unlimited.
+   */
+  memory?: number /* int64 */;
+  memoryReservation?: number /* int64 */;
+  memorySwap?: number /* int64 */;
+  cpus?: number /* float64 */;
+  cpuShares?: number /* int64 */;
+  cpuset?: string;
+  pidsLimit?: number /* int64 */;
+  shmSize?: number /* int64 */;
+}
+/**
+ * DockerSecurity is how a container is confined.
+ */
+export interface DockerSecurity {
+  privileged: boolean;
+  readonlyRootfs: boolean;
+  capAdd: string[];
+  capDrop: string[];
+  securityOpt: string[];
+}
+/**
+ * DockerContainerNetwork is a container's place on a network.
+ */
+export interface DockerContainerNetwork {
+  name: string;
+  id: string;
+  ip?: string;
+  prefixLen?: number /* int */;
+  gateway?: string;
+  mac?: string;
+  ipv6?: string;
+  ipv6Gateway?: string;
+  aliases: string[];
+  dnsNames: string[];
+}
+/**
+ * DockerMount is something mounted into a container.
+ */
+export interface DockerMount {
+  /**
+   * Type is "volume", "bind" or "tmpfs".
+   */
+  type: string;
+  /**
+   * Name is a volume's name.
+   */
+  name?: string;
+  source: string;
+  destination: string;
+  mode: string;
+  rw: boolean;
+  propagation?: string;
+  driver?: string;
+  /**
+   * Size is a volume's size in bytes, if the daemon has measured it.
+   */
+  size?: number /* int64 */;
+}
+/**
+ * DockerProcesses is the response to GET
+ * /api/devices/{id}/docker/containers/{id}/top: a container's processes, as
+ * ps writes them. Only admins get it.
+ */
+export interface DockerProcesses {
+  titles: string[];
+  processes: string[][];
+}
+/**
+ * DockerRef is a container that uses a volume, image or network.
+ */
+export interface DockerRef {
+  id: string;
+  name: string;
+  running: boolean;
+}
+/**
+ * DockerVolume is a volume.
+ */
+export interface DockerVolume {
+  name: string;
+  driver: string;
+  mountpoint: string;
+  created?: string /* RFC 3339 */;
+  scope: string;
+  labels: { [key: string]: string};
+  /**
+   * Project is its Docker Compose project, if it has one.
+   */
+  project?: string;
+  /**
+   * Size is in bytes, if the daemon has measured it.
+   */
+  size?: number /* int64 */;
+  usedBy: DockerRef[];
+}
+/**
+ * DockerImage is an image.
+ */
+export interface DockerImage {
+  id: string;
+  tags: string[];
+  digests: string[];
+  created: string /* RFC 3339 */;
+  size: number /* int64 */;
+  /**
+   * Dangling reports whether it has no tag.
+   */
+  dangling: boolean;
+  usedBy: DockerRef[];
+}
+/**
+ * DockerNetwork is a network.
+ */
+export interface DockerNetwork {
+  id: string;
+  name: string;
+  driver: string;
+  scope: string;
+  internal: boolean;
+  attachable: boolean;
+  ipv6: boolean;
+  created?: string /* RFC 3339 */;
+  subnets: DockerSubnet[];
+  /**
+   * Project is its Docker Compose project, if it has one.
+   */
+  project?: string;
+  containers: DockerNetworkContainer[];
+}
+/**
+ * DockerSubnet is a range of addresses on a network.
+ */
+export interface DockerSubnet {
+  subnet: string;
+  gateway?: string;
+}
+/**
+ * DockerNetworkContainer is a container on a network.
+ */
+export interface DockerNetworkContainer {
+  DockerRef: DockerRef;
+  ip?: string;
+  mac?: string;
+}
+/**
+ * DockerHistory is the response to GET
+ * /api/devices/{id}/docker/containers/{id}/history?range=, where the range
+ * is 1h, 6h, 24h or 7d: what the container used, averaged over each step.
+ * Roost records it once a minute, by the container's name.
+ */
+export interface DockerHistory {
+  from: string /* RFC 3339 */;
+  to: string /* RFC 3339 */;
+  /**
+   * Step is the time each point sums up, in milliseconds.
+   */
+  step: number /* int64 */;
+  /**
+   * CPU is in percent of one CPU, Mem in bytes, and the rest in bytes per
+   * second.
+   */
+  cpu: Point[];
+  mem: Point[];
+  netRx: Point[];
+  netTx: Point[];
+  blkRead: Point[];
+  blkWrite: Point[];
+}
+/**
+ * DockerActionResult is the response to POST
+ * /api/devices/{id}/docker/containers/{id}/{action}, where the action is
+ * start, stop or restart.
+ */
+export interface DockerActionResult {
+  /**
+   * Changed is false if the container already was as asked, such as a
+   * started one that was told to start.
+   */
+  changed: boolean;
+}
+/**
+ * DockerLogStart is the first event of a container's logs.
+ */
+export interface DockerLogStart {
+  /**
+   * TTY reports whether the container has a terminal, which merges its
+   * standard output and error.
+   */
+  tty: boolean;
+  running: boolean;
+}
+/**
+ * DockerLogLine is a line of a container's logs.
+ */
+export interface DockerLogLine {
+  /**
+   * S is 1 for standard output and 2 for standard error.
+   */
+  s: number /* int */;
+  /**
+   * T is the RFC 3339 time Docker stamped the line with, if it did.
+   */
+  t?: string;
+  m: string;
+}
+/**
+ * DockerStreamEnd is the last event of a stream that ended as it should.
+ */
+export interface DockerStreamEnd {
+  reason: string;
+}
+/**
+ * DockerStreamFailure is the last event of a stream that Docker or the
+ * connection to it broke.
+ */
+export interface DockerStreamFailure {
+  message: string;
 }

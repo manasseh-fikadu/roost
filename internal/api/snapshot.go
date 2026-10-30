@@ -127,6 +127,7 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 		if src.ssh != nil && ssh.Supported(d, dev.self) {
 			device.SSH = newDeviceSSH(d, dev.self, src.ssh)
 		}
+		device.Docker = hasDocker(d, dev.self, src)
 		out.Devices = append(out.Devices, device)
 		// In embedded mode, the machine's own node shows what Roost's does.
 		if m.deviceID != "" && (dev.self || !d.SameMachine) {
@@ -489,4 +490,15 @@ func defaultAlertOffline(d tailnet.Device) bool {
 func firstLabel(name string) string {
 	label, _, _ := strings.Cut(name, ".")
 	return label
+}
+
+// hasDocker reports whether Roost can read the Docker on d: on the machine
+// Roost runs on, if it has a socket, and on another, if its SSH access found
+// one. self marks Roost's own node.
+func hasDocker(d tailnet.Device, self bool, src sources) bool {
+	id := ssh.AccessID(d, self)
+	if id == store.HubID {
+		return src.docker != nil
+	}
+	return src.ssh[id].DockerSocket != ""
 }
