@@ -32,7 +32,7 @@ import type {
  * which a page on another site can't add. It matches CSRFHeader in
  * internal/api/auth.go.
  */
-const csrfHeaders = { 'x-roost': '1' };
+export const csrfHeaders = { 'x-roost': '1' };
 
 /** An error response from the Roost API. */
 export class ApiError extends Error {
