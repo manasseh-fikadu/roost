@@ -24,6 +24,10 @@ type pooled struct {
 	active    int
 	idleSince time.Time
 	closeOnce sync.Once
+	// sftp is the SFTP client on the connection, which is made when
+	// something first asks for it. sftpMu guards it.
+	sftpMu sync.Mutex
+	sftp   *SFTP
 }
 
 func (p *pooled) close() {
@@ -40,6 +44,15 @@ func (p *pooled) close() {
 // sharedTo returns the shared connection to t, connecting if there's none,
 // and a function to call once done with it.
 func (m *Manager) sharedTo(ctx context.Context, t target) (*gossh.Client, func(), error) {
+	p, release, err := m.sharedPool(ctx, t)
+	if err != nil {
+		return nil, nil, err
+	}
+	return p.client, release, nil
+}
+
+// sharedPool is sharedTo for the pooled connection that holds the client.
+func (m *Manager) sharedPool(ctx context.Context, t target) (*pooled, func(), error) {
 	if err := ctx.Err(); err != nil {
 		return nil, nil, err
 	}
@@ -77,7 +90,7 @@ func (m *Manager) sharedTo(ctx context.Context, t target) (*gossh.Client, func()
 		release()
 		return nil, nil, p.err
 	}
-	return p.client, release, nil
+	return p, release, nil
 }
 
 // dialShared connects p to t with a, and takes it out of the pool when it
@@ -153,6 +166,9 @@ const (
 // be anything but a NUL, which fails with ErrBadArg (see Quote). It runs with
 // the PATH extended to where package managers put tools such as tmux.
 func (m *Manager) Exec(ctx context.Context, deviceID, script string, args ...string) (Result, error) {
+	if err := checkArgs(args); err != nil {
+		return Result{}, err
+	}
 	t, err := m.target(deviceID)
 	if err != nil {
 		return Result{}, err

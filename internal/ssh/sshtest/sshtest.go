@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/pkg/sftp"
 	gossh "golang.org/x/crypto/ssh"
 )
 
@@ -33,13 +34,15 @@ type Server struct {
 	authorized [][]byte
 	handler    Handler
 	sockets    map[string]func(net.Conn)
-	refuse     bool
-	dialed     []string
-	logins     []string
-	conns      map[net.Conn]struct{}
-	accepted   int
-	closed     bool
-	wg         sync.WaitGroup
+	// sftp is the folder SFTP starts in, or "" while the server offers none.
+	sftp     string
+	refuse   bool
+	dialed   []string
+	logins   []string
+	conns    map[net.Conn]struct{}
+	accepted int
+	closed   bool
+	wg       sync.WaitGroup
 }
 
 // Exec is a command, or a login shell, that a client started.
@@ -157,6 +160,14 @@ func (s *Server) HandleSocket(path string, h func(net.Conn)) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.sockets[path] = h
+}
+
+// ServeSFTP makes the server offer SFTP, on the real file system, starting in
+// the folder home. The paths a client sends are the test machine's.
+func (s *Server) ServeSFTP(home string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.sftp = home
 }
 
 // Refuse makes Dial refuse connections while refuse is true, as if nothing
@@ -387,6 +398,25 @@ func (s *Server) session(user string, ch gossh.Channel, reqs <-chan *gossh.Reque
 			}
 		case "env":
 			ok = true
+		case "subsystem":
+			var msg struct{ Name string }
+			s.mu.Lock()
+			home := s.sftp
+			s.mu.Unlock()
+			if gossh.Unmarshal(req.Payload, &msg) != nil || msg.Name != "sftp" || home == "" || started {
+				break
+			}
+			started, ok = true, true
+			s.wg.Go(func() {
+				srv, err := sftp.NewServer(ch, sftp.WithServerWorkingDirectory(home))
+				if err != nil {
+					exited <- 1
+					return
+				}
+				_ = srv.Serve()
+				_ = srv.Close()
+				exited <- 0
+			})
 		case "exec", "shell":
 			var msg struct{ Command string }
 			if req.Type == "exec" && gossh.Unmarshal(req.Payload, &msg) != nil || started {
