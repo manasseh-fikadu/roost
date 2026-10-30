@@ -102,6 +102,38 @@ func TestLogDecoder_multiplexed(t *testing.T) {
 	}
 }
 
+func TestLogDecoder_longLineWithStampedParts(t *testing.T) {
+	t.Parallel()
+	// Docker cuts a line over 16 KiB into messages, each with its own
+	// timestamp. The line has the first stamp, and none inside it.
+	got := decode(true, true,
+		frame(1, "2027-03-01T10:00:00.000000001Z aaaa"),
+		frame(1, "2027-03-01T10:00:00.000000002Z bbbb"),
+		frame(1, "2027-03-01T10:00:00.000000003Z cccc\n"),
+		frame(1, "2027-03-01T10:00:01Z next\n"),
+	)
+	want := []docker.LogLine{
+		{Stream: 1, Time: "2027-03-01T10:00:00.000000001Z", Text: "aaaabbbbcccc"},
+		{Stream: 1, Time: "2027-03-01T10:00:01Z", Text: "next"},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("lines = %+v, want %+v", got, want)
+	}
+	// The other stream's parts don't take the stamp off this one's.
+	got = decode(true, true,
+		frame(1, "2027-03-01T10:00:00Z out-one "),
+		frame(2, "2027-03-01T10:00:01Z err\n"),
+		frame(1, "2027-03-01T10:00:02Z out-two\n"),
+	)
+	want = []docker.LogLine{
+		{Stream: 2, Time: "2027-03-01T10:00:01Z", Text: "err"},
+		{Stream: 1, Time: "2027-03-01T10:00:00Z", Text: "out-one out-two"},
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("lines = %+v, want %+v", got, want)
+	}
+}
+
 func TestLogDecoder_tty(t *testing.T) {
 	t.Parallel()
 	got := decode(false, true, []byte("2027-03-01T10:00:00Z $ ls\r\n2027-03-01T10:00:01Z fi"), []byte("le\r\r\n"))
@@ -173,6 +205,12 @@ func TestParseSince(t *testing.T) {
 		got, err := docker.ParseSince(tt.in, now)
 		if err != nil || got != tt.want {
 			t.Errorf("ParseSince(%q) = %q, %v, want %q", tt.in, got, err, tt.want)
+		}
+	}
+	// An age from before 1970 is all of the log, and doesn't wrap around.
+	for _, in := range []string{"106752d", "999999999d", "999999999h"} {
+		if got, err := docker.ParseSince(in, now); err != nil || got != "0" {
+			t.Errorf("ParseSince(%q) = %q, %v, want 0", in, got, err)
 		}
 	}
 	for _, in := range []string{"yesterday", "-5", "5x", "1e9", "15m; rm -rf", "1.5.2", "99999999999d"} {

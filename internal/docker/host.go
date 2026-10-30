@@ -179,7 +179,7 @@ func (h *Host) sampleAll(ctx context.Context, entries []Entry, running []int) {
 		if raw, err := h.client.Sample(ctx, id); err == nil {
 			first[n] = raw
 		}
-		if c, ok := prev[id]; ok && time.Since(c.at) < counterTTL {
+		if c, ok := prev[id]; ok && time.Since(c.seen) < counterTTL {
 			base[n] = &c
 		}
 	})
@@ -281,9 +281,10 @@ func (h *Host) Disk(ctx context.Context, wait time.Duration) *DiskUsage {
 }
 
 // Do starts, stops or restarts a container, and reports whether anything
-// changed.
+// changed. Once it asks, it goes on if ctx ends: Docker acts on the
+// container anyway, and Roost should hear what happened.
 func (h *Host) Do(ctx context.Context, id string, a Action) (bool, error) {
-	changed, err := h.client.Do(ctx, id, a)
+	changed, err := h.client.Do(context.WithoutCancel(ctx), id, a)
 	// The next look at the containers shows what happened.
 	h.list.forget()
 	h.entries.forget()

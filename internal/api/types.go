@@ -1775,12 +1775,15 @@ type DockerRef struct {
 
 // DockerVolume is a volume.
 type DockerVolume struct {
-	Name       string            `json:"name"`
-	Driver     string            `json:"driver"`
-	Mountpoint string            `json:"mountpoint"`
-	Created    *time.Time        `json:"created,omitempty"`
-	Scope      string            `json:"scope"`
-	Labels     map[string]string `json:"labels"`
+	Name       string     `json:"name"`
+	Driver     string     `json:"driver"`
+	Mountpoint string     `json:"mountpoint"`
+	Created    *time.Time `json:"created,omitempty"`
+	Scope      string     `json:"scope"`
+	// Labels are its labels, except those that look like credentials, which
+	// are in SecretLabels, for admins.
+	Labels       map[string]string `json:"labels"`
+	SecretLabels map[string]string `json:"secretLabels,omitempty" roost:"secret"`
 	// Project is its Docker Compose project, if it has one.
 	Project string `json:"project,omitempty"`
 	// Size is in bytes, if the daemon has measured it.

@@ -142,10 +142,13 @@ func (c *Client) stream(ctx context.Context, path string, query url.Values) (*ht
 	ctx, cancel := context.WithCancel(ctx)
 	timer := time.AfterFunc(headerTimeout, cancel)
 	resp, err := c.request(ctx, http.MethodGet, path, query, nil)
-	if !timer.Stop() && err == nil {
-		// The timer canceled the request just as it was answered.
-		_ = resp.Body.Close()
-		err = context.DeadlineExceeded
+	if !timer.Stop() {
+		// The timer canceled the request, whether or not it was answered.
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+		cancel()
+		return nil, context.DeadlineExceeded
 	}
 	if err != nil {
 		cancel()

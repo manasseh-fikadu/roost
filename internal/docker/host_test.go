@@ -25,6 +25,9 @@ type engine struct {
 	cpu, sys uint64
 	// running is false once the container is stopped.
 	running bool
+	// skew is added to the time of each sample, as when the machine's clock
+	// is wrong.
+	skew time.Duration
 	// answer, if it's set, answers a request instead of the engine, and says
 	// whether it did.
 	answer func(w http.ResponseWriter, r *http.Request) bool
@@ -71,7 +74,7 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		e.sys += 8_000_000_000
 		cpu, sys := e.cpu, e.sys
 		e.mu.Unlock()
-		reply(w, statsAt(time.Now(), cpu, sys))
+		reply(w, statsAt(time.Now().Add(e.skew), cpu, sys))
 	case strings.HasSuffix(r.URL.Path, "/stats"):
 		e.streamStats(w, r)
 	case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/start"):
@@ -392,6 +395,115 @@ func TestHost_WatchAfterClose(t *testing.T) {
 		<-w.Done()
 		if got := h.Watch("aaaa1111"); got != nil {
 			t.Error("Watch() after Close() returned a watch")
+		}
+	})
+}
+
+// A machine whose clock is far off still has its counters used: they're as
+// old as Roost's clock says, not the machine's.
+func TestHost_EntriesWithAnotherClock(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		// The bubble's clock starts in the year 2000, and a clock behind it
+		// must not go before that, which Docker takes for the zero time.
+		time.Sleep(48 * time.Hour)
+		e := newEngine()
+		e.skew = -3 * time.Hour
+		h := docker.NewHost(client(t, e))
+		defer h.Close()
+		if _, err := h.Entries(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(5 * time.Second)
+		got, err := h.Entries(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Two samples for a container seen the first time, and one for the
+		// next refresh, not two again.
+		if n := e.hit("GET /containers/aaaa1111/stats"); n != 3 {
+			t.Errorf("sampled web %d times, want 3", n)
+		}
+		if got[0].Stats == nil || !near(got[0].Stats.CPU, 25) {
+			t.Errorf("web's stats = %+v, want 25%% CPU", got[0].Stats)
+		}
+	})
+}
+
+// An action goes on when the caller goes away: Docker acts anyway.
+func TestHost_DoGoesOnWithoutTheCaller(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		e := newEngine()
+		release := make(chan struct{})
+		e.answer = func(w http.ResponseWriter, r *http.Request) bool {
+			if r.Method != http.MethodPost {
+				return false
+			}
+			<-release
+			w.WriteHeader(http.StatusNoContent)
+			return true
+		}
+		h := docker.NewHost(client(t, e))
+		defer h.Close()
+		ctx, cancel := context.WithCancel(t.Context())
+		type result struct {
+			changed bool
+			err     error
+		}
+		done := make(chan result)
+		go func() {
+			changed, err := h.Do(ctx, "web", docker.Stop)
+			done <- result{changed, err}
+		}()
+		synctest.Wait()
+		cancel()
+		time.Sleep(time.Second)
+		close(release)
+		if got := <-done; got.err != nil || !got.changed {
+			t.Errorf("Do() = %+v after the caller left, want the stop to finish", got)
+		}
+	})
+}
+
+func TestHost_NameAndStatsReasonsHideTheCause(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		e := newEngine()
+		e.answer = func(w http.ResponseWriter, r *http.Request) bool {
+			if !strings.HasSuffix(r.URL.Path, "/stats") {
+				return false
+			}
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"message":"mount /home/someone/secret-dir failed"}`))
+			return true
+		}
+		h := docker.NewHost(client(t, e))
+		defer h.Close()
+		w := h.Watch("aaaa1111")
+		<-w.Done()
+		// Viewers read the reason of a stream that ended.
+		if got := w.Reason(); strings.Contains(got, "secret-dir") || got == "" {
+			t.Errorf("Reason() = %q, want one that doesn't say what Docker said", got)
+		}
+	})
+}
+
+func TestClient_logsStreamThatNeverStarts(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		e := newEngine()
+		e.answer = func(w http.ResponseWriter, r *http.Request) bool {
+			if !strings.HasSuffix(r.URL.Path, "/logs") {
+				return false
+			}
+			<-r.Context().Done()
+			return true
+		}
+		c := client(t, e)
+		_, _, err := c.Logs(t.Context(), "web", false, docker.LogOptions{Stdout: true, Tail: -1})
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Errorf("Logs() error = %v, want it to have timed out", err)
 		}
 	})
 }

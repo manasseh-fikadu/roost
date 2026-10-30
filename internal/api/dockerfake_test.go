@@ -3,6 +3,7 @@ package api_test
 import (
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -27,6 +28,8 @@ type engine struct {
 	queries map[string]string
 	// webRunning is false once web is stopped.
 	webRunning bool
+	// hold, if it's set, makes a stop or restart wait until it's closed.
+	hold chan struct{}
 	// cpu and sys are the counters in the next one-shot sample: web uses half
 	// a second of the eight that the machine's four CPUs give, each time.
 	cpu, sys uint64
@@ -92,11 +95,12 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	e.hits[r.Method+" "+r.URL.Path]++
 	e.queries[r.URL.Path] = r.URL.RawQuery
 	running := e.webRunning
+	hold := e.hold
 	e.mu.Unlock()
 
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	if len(parts) >= 2 && parts[0] == "containers" && parts[1] != "json" {
-		e.container(w, r, parts[1], strings.Join(parts[2:], "/"), running)
+		e.container(w, r, parts[1], strings.Join(parts[2:], "/"), running, hold)
 		return
 	}
 	switch r.URL.Path {
@@ -147,7 +151,7 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		})
 	case "/volumes":
 		reply(w, map[string]any{"Volumes": []map[string]any{
-			{"Name": "shop_data", "Driver": "local", "Mountpoint": "/var/lib/docker/volumes/shop_data/_data", "CreatedAt": "2027-01-02T03:04:05Z", "Scope": "local", "Labels": map[string]string{"com.docker.compose.project": "shop"}},
+			{"Name": "shop_data", "Driver": "local", "Mountpoint": "/var/lib/docker/volumes/shop_data/_data", "CreatedAt": "2027-01-02T03:04:05Z", "Scope": "local", "Labels": map[string]string{"com.docker.compose.project": "shop", "backup.password": "volpw-test", "tier": "gold"}},
 			{"Name": "old_data", "Driver": "local", "Mountpoint": "/var/lib/docker/volumes/old_data/_data", "Scope": "local", "Labels": nil},
 		}})
 	case "/images/json":
@@ -171,7 +175,7 @@ func (e *engine) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // container answers a request about a container, by name or ID, with the
 // rest of the path after its name.
-func (e *engine) container(w http.ResponseWriter, r *http.Request, id, rest string, running bool) {
+func (e *engine) container(w http.ResponseWriter, r *http.Request, id, rest string, running bool, hold chan struct{}) {
 	switch id {
 	case "web", webID:
 	case "backup", backupID:
@@ -182,6 +186,20 @@ func (e *engine) container(w http.ResponseWriter, r *http.Request, id, rest stri
 				"Config":     map[string]any{"Image": "restic", "Env": []string{"RESTIC_PASSWORD=hunter-two"}},
 				"HostConfig": map[string]any{"RestartPolicy": map[string]any{"Name": "no"}},
 			})
+			return
+		}
+		if rest == "logs" {
+			// The connection breaks in the middle of the log: one chunk of a
+			// chunked answer, and then no more.
+			conn, buf, err := http.NewResponseController(w).Hijack()
+			if err != nil {
+				return
+			}
+			part := frame(1, "2027-03-01T10:00:00Z only the start\n")
+			_, _ = fmt.Fprintf(buf, "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.docker.multiplexed-stream\r\n"+
+				"Transfer-Encoding: chunked\r\n\r\n%x\r\n%s\r\n", len(part), part)
+			_ = buf.Flush()
+			_ = conn.Close()
 			return
 		}
 		if rest == "start" {
@@ -260,6 +278,9 @@ func (e *engine) container(w http.ResponseWriter, r *http.Request, id, rest stri
 	case r.Method == http.MethodPost && rest == "start":
 		w.WriteHeader(http.StatusNotModified)
 	case r.Method == http.MethodPost && (rest == "stop" || rest == "restart"):
+		if hold != nil {
+			<-hold
+		}
 		e.mu.Lock()
 		e.webRunning = rest == "restart"
 		e.mu.Unlock()

@@ -99,9 +99,10 @@ type Client struct {
 // SocketDialer returns.
 func NewClient(dial func(ctx context.Context, network, addr string) (net.Conn, error)) *Client {
 	return &Client{http: &http.Client{Transport: &http.Transport{
-		DialContext:     dial,
-		MaxIdleConns:    maxInspecting,
-		IdleConnTimeout: 30 * time.Second,
+		DialContext:         dial,
+		MaxIdleConns:        maxInspecting,
+		MaxIdleConnsPerHost: maxInspecting,
+		IdleConnTimeout:     30 * time.Second,
 	}}}
 }
 

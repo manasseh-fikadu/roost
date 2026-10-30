@@ -64,7 +64,9 @@ func countOf(p *uint64) count {
 // Counters are the numbers a sample counts up, which the next sample
 // needs to work out rates.
 type Counters struct {
-	at         time.Time
+	// at is when Docker took the sample, by the machine's clock, and seen is
+	// when Roost got it, by its own.
+	at, seen   time.Time
 	cpu, sys   count
 	cpus       int
 	rx, tx     count
@@ -152,6 +154,7 @@ func Derive(raw *RawStats, prev *Counters) (Stats, Counters, bool) {
 		return Stats{}, Counters{}, false
 	}
 	cur := countersOf(raw, at)
+	cur.seen = time.Now()
 	usable := prev != nil && at.After(prev.at) && at.Sub(prev.at) < maxGap
 	var secs float64
 	if usable {

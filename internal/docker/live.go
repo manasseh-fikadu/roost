@@ -112,14 +112,7 @@ func (f *feed) leave(w *Watch) {
 	defer f.mu.Unlock()
 	delete(f.subs, w)
 	if len(f.subs) == 0 && !f.ended && f.linger == nil {
-		f.linger = time.AfterFunc(feedLinger, func() {
-			f.mu.Lock()
-			idle := len(f.subs) == 0
-			f.mu.Unlock()
-			if idle {
-				f.finish("nobody is watching")
-			}
-		})
+		f.linger = time.AfterFunc(feedLinger, f.finishIfIdle)
 	}
 }
 
@@ -129,7 +122,9 @@ func (f *feed) stop() { f.finish("the stats were closed") }
 func (f *feed) run(ctx context.Context) {
 	body, err := f.h.client.StatsStream(ctx, f.id)
 	if err != nil {
-		f.finish(err.Error())
+		// Viewers read the reason, and an error can say how Roost reaches
+		// the machine.
+		f.finish("Roost couldn't read the container's stats")
 		return
 	}
 	defer func() { _ = body.Close() }()
@@ -147,7 +142,7 @@ func (f *feed) run(ctx context.Context) {
 			case errors.Is(err, io.EOF):
 				f.finish("The container stopped")
 			default:
-				f.finish(err.Error())
+				f.finish("Docker stopped sending the container's stats")
 			}
 			return
 		}
@@ -183,16 +178,40 @@ func (f *feed) publish(s Stats) {
 // finish ends the feed for its viewers, once.
 func (f *feed) finish(reason string) {
 	f.mu.Lock()
+	ok := f.endLocked(reason)
+	f.mu.Unlock()
+	if ok {
+		f.closed()
+	}
+}
+
+// finishIfIdle ends the feed if no one is watching, in the same step that
+// checks, so a viewer who joins just then isn't cut off.
+func (f *feed) finishIfIdle() {
+	f.mu.Lock()
+	ok := len(f.subs) == 0 && f.endLocked("nobody is watching")
+	f.mu.Unlock()
+	if ok {
+		f.closed()
+	}
+}
+
+// endLocked marks the feed as ended, if it isn't, and reports whether it did.
+// The caller holds f.mu, and then calls closed.
+func (f *feed) endLocked(reason string) bool {
 	if f.ended {
-		f.mu.Unlock()
-		return
+		return false
 	}
 	f.ended, f.reason = true, reason
 	if f.linger != nil {
 		f.linger.Stop()
 		f.linger = nil
 	}
-	f.mu.Unlock()
+	return true
+}
+
+// closed lets go of what an ended feed held, and tells its viewers.
+func (f *feed) closed() {
 	f.cancel()
 	f.h.mu.Lock()
 	if f.h.feeds[f.id] == f {

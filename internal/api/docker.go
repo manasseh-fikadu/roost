@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"cmp"
 	"compress/gzip"
 	"context"
 	"errors"
@@ -58,20 +59,28 @@ func (h *handler) dockerOf(w http.ResponseWriter, r *http.Request) *dockerTarget
 	name := h.deviceName(r, d.ID)
 	if hid != store.HubID {
 		a, ok := h.opts.SSH.Access()[hid]
+		var why string
 		switch {
 		case !ok:
-			h.writeJSON(w, r, http.StatusConflict, ErrorBody{Error: "SSH access isn't set up for " + name + ", so Roost can't reach its Docker"})
-			return nil
+			why = "SSH access isn't set up for " + name + ", so Roost can't reach its Docker"
 		case a.DockerSocket == "":
-			h.writeJSON(w, r, http.StatusConflict, ErrorBody{
-				Error: "Roost found no Docker socket on " + name + "; if it has Docker, check the machine again on its page",
-			})
+			why = "Roost found no Docker socket on " + name + "; if it has Docker, check the machine again on its page"
+		}
+		if why != "" {
+			if callerOf(r).level < admins {
+				why = cantReachDevice
+			}
+			h.writeJSON(w, r, http.StatusConflict, ErrorBody{Error: why})
 			return nil
 		}
 	}
 	host, err := h.opts.Docker.Host(hid)
 	if errors.Is(err, docker.ErrNoDocker) {
-		h.writeJSON(w, r, http.StatusConflict, ErrorBody{Error: "Roost finds no Docker socket on the machine it runs on"})
+		why := "Roost finds no Docker socket on the machine it runs on"
+		if callerOf(r).level < admins {
+			why = cantReachDevice
+		}
+		h.writeJSON(w, r, http.StatusConflict, ErrorBody{Error: why})
 		return nil
 	}
 	if err != nil {
@@ -79,6 +88,17 @@ func (h *handler) dockerOf(w http.ResponseWriter, r *http.Request) *dockerTarget
 		return nil
 	}
 	return &dockerTarget{host: host, deviceID: d.ID, historyID: hid}
+}
+
+// dockerContainerOf finds the Docker of the device in the path and the
+// container in it. If it can't, it answers with why, once, and returns false.
+func (h *handler) dockerContainerOf(w http.ResponseWriter, r *http.Request) (*dockerTarget, string, bool) {
+	t := h.dockerOf(w, r)
+	if t == nil {
+		return nil, "", false
+	}
+	cid, ok := h.containerID(w, r)
+	return t, cid, ok
 }
 
 // containerID returns the container in the path. If it can't be one, it
@@ -92,34 +112,53 @@ func (h *handler) containerID(w http.ResponseWriter, r *http.Request) (string, b
 	return id, true
 }
 
+// Said to someone who may not know how Roost reaches a machine: its SSH user
+// and port, its Docker socket, or what Docker itself says went wrong.
+const (
+	cantReach       = "Roost can't reach Docker on this machine right now"
+	cantReachDevice = "Roost can't reach this machine's Docker"
+)
+
 // dockerStatus returns the HTTP status and message for an error from Docker,
-// or from reaching it.
-func dockerStatus(err error) (int, string) {
+// or from reaching it. An error about how Roost reaches the machine says
+// where, and as what user, so only admins get its words: Device.SSH is for
+// admins too. Everyone gets what Docker says of a request that was wrong, such
+// as a container that isn't there.
+func dockerStatus(err error, admin bool) (int, string) {
 	var (
 		de *docker.Error
 		se *ssh.SocketError
 	)
+	reach := func(status int, msg string) (int, string) {
+		if admin {
+			return status, msg
+		}
+		return status, cantReach
+	}
 	switch {
 	case errors.As(err, &de):
-		if de.Message != "" {
-			return de.ClientStatus(), de.Message
+		status := de.ClientStatus()
+		msg := cmp.Or(de.Message, de.Error())
+		if status == http.StatusBadGateway {
+			// The daemon failed, and its message can name paths.
+			return reach(status, msg)
 		}
-		return de.ClientStatus(), de.Error()
+		return status, msg
 	case errors.Is(err, docker.ErrBadID):
 		return http.StatusBadRequest, err.Error()
 	case errors.Is(err, docker.ErrNoDocker), errors.Is(err, ssh.ErrNoDockerSocket):
-		return http.StatusConflict, err.Error()
+		return reach(http.StatusConflict, err.Error())
 	case errors.Is(err, docker.ErrUnreachable):
-		return http.StatusBadGateway, err.Error()
+		return reach(http.StatusBadGateway, err.Error())
 	case errors.As(err, &se):
-		return http.StatusBadGateway, "Docker isn't reachable: " + se.Error() + "; is Docker running, and may the SSH user use it?"
+		return reach(http.StatusBadGateway, "Docker isn't reachable: "+se.Error()+"; is Docker running, and may the SSH user use it?")
 	case errors.Is(err, context.DeadlineExceeded):
 		return http.StatusGatewayTimeout, "Docker didn't answer in time"
 	}
 	if status, known := sshStatus(err); known {
-		return status, err.Error()
+		return reach(status, err.Error())
 	}
-	return http.StatusBadGateway, "Docker: " + err.Error()
+	return reach(http.StatusBadGateway, "Docker: "+err.Error())
 }
 
 // dockerError answers with the status and message for an error from Docker,
@@ -132,7 +171,7 @@ func (h *handler) dockerError(w http.ResponseWriter, r *http.Request, err error)
 		// The caller went away.
 		return true
 	}
-	status, msg := dockerStatus(err)
+	status, msg := dockerStatus(err, callerOf(r).level >= admins)
 	h.writeJSON(w, r, status, ErrorBody{Error: msg})
 	return true
 }
@@ -193,9 +232,8 @@ func (h *handler) dockerContainers(w http.ResponseWriter, r *http.Request) {
 
 // dockerContainer answers GET /api/devices/{id}/docker/containers/{cid}.
 func (h *handler) dockerContainer(w http.ResponseWriter, r *http.Request) {
-	t := h.dockerOf(w, r)
-	cid, ok := h.containerID(w, r)
-	if t == nil || !ok {
+	t, cid, ok := h.dockerContainerOf(w, r)
+	if !ok {
 		return
 	}
 	ctx := r.Context()
@@ -224,9 +262,8 @@ func (h *handler) dockerContainer(w http.ResponseWriter, r *http.Request) {
 // with the container's whole inspection, which has its environment and
 // commands in it, so it is for admins.
 func (h *handler) dockerInspect(w http.ResponseWriter, r *http.Request) {
-	t := h.dockerOf(w, r)
-	cid, ok := h.containerID(w, r)
-	if t == nil || !ok {
+	t, cid, ok := h.dockerContainerOf(w, r)
+	if !ok {
 		return
 	}
 	raw, err := t.host.Client().InspectRaw(r.Context(), cid)
@@ -239,9 +276,8 @@ func (h *handler) dockerInspect(w http.ResponseWriter, r *http.Request) {
 // dockerTop answers GET /api/devices/{id}/docker/containers/{cid}/top with
 // the container's processes.
 func (h *handler) dockerTop(w http.ResponseWriter, r *http.Request) {
-	t := h.dockerOf(w, r)
-	cid, ok := h.containerID(w, r)
-	if t == nil || !ok {
+	t, cid, ok := h.dockerContainerOf(w, r)
+	if !ok {
 		return
 	}
 	top, err := t.host.Client().Top(r.Context(), cid)
@@ -258,9 +294,8 @@ func (h *handler) dockerTop(w http.ResponseWriter, r *http.Request) {
 // dockerHistory answers GET
 // /api/devices/{id}/docker/containers/{cid}/history.
 func (h *handler) dockerHistory(w http.ResponseWriter, r *http.Request) {
-	t := h.dockerOf(w, r)
-	cid, ok := h.containerID(w, r)
-	if t == nil || !ok {
+	t, cid, ok := h.dockerContainerOf(w, r)
+	if !ok {
 		return
 	}
 	from, to, step, ok := h.historyRange(w, r)
@@ -362,9 +397,8 @@ func (h *handler) dockerNetworks(w http.ResponseWriter, r *http.Request) {
 // stop and restart, which an admin can do, and which the activity log keeps.
 func (h *handler) dockerAction(a docker.Action, done string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		t := h.dockerOf(w, r)
-		cid, ok := h.containerID(w, r)
-		if t == nil || !ok {
+		t, cid, ok := h.dockerContainerOf(w, r)
+		if !ok {
 			return
 		}
 		ctx := r.Context()
@@ -374,12 +408,17 @@ func (h *handler) dockerAction(a docker.Action, done string) http.HandlerFunc {
 		if h.dockerError(w, r, err) {
 			return
 		}
+		device := h.deviceName(r, t.deviceID)
 		changed, err := t.host.Do(ctx, cid, a)
+		if err == nil && changed {
+			// Docker acted, whether or not the admin is still there to hear.
+			h.addEvent(context.WithoutCancel(ctx), store.Event{
+				Kind: string(EventKindContainer), DeviceID: t.deviceID, Actor: callerOf(r).who.LoginName,
+				Message: done + " " + name + " on " + device,
+			})
+		}
 		if h.dockerError(w, r, err) {
 			return
-		}
-		if changed {
-			h.logAction(r, EventKindContainer, t.deviceID, done+" "+name+" on "+h.deviceName(r, t.deviceID))
 		}
 		h.writeJSON(w, r, http.StatusOK, DockerActionResult{Changed: changed})
 	}
@@ -413,9 +452,8 @@ func logOptions(r *http.Request, follow bool) (docker.LogOptions, error) {
 // batches, and then an "end", or a "failure" if it broke. Logs often print
 // secrets, so it's for admins.
 func (h *handler) dockerLogs(w http.ResponseWriter, r *http.Request) {
-	t := h.dockerOf(w, r)
-	cid, ok := h.containerID(w, r)
-	if t == nil || !ok {
+	t, cid, ok := h.dockerContainerOf(w, r)
+	if !ok {
 		return
 	}
 	opts, err := logOptions(r, r.URL.Query().Get("follow") != "0")
@@ -442,7 +480,7 @@ func (h *handler) dockerLogs(w http.ResponseWriter, r *http.Request) {
 	body, dec, err := t.host.Client().Logs(ctx, in.ID, in.Config.Tty, opts)
 	if err != nil {
 		if ctx.Err() == nil {
-			_, msg := dockerStatus(err)
+			_, msg := dockerStatus(err, true)
 			_ = s.send("failure", DockerStreamFailure{Message: msg})
 		}
 		return
@@ -562,9 +600,8 @@ var fileSafe = regexp.MustCompile(`[^\w.-]`)
 // /api/devices/{id}/docker/containers/{cid}/logs/download with the log as a
 // plain text file, without terminal escapes.
 func (h *handler) dockerLogDownload(w http.ResponseWriter, r *http.Request) {
-	t := h.dockerOf(w, r)
-	cid, ok := h.containerID(w, r)
-	if t == nil || !ok {
+	t, cid, ok := h.dockerContainerOf(w, r)
+	if !ok {
 		return
 	}
 	opts, err := logOptions(r, false)
@@ -572,14 +609,16 @@ func (h *handler) dockerLogDownload(w http.ResponseWriter, r *http.Request) {
 		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: err.Error()})
 		return
 	}
-	withTimes := r.URL.Query().Get("timestamps") != "0"
-	ctx := r.Context()
-	in, err := t.host.Client().Inspect(ctx, cid)
-	if h.dockerError(w, r, err) {
-		return
-	}
 	if !opts.Stdout && !opts.Stderr {
 		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: "select stdout or stderr"})
+		return
+	}
+	withTimes := r.URL.Query().Get("timestamps") != "0"
+	// A download can be long, so it ends when the server shuts down too.
+	ctx, cancel := h.streamContext(r)
+	defer cancel()
+	in, err := t.host.Client().Inspect(ctx, cid)
+	if h.dockerError(w, r, err) {
 		return
 	}
 	body, dec, err := t.host.Client().Logs(ctx, in.ID, in.Config.Tty, opts)
@@ -593,11 +632,13 @@ func (h *handler) dockerLogDownload(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", `attachment; filename="`+file+`"`)
 	w.Header().Set("Cache-Control", "no-store")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
-	var out io.Writer = w
+	// Each write has a deadline, so a client that stops reading ends the
+	// download instead of holding Docker's stream and the connection open.
+	out := io.Writer(&deadlineWriter{w: w, rc: http.NewResponseController(w)})
 	if acceptsGzip(r) {
 		w.Header().Set("Content-Encoding", "gzip")
 		w.Header().Add("Vary", "Accept-Encoding")
-		gz := gzip.NewWriter(w)
+		gz := gzip.NewWriter(out)
 		defer func() { _ = gz.Close() }()
 		out = gz
 	}
@@ -619,14 +660,43 @@ func (h *handler) dockerLogDownload(w http.ResponseWriter, r *http.Request) {
 	for {
 		n, err := body.Read(buf)
 		if n > 0 && write(dec.Push(buf[:n], nil)) != nil {
+			// The client went away, or stopped reading.
 			return
 		}
-		if err != nil {
-			// Whatever went wrong, the file is as much as Roost got.
+		switch {
+		case err == nil:
+		case errors.Is(err, io.EOF):
 			_ = write(dec.Flush(nil))
 			return
+		case ctx.Err() != nil:
+			// The client went away, or the server is stopping.
+			return
+		default:
+			// Docker or the connection to it broke. A file that ends here
+			// would look as whole as one that was, so the response is cut off
+			// instead, and the browser says the download failed.
+			h.log.Warn("read a container's log for a download", "error", err)
+			panic(http.ErrAbortHandler)
 		}
 	}
+}
+
+// A deadlineWriter gives each write to a response a deadline, if the
+// connection supports one.
+type deadlineWriter struct {
+	w  io.Writer
+	rc *http.ResponseController
+}
+
+func (d *deadlineWriter) Write(p []byte) (int, error) {
+	if err := setWriteDeadline(d.rc, time.Now().Add(streamWriteTimeout)); err != nil {
+		return 0, err
+	}
+	n, err := d.w.Write(p)
+	if err != nil {
+		return n, err
+	}
+	return n, setWriteDeadline(d.rc, time.Time{})
 }
 
 // dockerStats answers GET
@@ -635,9 +705,8 @@ func (h *handler) dockerLogDownload(w http.ResponseWriter, r *http.Request) {
 // each second, and an "end" once the container stops. Everyone watching a
 // container shares one stream from Docker.
 func (h *handler) dockerStats(w http.ResponseWriter, r *http.Request) {
-	t := h.dockerOf(w, r)
-	cid, ok := h.containerID(w, r)
-	if t == nil || !ok {
+	t, cid, ok := h.dockerContainerOf(w, r)
+	if !ok {
 		return
 	}
 	in, err := t.host.Client().Inspect(r.Context(), cid)

@@ -76,7 +76,13 @@ func (d *LogDecoder) Push(chunk []byte, out []LogLine) []LogLine {
 		if len(data)-8 < int(size) {
 			break
 		}
-		out = d.feed(int(kind), data[8:8+size], out)
+		frame := data[8 : 8+size]
+		if d.timestamps && len(d.partial[kind]) > 0 {
+			// Docker cuts a line over 16 KiB into messages, and stamps each
+			// one, so this frame goes on a line with the stamp of its own.
+			frame = frame[len(stamp.Find(frame)):]
+		}
+		out = d.feed(int(kind), frame, out)
 		data = data[8+size:]
 	}
 	d.pending = append(d.pending[:0], data...)
@@ -153,7 +159,7 @@ var ErrBadSince = errors.New("the time must be Unix seconds, an RFC 3339 time, o
 var (
 	unixSince = regexp.MustCompile(`^\d+(\.\d+)?$`)
 	ageSince  = regexp.MustCompile(`^(\d{1,9})([smhd])$`)
-	ageUnits  = map[string]time.Duration{"s": time.Second, "m": time.Minute, "h": time.Hour, "d": 24 * time.Hour}
+	ageUnits  = map[string]int64{"s": 1, "m": 60, "h": 3600, "d": 86400}
 )
 
 // ParseSince turns the time a caller asks for logs since into the form
@@ -167,8 +173,9 @@ func ParseSince(s string, now time.Time) (string, error) {
 		return s, nil
 	}
 	if m := ageSince.FindStringSubmatch(s); m != nil {
-		n, _ := strconv.Atoi(m[1])
-		return strconv.FormatInt(now.Add(-time.Duration(n)*ageUnits[m[2]]).Unix(), 10), nil
+		n, _ := strconv.ParseInt(m[1], 10, 64)
+		// An age from before 1970 is all of the log.
+		return strconv.FormatInt(max(now.Unix()-n*ageUnits[m[2]], 0), 10), nil
 	}
 	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil {

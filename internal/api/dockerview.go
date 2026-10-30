@@ -126,9 +126,8 @@ func dockerDetail(c *docker.RawInspect, image *docker.RawImageInfo, disk *docker
 		RestartCount: c.RestartCount,
 		Path:         c.Path, Args: c.Args, Cmd: c.Config.Cmd, Entrypoint: c.Config.Entrypoint,
 		WorkingDir: c.Config.WorkingDir, User: c.Config.User, Hostname: c.Config.Hostname, TTY: c.Config.Tty,
-		Labels: map[string]string{}, SecretLabels: map[string]string{},
 		AutoRemove: h.AutoRemove, LogDriver: h.LogConfig.Type, NetworkMode: h.NetworkMode,
-		Ports: inspectedPorts(c), Exposed: slices.Sorted(maps.Keys(c.Config.ExposedPorts)),
+		Ports: inspectedPorts(c), Exposed: nonNil(slices.Sorted(maps.Keys(c.Config.ExposedPorts))),
 		Networks: []DockerContainerNetwork{}, Mounts: []DockerMount{},
 		DNS: nonNil(h.DNS), ExtraHosts: nonNil(h.ExtraHosts),
 		Security: DockerSecurity{
@@ -179,13 +178,7 @@ func dockerDetail(c *docker.RawInspect, image *docker.RawImageInfo, disk *docker
 		k, v, _ := strings.Cut(line, "=")
 		out.Env = append(out.Env, DockerEnvVar{Key: k, Value: v})
 	}
-	for k, v := range c.Config.Labels {
-		if secretLabel.MatchString(k) {
-			out.SecretLabels[k] = v
-		} else {
-			out.Labels[k] = v
-		}
-	}
+	out.Labels, out.SecretLabels = splitLabels(c.Config.Labels)
 	out.Project, out.Service = c.Config.Labels["com.docker.compose.project"], c.Config.Labels["com.docker.compose.service"]
 	out.ComposeDir = c.Config.Labels["com.docker.compose.project.working_dir"]
 	out.ComposeFiles = c.Config.Labels["com.docker.compose.project.config_files"]
@@ -276,10 +269,11 @@ func dockerVolumes(raw []docker.RawVolume, list []docker.RawContainer, disk *doc
 	for i, v := range raw {
 		out[i] = DockerVolume{
 			Name: v.Name, Driver: v.Driver, Mountpoint: v.Mountpoint, Scope: v.Scope,
-			Created: timePtr(docker.ParseTime(v.CreatedAt)), Labels: nonNilMap(v.Labels),
+			Created: timePtr(docker.ParseTime(v.CreatedAt)),
 			Project: v.Labels["com.docker.compose.project"],
 			UsedBy:  dockerRefs(list, func(c docker.RawContainer) bool { return c.UsesVolume(v.Name) }),
 		}
+		out[i].Labels, out[i].SecretLabels = splitLabels(v.Labels)
 		if u, ok := disk.VolumeUse(v.Name); ok {
 			out[i].Size = &u.Size
 		}
@@ -347,9 +341,16 @@ func dockerNetworks(raw []docker.RawNetwork, list []docker.RawContainer) []Docke
 	return out
 }
 
-func nonNilMap(m map[string]string) map[string]string {
-	if m == nil {
-		return map[string]string{}
+// splitLabels returns the labels that are safe to show to anyone, and those
+// whose names look like they hold a credential, which only admins get.
+func splitLabels(in map[string]string) (plain, secret map[string]string) {
+	plain, secret = map[string]string{}, map[string]string{}
+	for k, v := range in {
+		if secretLabel.MatchString(k) {
+			secret[k] = v
+		} else {
+			plain[k] = v
+		}
 	}
-	return m
+	return plain, secret
 }

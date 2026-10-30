@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -418,8 +419,10 @@ func TestDocker_actions(t *testing.T) {
 		json.Unmarshal(rec.Body.Bytes(), &res) != nil || !res.Changed {
 		t.Fatalf("stop = %d %s, want 200 and a change", rec.Code, rec.Body)
 	}
-	if got := e.laptop.query("/containers/web/stop"); got != "t=10" {
-		t.Errorf("Docker was told %q, want the ten second grace period", got)
+	// Docker waits as long as the container's own stop timeout says, as it
+	// does for `docker stop`: Roost doesn't give a time.
+	if got := e.laptop.query("/containers/web/stop"); got != "" {
+		t.Errorf("Docker was told %q, want no time given for the container to stop", got)
 	}
 	if rec := e.do(t, http.MethodPost, "/api/devices/laptop/docker/containers/web/restart", laptopIP); rec.Code != http.StatusOK {
 		t.Fatalf("restart = %d %s", rec.Code, rec.Body)
@@ -839,6 +842,159 @@ func TestDocker_deviceFlagOfTheHostMachine(t *testing.T) {
 	for id, want := range map[string]bool{"roost": false, "server": true, "laptop": true, "phone": false} {
 		if got := findDevice(t, snap, id).Docker; got != want {
 			t.Errorf("%s has Docker: %v, want %v", id, got, want)
+		}
+	}
+}
+
+// A request that names no device and a container that can't be one is
+// answered once.
+func TestDocker_answersOnce(t *testing.T) {
+	t.Parallel()
+	e := newDockerEnv(t, testStore(t), false)
+	for _, path := range []string{
+		"/api/devices/nobody/docker/containers/a%20b/inspect",
+		"/api/devices/nobody/docker/containers/web/logs",
+		"/api/devices/server/docker/containers/a%20b",
+	} {
+		rec := e.do(t, http.MethodGet, path, laptopIP)
+		dec := json.NewDecoder(rec.Body)
+		var first api.ErrorBody
+		if err := dec.Decode(&first); err != nil || first.Error == "" {
+			t.Errorf("GET %s = %d %q, want an error body", path, rec.Code, rec.Body)
+			continue
+		}
+		if dec.More() {
+			t.Errorf("GET %s answered twice: %q", path, rec.Body)
+		}
+	}
+	rec := e.do(t, http.MethodPost, "/api/devices/nobody/docker/containers/a%20b/stop", laptopIP)
+	if rec.Code != http.StatusNotFound || strings.Count(rec.Body.String(), `"error"`) != 1 {
+		t.Errorf("POST = %d %q, want one 404", rec.Code, rec.Body)
+	}
+}
+
+// How Roost reaches a machine is for admins, as a device's SSH access is. A
+// viewer who can see the machine's Docker is told only that it can't.
+func TestDocker_viewersAreNotToldHowRoostReachesAMachine(t *testing.T) {
+	t.Parallel()
+	e := newDockerEnv(t, testStore(t), false)
+	e.sshd.Drop()
+	e.sshd.Refuse(true)
+	admin := e.do(t, http.MethodGet, "/api/devices/laptop/docker/overview", laptopIP)
+	viewer := e.do(t, http.MethodGet, "/api/devices/laptop/docker/overview", phoneIP)
+	if admin.Code < 500 && admin.Code != http.StatusConflict || viewer.Code != admin.Code {
+		t.Fatalf("with SSH down, admin got %d %s and viewer %d %s, want the same failure", admin.Code, admin.Body, viewer.Code, viewer.Body)
+	}
+	if got := errorOf(t, viewer); got != "Roost can't reach Docker on this machine right now" {
+		t.Errorf("a viewer was told %q", got)
+	}
+	// The admin hears why, and it isn't the viewer's message.
+	if got := errorOf(t, admin); got == errorOf(t, viewer) || got == "" {
+		t.Errorf("an admin was told %q, want the reason", got)
+	}
+	// What Docker answers to a bad request is for anyone.
+	e.sshd.Refuse(false)
+	if rec := e.do(t, http.MethodGet, "/api/devices/roost/docker/containers/nope", phoneIP); rec.Code != http.StatusNotFound || errorOf(t, rec) != "No such container: nope" {
+		t.Errorf("a viewer asking for a container that isn't there got %d %s", rec.Code, rec.Body)
+	}
+	// And the messages about how a machine is set up.
+	rec := e.do(t, http.MethodGet, "/api/devices/server/docker/overview", phoneIP)
+	if rec.Code != http.StatusConflict || strings.Contains(rec.Body.String(), "SSH") {
+		t.Errorf("a viewer asking for a machine with no SSH access got %d %s", rec.Code, rec.Body)
+	}
+	if rec := e.do(t, http.MethodGet, "/api/devices/server/docker/overview", laptopIP); !strings.Contains(rec.Body.String(), "SSH access isn't set up for server") {
+		t.Errorf("an admin got %s, want to hear that SSH isn't set up", rec.Body)
+	}
+}
+
+func TestDocker_volumeLabelsThatLookLikeCredentialsAreForAdmins(t *testing.T) {
+	t.Parallel()
+	e := newDockerEnv(t, testStore(t), false)
+	var admin, viewer []api.DockerVolume
+	get(t, e.h, "/api/devices/roost/docker/volumes", laptopIP, &admin)
+	rec := serve(e.h, newRequest(t, http.MethodGet, "/api/devices/roost/docker/volumes", phoneIP))
+	if err := json.Unmarshal(rec.Body.Bytes(), &viewer); err != nil {
+		t.Fatal(err)
+	}
+	find := func(vols []api.DockerVolume) api.DockerVolume {
+		for _, v := range vols {
+			if v.Name == "shop_data" {
+				return v
+			}
+		}
+		t.Fatal("no shop_data")
+		return api.DockerVolume{}
+	}
+	if v := find(admin); v.SecretLabels["backup.password"] != "volpw-test" || v.Labels["tier"] != "gold" || v.Labels["backup.password"] != "" {
+		t.Errorf("admin's labels = %v, secret = %v", v.Labels, v.SecretLabels)
+	}
+	if v := find(viewer); v.Labels["tier"] != "gold" || len(v.SecretLabels) != 0 || strings.Contains(rec.Body.String(), "volpw-test") {
+		t.Errorf("viewer's labels = %v, secret = %v, body %s", v.Labels, v.SecretLabels, rec.Body)
+	}
+}
+
+// Docker acts on a container once it's told to, so the activity log says so
+// even when the admin's browser went away while it did.
+func TestDocker_actionIsLoggedWhenTheAdminLeaves(t *testing.T) {
+	t.Parallel()
+	e := newDockerEnv(t, testStore(t), false)
+	e.laptop.hold = make(chan struct{})
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	req := newRequestBody(t, http.MethodPost, "/api/devices/laptop/docker/containers/web/stop", laptopIP, strings.NewReader("")).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		e.h.ServeHTTP(rec, req)
+	}()
+	for range 500 {
+		if e.laptop.hit("POST /containers/web/stop") > 0 {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if e.laptop.hit("POST /containers/web/stop") == 0 {
+		t.Fatal("Docker was never asked to stop web")
+	}
+	cancel()
+	time.Sleep(50 * time.Millisecond)
+	close(e.laptop.hold)
+	<-done
+	events := e.events(t, api.EventKindContainer)
+	if len(events) != 1 || events[0].Message != "Stopped web on laptop" || events[0].Actor != alice {
+		t.Errorf("events = %+v, want Stopped web on laptop, by alice", events)
+	}
+}
+
+// A download that breaks in the middle ends in an error, not in a file that
+// looks whole.
+func TestDocker_logDownloadThatBreaks(t *testing.T) {
+	t.Parallel()
+	e := newDockerEnv(t, testStore(t), false)
+	rec := httptest.NewRecorder()
+	req := newRequest(t, http.MethodGet, "/api/devices/roost/docker/containers/backup/logs/download", laptopIP)
+	var aborted any
+	func() {
+		defer func() { aborted = recover() }()
+		e.h.ServeHTTP(rec, req)
+	}()
+	if err, _ := aborted.(error); !errors.Is(err, http.ErrAbortHandler) {
+		t.Errorf("the response ended with %v (and %d %q), want it cut off", aborted, rec.Code, rec.Body)
+	}
+}
+
+func TestDocker_containerWithNoExposedPorts(t *testing.T) {
+	t.Parallel()
+	e := newDockerEnv(t, testStore(t), false)
+	rec := e.do(t, http.MethodGet, "/api/devices/roost/docker/containers/backup", laptopIP)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("GET = %d %s", rec.Code, rec.Body)
+	}
+	// Lists are lists, never null, since the web app's types say so.
+	for _, field := range []string{`"exposed":[]`, `"ports":[]`, `"networks":[]`, `"mounts":[]`, `"dns":[]`} {
+		if !strings.Contains(rec.Body.String(), field) {
+			t.Errorf("the detail has no %s: %s", field, rec.Body)
 		}
 	}
 }

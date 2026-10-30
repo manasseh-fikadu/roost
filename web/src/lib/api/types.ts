@@ -2529,7 +2529,12 @@ export interface DockerVolume {
   mountpoint: string;
   created?: string /* RFC 3339 */;
   scope: string;
+  /**
+   * Labels are its labels, except those that look like credentials, which
+   * are in SecretLabels, for admins.
+   */
   labels: { [key: string]: string};
+  secretLabels?: { [key: string]: string};
   /**
    * Project is its Docker Compose project, if it has one.
    */

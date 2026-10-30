@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"time"
 )
 
@@ -454,13 +453,10 @@ const (
 	Restart Action = "restart"
 )
 
-// stopGrace is how many seconds Docker waits for a container to stop on its
-// own before it kills it, as `docker stop` does.
-const stopGrace = 10
-
-// actionTimeout is how long an action can take: a stop waits out its grace
-// period first.
-const actionTimeout = 60 * time.Second
+// actionTimeout is how long an action can take. A stop waits out the
+// container's own stop timeout, which is 10 seconds unless it sets another,
+// such as Docker Compose's stop_grace_period, before Docker kills it.
+const actionTimeout = 5 * time.Minute
 
 // Do starts, stops or restarts a container. It reports whether anything
 // changed: Docker answers that a container is already started or stopped.
@@ -469,14 +465,13 @@ func (c *Client) Do(ctx context.Context, id string, a Action) (changed bool, err
 	if err != nil {
 		return false, err
 	}
-	var q url.Values
 	switch a {
-	case Start:
-	case Stop, Restart:
-		q = url.Values{"t": {strconv.Itoa(stopGrace)}}
+	case Start, Stop, Restart:
 	default:
 		return false, errors.New("docker: unknown action " + string(a))
 	}
-	status, err := c.post(ctx, actionTimeout, path, q)
+	// Without a time, Docker uses the container's own stop timeout, as
+	// `docker stop` does.
+	status, err := c.post(ctx, actionTimeout, path, nil)
 	return status != http.StatusNotModified, err
 }
