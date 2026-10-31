@@ -5,7 +5,7 @@
 	before the unit is installed.
 -->
 <script lang="ts">
-	import { onMount, untrack } from 'svelte';
+	import { onMount } from 'svelte';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Search from '@lucide/svelte/icons/search';
 	import Server from '@lucide/svelte/icons/server';
@@ -22,6 +22,7 @@
 	import Input from '#lib/ui/Input.svelte';
 	import Select from '#lib/ui/Select.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
+	import { Draft } from './draft.svelte.js';
 	import FormCard from './FormCard.svelte';
 
 	interface Props {
@@ -34,19 +35,18 @@
 
 	const id = $props.id();
 
-	// The draft starts from the saved units, and goes back to them only on
-	// Discard and after a save, so a new snapshot or another admin's change
-	// doesn't undo what's being picked.
-	let selected = $state<string[]>(untrack(() => [...(view.settings.watchedUnits ?? [])]));
+	// The draft starts from the saved units, in the order they were saved. It
+	// follows them if someone else changes them while nothing here is picked,
+	// and stays as it is once something is.
+	const draft = new Draft(() => view.settings.watchedUnits ?? [], sameSet);
+	const selected = $derived(draft.value);
 	let saving = $state(false);
 	let query = $state('');
 	let newName = $state('');
 	let newScope = $state<'system' | 'user'>('system');
 
-	const saved = $derived(view.settings.watchedUnits ?? []);
-	const dirty = $derived(!sameSet(selected, saved));
 	const selectedSet = $derived(new Set(selected));
-	const savedSet = $derived(new Set(saved));
+	const savedSet = $derived(new Set(draft.base));
 
 	// The installed services, which are loaded once.
 	let installed = $state.raw<InstalledServices | null>(null);
@@ -100,11 +100,11 @@
 	const parsed = $derived(readUnitName(newName));
 
 	function toggle(key: string) {
-		selected = selectedSet.has(key) ? selected.filter((k) => k !== key) : [...selected, key];
+		draft.value = selectedSet.has(key) ? selected.filter((k) => k !== key) : [...selected, key];
 	}
 
 	function remove(key: string) {
-		selected = selected.filter((k) => k !== key);
+		draft.value = selected.filter((k) => k !== key);
 	}
 
 	function add() {
@@ -113,20 +113,16 @@
 		}
 		const key = unitKey(parsed.name, newScope === 'user');
 		if (!selectedSet.has(key)) {
-			selected = [...selected, key];
+			draft.value = [...selected, key];
 		}
 		newName = '';
-	}
-
-	function reset() {
-		selected = [...saved];
 	}
 
 	async function save() {
 		saving = true;
 		try {
 			const next = await changeSettings({ watchedUnits: [...selected] }, 'Watched units saved');
-			selected = [...(next.settings.watchedUnits ?? [])];
+			draft.adopt(next.settings.watchedUnits ?? []);
 			onsaved(next);
 		} catch {
 			// changeSettings showed the error.
@@ -161,10 +157,10 @@
 <FormCard
 	title="Watched units"
 	description="Roost shows these units on the hub's page and alerts when one isn't running. It always shows failed units, watched or not."
-	{dirty}
+	dirty={draft.dirty}
 	{saving}
 	onsave={save}
-	onreset={reset}
+	onreset={() => draft.reset()}
 >
 	{#if waiting}
 		<div class="space-y-2" aria-busy="true">

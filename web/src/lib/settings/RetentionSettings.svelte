@@ -3,12 +3,18 @@
 	days than before deletes data, so that asks first.
 -->
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { changeSettings } from '#lib/api/client.js';
 	import type { RetentionSettings, SettingsView } from '#lib/api/types.js';
-	import { retention, retentionProblem, same, shortensRetention } from '#lib/settings.js';
+	import { Draft } from '#lib/settings/draft.svelte.js';
 	import FormCard from '#lib/settings/FormCard.svelte';
 	import NumberInput from '#lib/settings/NumberInput.svelte';
+	import {
+		changedFields,
+		retention,
+		retentionProblem,
+		same,
+		shortensRetention
+	} from '#lib/settings.js';
 	import Button from '#lib/ui/Button.svelte';
 	import Dialog from '#lib/ui/Dialog.svelte';
 
@@ -26,9 +32,7 @@
 
 	const id = $props.id();
 
-	// The form starts from what is saved and stays as it is until it is saved
-	// or discarded, so another section saving doesn't wipe a half-edited one.
-	let draft: RetentionSettings = $state(untrack(() => ({ ...view.settings.retention })));
+	const draft = new Draft(() => view.settings.retention);
 	let saving = $state(false);
 
 	// The kinds of history that would shrink, as of when Save was pressed, so
@@ -36,40 +40,43 @@
 	let confirming = $state(false);
 	let shrinking: { label: string; from: number; to: number }[] = $state([]);
 
-	const dirty = $derived(!same(draft, view.settings.retention));
-	const problem = $derived(retentionProblem(draft));
-	const differsFromDefaults = $derived(!same(draft, view.defaults.retention));
+	const problem = $derived(retentionProblem(draft.value));
+	const differsFromDefaults = $derived(!same(draft.value, view.defaults.retention));
 
 	function days(n: number): string {
 		return n === 1 ? '1 day' : `${n} days`;
 	}
 
-	function reset() {
-		draft = { ...view.settings.retention };
-	}
-
 	function restoreDefaults() {
-		draft = { ...view.defaults.retention };
+		draft.value = { ...view.defaults.retention };
 	}
 
 	function submit() {
 		const saved = view.settings.retention;
-		if (!shortensRetention(saved, draft)) {
+		if (!shortensRetention(saved, draft.value)) {
 			void save();
 			return;
 		}
 		shrinking = retention
-			.filter(({ key }) => draft[key] < saved[key])
-			.map(({ key, label }) => ({ label, from: saved[key], to: draft[key] }));
+			.filter(({ key }) => draft.value[key] < saved[key])
+			.map(({ key, label }) => ({ label, from: saved[key], to: draft.value[key] }));
+		// The dialog gives focus back to what had it when it opened. That would
+		// be the Save button, which is off once the change is saved, so unless
+		// the admin is in a field already, start from the first one.
+		if (!(document.activeElement instanceof HTMLInputElement)) {
+			document.getElementById(`${id}-${retention[0].key}`)?.focus();
+		}
 		confirming = true;
 	}
 
 	async function save() {
 		saving = true;
 		try {
-			const saved = await changeSettings({ retention: $state.snapshot(draft) });
+			const saved = await changeSettings({
+				retention: changedFields($state.snapshot(draft.value), draft.base)
+			});
+			draft.adopt(saved.settings.retention);
 			onsaved(saved);
-			draft = { ...saved.settings.retention };
 		} catch {
 			// changeSettings showed the error.
 		} finally {
@@ -82,11 +89,11 @@
 <FormCard
 	title="Retention"
 	description="How long Roost keeps history. It deletes older data within the hour."
-	{dirty}
+	dirty={draft.dirty}
 	{saving}
 	{problem}
 	onsave={submit}
-	onreset={reset}
+	onreset={() => draft.reset()}
 >
 	<ul class="divide-y divide-line">
 		{#each retention as info (info.key)}
@@ -104,7 +111,7 @@
 				</div>
 				<NumberInput
 					id="{id}-{info.key}"
-					bind:value={draft[info.key]}
+					bind:value={draft.value[info.key]}
 					unit="days"
 					min={1}
 					max={info.max}

@@ -5,7 +5,7 @@
 	replaces what's shown.
 -->
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { page } from '$app/state';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import { RadioGroup } from 'bits-ui';
@@ -125,6 +125,12 @@
 		}
 	}
 
+	/** Gives a login a role, or changes it, and says whether it worked. The toast says which. */
+	function grant(login: string, role: Role): Promise<boolean> {
+		const known = access?.users.some((u) => u.login.toLowerCase() === login.toLowerCase());
+		return change(login, role, () => setRole(login, role, known ? 'Saved' : 'Added'));
+	}
+
 	function pick(user: User, role: Role) {
 		if (role === user.role) {
 			return;
@@ -135,18 +141,21 @@
 			ask('demote', user.login);
 			return;
 		}
-		void change(user.login, role, () => setRole(user.login, role));
+		void grant(user.login, role);
 	}
 
 	// The question before taking a role from the caller, or taking one away.
 	// What it's about stays after it closes, so its text doesn't change while
-	// it fades out.
-	let question = $state<{ kind: 'remove' | 'demote'; login: string } | null>(null);
+	// it fades out. `fromForm` is for a demotion that came from the add form,
+	// not from the person's role select.
+	let question = $state<{ kind: 'remove' | 'demote'; login: string; fromForm: boolean } | null>(
+		null
+	);
 	let questionOpen = $state(false);
 	let answering = $state(false);
 
-	function ask(kind: 'remove' | 'demote', login: string) {
-		question = { kind, login };
+	function ask(kind: 'remove' | 'demote', login: string, fromForm = false) {
+		question = { kind, login, fromForm };
 		questionOpen = true;
 	}
 
@@ -161,17 +170,26 @@
 		if (!question) {
 			return;
 		}
-		const { kind, login } = question;
+		const { kind, login, fromForm } = question;
 		answering = true;
+		let ok = false;
 		try {
 			if (kind === 'remove') {
-				await change(login, undefined, () => removeUser(login));
+				ok = await change(login, undefined, () => removeUser(login));
+			} else if (fromForm) {
+				ok = await submit(login, RoleViewer);
 			} else {
-				await change(login, RoleViewer, () => setRole(login, RoleViewer));
+				ok = await grant(login, RoleViewer);
 			}
 		} finally {
 			answering = false;
 			questionOpen = false;
+		}
+		if (ok && kind === 'remove') {
+			// The row, and the button the dialog would give focus back to, are gone.
+			// Wait for the dialog to let go of focus, then put it on the add form.
+			await tick();
+			document.getElementById(`${id}-login`)?.focus();
 		}
 	}
 
@@ -183,23 +201,29 @@
 	const problem = $derived(loginProblem(newLogin));
 	const typed = $derived(newLogin.trim() !== '');
 
-	async function add(e: SubmitEvent) {
+	/** Adds a person from the form, and clears the form if it worked. */
+	async function submit(login: string, role: Role): Promise<boolean> {
+		adding = true;
+		const ok = await grant(login, role);
+		adding = false;
+		if (ok) {
+			newLogin = '';
+			newRole = RoleViewer;
+		}
+		return ok;
+	}
+
+	function add(e: SubmitEvent) {
 		e.preventDefault();
 		if (!typed || problem || adding) {
 			return;
 		}
 		const login = newLogin.trim();
-		const known = access?.users.some((u) => u.login.toLowerCase() === login.toLowerCase());
-		adding = true;
-		try {
-			take(++sequence, await setRole(login, newRole, known ? 'Saved' : 'Added'));
-			newLogin = '';
-			newRole = RoleViewer;
-		} catch {
-			// The client showed the error.
-		} finally {
-			adding = false;
+		if (isMe(login) && newRole !== RoleAdmin) {
+			ask('demote', login, true);
+			return;
 		}
+		void submit(login, newRole);
 	}
 
 	// Who can view.
@@ -298,6 +322,7 @@
 			>
 				<div class="min-w-0 flex-1">
 					<Input
+						id="{id}-login"
 						bind:value={newLogin}
 						type="text"
 						inputmode="email"

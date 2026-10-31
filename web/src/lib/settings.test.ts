@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test';
 import type { InstalledService, RetentionSettings, Thresholds } from './api/types.js';
 import {
+	changedFields,
+	follow,
 	loginProblem,
 	matchServices,
 	numberOf,
@@ -79,6 +81,42 @@ test('same compares by value', () => {
 	expect(same({ a: [1, 2] }, { a: [2, 1] })).toBe(false);
 });
 
+test('changedFields keeps what was not edited out of a change', () => {
+	const saved = { a: 1, b: 'x', c: [1, 2] };
+	expect(changedFields({ ...saved }, saved)).toEqual({});
+	expect(changedFields({ a: 2, b: 'x', c: [1, 2] }, saved)).toEqual({ a: 2 });
+	expect(changedFields({ a: 1, b: '', c: [1, 3] }, saved)).toEqual({ b: '', c: [1, 3] });
+});
+
+test('follow keeps what was edited and takes the rest from the saved settings', () => {
+	const was = {
+		thresholds: { disk: 85, memory: 92, cpu: 90 },
+		rules: { disk: true, cpu: true },
+		units: ['a']
+	};
+	// The admin edited the CPU threshold and the disk rule.
+	const edited = {
+		thresholds: { disk: 85, memory: 92, cpu: 75 },
+		rules: { disk: false, cpu: true },
+		units: ['a']
+	};
+	// Meanwhile someone changed memory, the CPU threshold and the CPU rule, and added a unit.
+	const now = {
+		thresholds: { disk: 85, memory: 70, cpu: 80 },
+		rules: { disk: true, cpu: false },
+		units: ['a', 'b']
+	};
+	expect(follow(edited, was, now)).toEqual({
+		thresholds: { disk: 85, memory: 70, cpu: 75 },
+		rules: { disk: false, cpu: false },
+		units: ['a', 'b']
+	});
+	// A draft nobody edited is the saved settings.
+	expect(follow(was, was, now)).toEqual(now);
+	// What isn't in the edit is added from the saved settings.
+	expect(follow({ a: 1 }, { a: 1 }, { a: 2, b: 3 })).toEqual({ a: 2, b: 3 });
+});
+
 test('numberOf', () => {
 	expect(numberOf(5)).toBe(5);
 	expect(numberOf('7.5')).toBe(7.5);
@@ -124,7 +162,13 @@ describe('publicUrlProblem', () => {
 		'HTTPS://Roost.Example.com',
 		'https://roost.example.ts.net/',
 		'  https://roost.example.ts.net  ',
-		'http://[fd7a:115c:a1e0::1]:8080'
+		'http://[fd7a:115c:a1e0::1]:8080',
+		'http://[::1]',
+		'https://localhost:1',
+		'https://roost.example.com:65535',
+		'https://my-host.example.com',
+		'https://a.b.c.d.example',
+		`https://${'a.'.repeat(126)}a`
 	])('accepts %j', (url) => {
 		expect(publicUrlProblem(url)).toBe('');
 	});
@@ -133,8 +177,8 @@ describe('publicUrlProblem', () => {
 		['no scheme', 'roost.example.com', 'web address'],
 		['another scheme', 'ftp://roost.example.com', 'web address'],
 		['a scheme alone', 'https://', 'web address'],
-		['no host', 'https://:8080', 'web address'],
-		['a bad port', 'https://example.com:99999', 'web address'],
+		['an unclosed bracket', 'http://[::1', 'web address'],
+		['text after a bracket', 'http://[::1]x', 'web address'],
 		['a path', 'https://example.com/roost', 'scheme, a host and a port'],
 		['two slashes at the end', 'https://example.com//', 'scheme, a host and a port'],
 		['a query', 'https://example.com?a=b', 'scheme, a host and a port'],
@@ -142,9 +186,43 @@ describe('publicUrlProblem', () => {
 		['a login', 'https://alice:secret@example.com', 'scheme, a host and a port'],
 		['a backslash', 'https://example.com\\roost', 'scheme, a host and a port'],
 		['a space in the host', 'https://exa mple.com', 'spaces'],
-		['a line break', 'https://example.com\nhttp://x', 'spaces']
+		['a line break', 'https://example.com\nhttp://x', 'spaces'],
+		['a no-break space in the host', 'https://exa\u00a0mple.com', 'spaces']
 	])('rejects %s', (_, url, words) => {
 		expect(publicUrlProblem(url)).toContain(words);
+	});
+
+	test.each([
+		['no host', 'https://:8080'],
+		['a dollar sign in the host', 'https://exa$mple.com'],
+		['a semicolon in the host', 'https://exa;mple.com'],
+		['an apostrophe in the host', "https://exa'mple.com"],
+		['a quote in the host', 'https://exa"mple.com'],
+		['an underscore in the host', 'https://exa_mple.com'],
+		['a percent sign in the host', 'https://exa%41mple.com'],
+		['a zero-width space in the host', 'https://exa\u200bmple.com'],
+		['a soft hyphen in the host', 'https://exa\u00admple.com'],
+		['an accented letter in the host', 'https://b\u00fccher.example'],
+		['a dash first in a label', 'https://-example.com'],
+		['a dash last in a label', 'https://example-.com'],
+		['an empty label', 'https://example..com'],
+		['a dot first', 'https://.example.com'],
+		['a dot last', 'https://example.com.'],
+		['a host over 253 characters', `https://${'a.'.repeat(126)}aa`],
+		['an empty port', 'https://example.com:'],
+		['port zero', 'https://example.com:0'],
+		['a port over 65535', 'https://example.com:65536'],
+		['a very large port', 'https://example.com:99999'],
+		['a port that is not a number', 'https://example.com:abc'],
+		['a signed port', 'https://example.com:+80'],
+		['an empty port after a bracket', 'http://[::1]:'],
+		['a zone on an IPv6 address', 'http://[fe80::1%25eth0]'],
+		['a bare zone on an IPv6 address', 'http://[fe80::1%eth0]'],
+		['an IPv6 address that is not one', 'http://[not:an:ip]'],
+		['an IPv6 address without brackets', 'http://::1'],
+		['empty brackets', 'http://[]']
+	])('rejects %s', (_, url) => {
+		expect(publicUrlProblem(url)).toContain('name or an IP address');
 	});
 });
 
@@ -161,7 +239,10 @@ describe('readUnitName', () => {
 		['nginx', 'nginx.service'],
 		['  nginx.service ', 'nginx.service'],
 		['backup.timer', 'backup.timer'],
-		['app@1', 'app@1.service']
+		['app@1', 'app@1.service'],
+		['getty@tty1.service', 'getty@tty1.service'],
+		['a:b_c-d\\e.service', 'a:b_c-d\\e.service'],
+		[`${'a'.repeat(247)}.service`, `${'a'.repeat(247)}.service`]
 	])('reads %j as %j', (input, name) => {
 		expect(readUnitName(input)).toEqual({ name, problem: '' });
 	});
@@ -175,7 +256,12 @@ describe('readUnitName', () => {
 		['a space', 'my app', 'spaces'],
 		['a slash', 'a/b.service', 'slashes'],
 		['a leading dash', '-x.service', 'dash'],
-		['a user: prefix', 'user:app.service', 'User']
+		['a user: prefix', 'user:app.service', 'User'],
+		['an accent', 'café.service', 'letters, digits'],
+		['a plus sign', 'a+b.service', 'letters, digits'],
+		['a template', 'getty@.service', 'template'],
+		['a template without its suffix', 'getty@', 'template'],
+		['a name over 255 characters', `${'a'.repeat(248)}.service`, '255']
 	])('rejects %s', (_, input, words) => {
 		expect(readUnitName(input).problem).toContain(words);
 	});

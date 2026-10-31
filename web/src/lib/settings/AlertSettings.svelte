@@ -4,12 +4,12 @@
 	are for.
 -->
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { changeSettings } from '#lib/api/client.js';
 	import type { AlertRules, SettingsView, Thresholds } from '#lib/api/types.js';
-	import { rules, same, thresholdsProblem } from '#lib/settings.js';
+	import { Draft } from '#lib/settings/draft.svelte.js';
 	import FormCard from '#lib/settings/FormCard.svelte';
 	import NumberInput from '#lib/settings/NumberInput.svelte';
+	import { changedFields, rules, same, thresholdsProblem } from '#lib/settings.js';
 	import Button from '#lib/ui/Button.svelte';
 	import Switch from '#lib/ui/Switch.svelte';
 
@@ -87,33 +87,20 @@
 
 	const id = $props.id();
 
-	// The form starts from what is saved and stays as it is until it is saved
-	// or discarded, so another section saving doesn't wipe a half-edited one.
-	let draft = $state(
-		untrack(() => ({
-			thresholds: { ...view.settings.thresholds },
-			rules: { ...view.settings.rules }
-		}))
-	);
+	const draft = new Draft(() => ({
+		thresholds: view.settings.thresholds,
+		rules: view.settings.rules
+	}));
 	let saving = $state(false);
 
-	const dirty = $derived(
-		!same(draft.thresholds, view.settings.thresholds) || !same(draft.rules, view.settings.rules)
-	);
-	const problem = $derived(thresholdsProblem(draft.thresholds));
+	const problem = $derived(thresholdsProblem(draft.value.thresholds));
 	const differsFromDefaults = $derived(
-		!same(draft.thresholds, view.defaults.thresholds) || !same(draft.rules, view.defaults.rules)
+		!same(draft.value.thresholds, view.defaults.thresholds) ||
+			!same(draft.value.rules, view.defaults.rules)
 	);
-
-	function reset() {
-		draft = {
-			thresholds: { ...view.settings.thresholds },
-			rules: { ...view.settings.rules }
-		};
-	}
 
 	function restoreDefaults() {
-		draft = {
+		draft.value = {
 			thresholds: { ...view.defaults.thresholds },
 			rules: { ...view.defaults.rules }
 		};
@@ -122,13 +109,13 @@
 	async function save() {
 		saving = true;
 		try {
-			const { thresholds, rules } = $state.snapshot(draft);
-			const saved = await changeSettings({ thresholds, rules });
+			const edited = $state.snapshot(draft.value);
+			const saved = await changeSettings({
+				thresholds: changedFields(edited.thresholds, draft.base.thresholds),
+				rules: changedFields(edited.rules, draft.base.rules)
+			});
+			draft.adopt({ thresholds: saved.settings.thresholds, rules: saved.settings.rules });
 			onsaved(saved);
-			draft = {
-				thresholds: { ...saved.settings.thresholds },
-				rules: { ...saved.settings.rules }
-			};
 		} catch {
 			// changeSettings showed the error.
 		} finally {
@@ -140,21 +127,25 @@
 <FormCard
 	title="Alert rules"
 	description="Roost raises an alert when a rule's condition holds. Turning a rule off also stops flagging it on the dashboard and resolves its open alerts."
-	{dirty}
+	dirty={draft.dirty}
 	{saving}
 	{problem}
 	onsave={save}
-	onreset={reset}
+	onreset={() => draft.reset()}
 >
 	<ul class="divide-y divide-line">
 		{#each rules as rule (rule.key)}
 			{@const fields = parts[rule.key]}
-			{@const on = draft.rules[rule.key]}
+			{@const on = draft.value.rules[rule.key]}
 			<li
 				class="grid grid-cols-[auto_1fr] items-start gap-x-3 gap-y-2 py-3 first:pt-0 last:pb-0 lg:grid-cols-[auto_1fr_auto] lg:items-center"
 			>
 				<div class="mt-0.5 lg:mt-0">
-					<Switch id="{id}-{rule.key}" label={rule.label} bind:checked={draft.rules[rule.key]} />
+					<Switch
+						id="{id}-{rule.key}"
+						label={rule.label}
+						bind:checked={draft.value.rules[rule.key]}
+					/>
 				</div>
 				<label for="{id}-{rule.key}" class="min-w-0">
 					<span class="block text-[13px] font-medium text-fg">{rule.label}</span>
@@ -171,7 +162,7 @@
 							<span class="flex items-center gap-2">
 								{part.before}
 								<NumberInput
-									bind:value={draft.thresholds[part.field]}
+									bind:value={draft.value.thresholds[part.field]}
 									unit={part.unit}
 									min={part.min}
 									max={part.max}

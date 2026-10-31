@@ -77,6 +77,40 @@ export function same(a: unknown, b: unknown): boolean {
 	return JSON.stringify(a) === JSON.stringify(b);
 }
 
+function isRecord(v: unknown): v is Record<string, unknown> {
+	return typeof v === 'object' && v !== null && !Array.isArray(v);
+}
+
+/**
+ * Returns `edited` with each field that is still as it was in `was` taken from
+ * `now`, so what an admin edited stays and what they didn't follows the saved
+ * settings. It goes into nested objects, and compares anything else whole.
+ */
+export function follow(edited: unknown, was: unknown, now: unknown): unknown {
+	if (isRecord(edited) && isRecord(was) && isRecord(now)) {
+		const out: Record<string, unknown> = { ...edited };
+		for (const key of Object.keys(now)) {
+			out[key] = follow(edited[key], was[key], now[key]);
+		}
+		return out;
+	}
+	return same(edited, was) ? now : edited;
+}
+
+/**
+ * The fields of `edited` that differ from `saved`, to send in a change so that
+ * a field nobody edited here keeps what someone else may have saved since.
+ */
+export function changedFields<T extends object>(edited: T, saved: T): Partial<T> {
+	const out: Partial<T> = {};
+	for (const key of Object.keys(edited) as (keyof T)[]) {
+		if (!same(edited[key], saved[key])) {
+			out[key] = edited[key];
+		}
+	}
+	return out;
+}
+
 /**
  * Reads a number field's value, which is a number or null when the field is
  * empty or isn't a number, as `bind:value` on `type="number"` gives it.
@@ -166,10 +200,25 @@ export function matchServices(services: InstalledService[], query: string): Inst
 	});
 }
 
+/** A DNS name: labels of letters, digits and hyphens, none starting or ending with a hyphen. */
+const dnsName =
+	/^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$/;
+
+/** Whether a host, without brackets, is a DNS name or an IP address without a zone. */
+function validHost(host: string): boolean {
+	if (host.includes(':')) {
+		// An IPv6 address. The URL parser refuses one with a zone.
+		return URL.canParse(`http://[${host}]`);
+	}
+	return host.length <= 253 && dnsName.test(host);
+}
+
 /**
  * What is wrong with a public URL, in a sentence, or '' if nothing is. It
  * can be empty, or http(s)://host with an optional port: no path, query,
- * fragment or login. A slash at its end is fine, since the hub trims it.
+ * fragment or login. The host is a DNS name or an IP address, and the port,
+ * if there is one, is from 1 to 65535. A slash at its end is fine, since the
+ * hub trims it.
  */
 export function publicUrlProblem(url: string): string {
 	let s = url.trim();
@@ -190,12 +239,28 @@ export function publicUrlProblem(url: string): string {
 	if (/[/\\?#@]/.test(authority)) {
 		return 'The public URL can only be a scheme, a host and a port, such as https://roost.example.ts.net:8443.';
 	}
-	try {
-		if (new URL(s).hostname === '') {
+	// A host in brackets, such as [fd7a::1], ends at the bracket. Any other host
+	// ends at the last colon, which starts the port.
+	let host = authority;
+	let port: string | undefined;
+	if (authority.startsWith('[')) {
+		const end = authority.indexOf(']');
+		const after = end < 0 ? '' : authority.slice(end + 1);
+		if (end < 0 || (after !== '' && !after.startsWith(':'))) {
 			return webAddress;
 		}
-	} catch {
-		return webAddress;
+		host = authority.slice(1, end);
+		port = after === '' ? undefined : after.slice(1);
+	} else if (authority.includes(':')) {
+		const colon = authority.lastIndexOf(':');
+		host = authority.slice(0, colon);
+		port = authority.slice(colon + 1);
+	}
+	if (
+		!validHost(host) ||
+		(port !== undefined && !(/^[0-9]+$/.test(port) && Number(port) >= 1 && Number(port) <= 65535))
+	) {
+		return "The public URL's host must be a name or an IP address, and its port a number from 1 to 65535.";
 	}
 	return '';
 }
@@ -211,23 +276,37 @@ export function sameSet(a: readonly string[], b: readonly string[]): boolean {
  * Reads a unit name typed into the add form: it's trimmed, and gets
  * ".service" if it has no dot. The name is empty if nothing was typed, and
  * the problem says in a sentence what is wrong with a name, or is '' if
- * nothing is.
+ * nothing is. The hub holds names to what systemd does: letters, digits and
+ * ": _ . \ @ -", at most 255 of them, no dash first, and no template such as
+ * "getty@.service".
  */
 export function readUnitName(input: string): { name: string; problem: string } {
 	const typed = input.trim();
 	if (typed === '') {
 		return { name: '', problem: '' };
 	}
-	if (/[\s/]/.test(typed)) {
-		return { name: typed, problem: "A unit name can't have spaces or slashes in it." };
-	}
+	const bad = (problem: string) => ({ name: typed, problem });
 	if (typed.startsWith('-')) {
-		return { name: typed, problem: "A unit name can't start with a dash." };
+		return bad("A unit name can't start with a dash.");
 	}
 	if (typed.startsWith('user:')) {
-		return { name: typed, problem: 'Pick User from the list instead of typing user:.' };
+		return bad('Pick User from the list instead of typing user:.');
 	}
-	return { name: typed.includes('.') ? typed : `${typed}.service`, problem: '' };
+	if (!/^[A-Za-z0-9:_.\\@-]+$/.test(typed)) {
+		return bad(
+			'A unit name can only have letters, digits and the characters : _ . \\ @ - (so no spaces or slashes).'
+		);
+	}
+	const name = typed.includes('.') ? typed : `${typed}.service`;
+	if (name.includes('@.')) {
+		return bad(
+			"A template such as getty@.service can't be watched. Name an instance, such as getty@tty1.service."
+		);
+	}
+	if (name.length > 255) {
+		return bad('A unit name can have at most 255 characters.');
+	}
+	return { name, problem: '' };
 }
 
 /**
