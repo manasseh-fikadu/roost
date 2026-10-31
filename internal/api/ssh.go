@@ -39,32 +39,42 @@ func (h *handler) sshOf(id string) *DeviceSSH {
 // sshError answers with the status and message for an error from the SSH
 // manager, and reports whether there was one.
 func (h *handler) sshError(w http.ResponseWriter, r *http.Request, err error) bool {
-	var ce *ssh.ConnectError
-	status := http.StatusBadRequest
 	switch {
 	case err == nil:
 		return false
 	case errors.Is(err, context.Canceled) && r.Context().Err() != nil:
 		// The caller went away.
 		return true
-	case errors.Is(err, ssh.ErrNoDevice), errors.Is(err, ssh.ErrNoSession):
-		status = http.StatusNotFound
-	case errors.Is(err, ssh.ErrStarting):
-		status = http.StatusServiceUnavailable
-	case errors.Is(err, ssh.ErrNotSetUp), errors.Is(err, ssh.ErrOffline), errors.Is(err, ssh.ErrHostKeyChange),
-		errors.Is(err, ssh.ErrNoTmux), errors.Is(err, ssh.ErrNoChangedKey), errors.Is(err, ssh.ErrOfferedKeyChanged),
-		errors.Is(err, ssh.ErrNoSFTP):
-		status = http.StatusConflict
-	case errors.As(err, &ce), errors.Is(err, ssh.ErrTmux), errors.Is(err, context.DeadlineExceeded):
-		status = http.StatusBadGateway
-	case errors.Is(err, ssh.ErrUnsupported), errors.Is(err, ssh.ErrNotHub), errors.Is(err, ssh.ErrBadUser),
-		errors.Is(err, ssh.ErrBadPort), errors.Is(err, ssh.ErrBadSession), errors.Is(err, ssh.ErrBadDir), errors.Is(err, ssh.ErrBadArg):
-	default:
+	}
+	status, known := sshStatus(err)
+	if !known {
 		h.fail(w, r, "use SSH", err)
 		return true
 	}
 	h.writeJSON(w, r, status, ErrorBody{Error: err.Error()})
 	return true
+}
+
+// sshStatus returns the HTTP status for an error from the SSH manager, and
+// whether it is one of the errors the manager has.
+func sshStatus(err error) (int, bool) {
+	var ce *ssh.ConnectError
+	switch {
+	case errors.Is(err, ssh.ErrNoDevice), errors.Is(err, ssh.ErrNoSession):
+		return http.StatusNotFound, true
+	case errors.Is(err, ssh.ErrStarting):
+		return http.StatusServiceUnavailable, true
+	case errors.Is(err, ssh.ErrNotSetUp), errors.Is(err, ssh.ErrOffline), errors.Is(err, ssh.ErrHostKeyChange),
+		errors.Is(err, ssh.ErrNoTmux), errors.Is(err, ssh.ErrNoChangedKey), errors.Is(err, ssh.ErrOfferedKeyChanged),
+		errors.Is(err, ssh.ErrNoSFTP):
+		return http.StatusConflict, true
+	case errors.As(err, &ce), errors.Is(err, ssh.ErrTmux), errors.Is(err, context.DeadlineExceeded):
+		return http.StatusBadGateway, true
+	case errors.Is(err, ssh.ErrUnsupported), errors.Is(err, ssh.ErrNotHub), errors.Is(err, ssh.ErrBadUser),
+		errors.Is(err, ssh.ErrBadPort), errors.Is(err, ssh.ErrBadSession), errors.Is(err, ssh.ErrBadDir), errors.Is(err, ssh.ErrBadArg):
+		return http.StatusBadRequest, true
+	}
+	return 0, false
 }
 
 // sshSetup answers GET /api/devices/{id}/ssh with how to let Roost log in

@@ -262,10 +262,46 @@ func (m *Manager) dialUnix(ctx context.Context, t target, path string) (net.Conn
 	conn, err := client.DialContext(ctx, "unix", path)
 	if err != nil {
 		release()
+		if _, ok := errors.AsType[*gossh.OpenChannelError](err); ok {
+			return nil, &SocketError{Path: path, Err: err}
+		}
 		return nil, err
 	}
 	return &releasingConn{Conn: conn, release: release}, nil
 }
+
+// ErrNoDockerSocket means the latest check of a machine found no Docker
+// socket on it.
+var ErrNoDockerSocket = errors.New("the latest check found no Docker socket on the machine")
+
+// DialDocker connects to the Docker socket that the latest check found on a
+// machine, by the ID its access is kept under (see AccessID), over its shared
+// connection. The connection counts as in use until the returned one is
+// closed.
+func (m *Manager) DialDocker(ctx context.Context, accessID string) (net.Conn, error) {
+	a, ok := m.Access()[accessID]
+	switch {
+	case !ok:
+		return nil, ErrNotSetUp
+	case a.DockerSocket == "":
+		return nil, ErrNoDockerSocket
+	}
+	return m.DialUnix(ctx, accessID, a.DockerSocket)
+}
+
+// A SocketError is the error for a Unix socket on a machine that sshd
+// wouldn't open: nothing listens on it, or the user Roost logs in as may not
+// use it.
+type SocketError struct {
+	Path string
+	Err  error
+}
+
+func (e *SocketError) Error() string {
+	return "can't open " + e.Path + " on the machine: " + e.Err.Error()
+}
+
+func (e *SocketError) Unwrap() error { return e.Err }
 
 // releasingConn calls release when it's closed.
 type releasingConn struct {

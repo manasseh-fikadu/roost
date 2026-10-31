@@ -73,8 +73,8 @@ func classify(cgroup string, kthread bool, name string, userName func(uid int) s
 			id = segs[i+1]
 		}
 		if id != "" {
-			// Roost doesn't know the containers' names until Docker
-			// management (#29), so the short ID names it.
+			// A process's cgroup has the container's ID, but not its name,
+			// so the short ID names it.
 			return KindContainer, id[:12]
 		}
 	}

@@ -107,6 +107,9 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 			enrolled[id] = e
 		}
 	}
+	// In embedded mode, the machine Roost runs on is a peer too, and is the
+	// node that the Docker pages list, since it's named for the machine.
+	hostNode := slices.ContainsFunc(st.Peers, func(d tailnet.Device) bool { return d.SameMachine })
 	var machines []machine
 	for i, d := range devices {
 		dev := deviceInput{device: d, self: i == 0, settings: src.settings[d.ID], thresholds: src.thresholds}
@@ -127,6 +130,7 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 		if src.ssh != nil && ssh.Supported(d, dev.self) {
 			device.SSH = newDeviceSSH(d, dev.self, src.ssh)
 		}
+		device.Docker = hasDocker(d, dev.self, hostNode, src)
 		out.Devices = append(out.Devices, device)
 		// In embedded mode, the machine's own node shows what Roost's does.
 		if m.deviceID != "" && (dev.self || !d.SameMachine) {
@@ -489,4 +493,17 @@ func defaultAlertOffline(d tailnet.Device) bool {
 func firstLabel(name string) string {
 	label, _, _ := strings.Cut(name, ".")
 	return label
+}
+
+// hasDocker reports whether Roost can read the Docker on d: on the machine
+// Roost runs on, if it has a socket, and on another, if its SSH access found
+// one. self marks Roost's own node. That machine can be two nodes, Roost's
+// and its own peer node, which share a Docker, and only one of them has it:
+// the peer, if hostNode says there is one.
+func hasDocker(d tailnet.Device, self, hostNode bool, src sources) bool {
+	id := ssh.AccessID(d, self)
+	if id == store.HubID {
+		return src.docker != nil && (d.SameMachine || !hostNode)
+	}
+	return src.ssh[id].DockerSocket != ""
 }

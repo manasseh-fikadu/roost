@@ -18,6 +18,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/checks"
+	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
@@ -57,7 +58,8 @@ func TestStream(t *testing.T) {
 					Version: "v1.2.3", WhoIs: tn.WhoIs, Snapshot: snapshot, Feed: feed, Store: st,
 					Agents: agents.NewRegistry(st, nil), Usage: usage.NewRecorder(st, nil),
 					Checks: checks.NewRunner(st, checks.Options{Dial: tn.Dial}), Alerts: alerts.NewEngine(st, nil),
-					SSH: ssh.NewManager(ssh.Options{KeyDir: t.TempDir(), Store: st, Tailnet: snapshot, Dial: tn.Dial}),
+					SSH:    ssh.NewManager(ssh.Options{KeyDir: t.TempDir(), Store: st, Tailnet: snapshot, Dial: tn.Dial}),
+					Docker: docker.NewFleet(nil, nil),
 				})
 				events := openStream(t, tn, h, tt.from, tt.gzip)
 
@@ -236,6 +238,19 @@ type event struct {
 // it.
 func openStream(t *testing.T, tn *tailnettest.Tailnet, h http.Handler, from netip.Addr, gzip bool) <-chan event {
 	t.Helper()
+	return openEvents(t, tn, h, from, "/api/stream", gzip)
+}
+
+// openEvents is openStream for the stream at a path.
+func openEvents(t *testing.T, tn *tailnettest.Tailnet, h http.Handler, from netip.Addr, path string, gzip bool) <-chan event {
+	t.Helper()
+	serveOn(t, tn, h)
+	return readEvents(t, tn, from, path, gzip)
+}
+
+// serveOn serves h on the tailnet, which it can do once.
+func serveOn(t *testing.T, tn *tailnettest.Tailnet, h http.Handler) {
+	t.Helper()
 	ln, _, err := tn.Listen(t.Context())
 	if err != nil {
 		t.Fatal(err)
@@ -243,10 +258,15 @@ func openStream(t *testing.T, tn *tailnettest.Tailnet, h http.Handler, from neti
 	srv := &http.Server{Handler: h, ReadHeaderTimeout: time.Second}
 	go func() { _ = srv.Serve(ln) }()
 	t.Cleanup(func() { _ = srv.Close() })
+}
 
+// readEvents opens the stream at a path on a tailnet that serves the API, and
+// returns the events it sends.
+func readEvents(t *testing.T, tn *tailnettest.Tailnet, from netip.Addr, path string, gzip bool) <-chan event {
+	t.Helper()
 	client := tn.Client(from)
 	t.Cleanup(client.CloseIdleConnections)
-	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tailnettest.URL+"/api/stream", nil)
+	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tailnettest.URL+path, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,7 +284,7 @@ func openStream(t *testing.T, tn *tailnettest.Tailnet, h http.Handler, from neti
 	}
 	if res.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(res.Body)
-		t.Fatalf("GET /api/stream = %d %s, want 200", res.StatusCode, body)
+		t.Fatalf("GET %s = %d %s, want 200", path, res.StatusCode, body)
 	}
 	if ct := res.Header.Get("Content-Type"); ct != "text/event-stream" {
 		t.Errorf("Content-Type = %q, want text/event-stream", ct)

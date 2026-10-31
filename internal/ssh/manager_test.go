@@ -241,6 +241,30 @@ func TestManager_closesIdleConnections(t *testing.T) {
 	})
 }
 
+func TestManager_DialUnixNoSocket(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		e := newEnv(t, envOptions{})
+		ok(e.laptop)
+		e.setUp(t, "laptop", "alice")
+		synctest.Wait()
+
+		_, err := e.m.DialUnix(t.Context(), "laptop", "/run/nothing.sock")
+		var se *ssh.SocketError
+		if !errors.As(err, &se) || se.Path != "/run/nothing.sock" {
+			t.Fatalf("DialUnix() error = %v, want a SocketError for the path", err)
+		}
+		if _, err := e.m.DialUnix(t.Context(), "nobody", "/run/nothing.sock"); !errors.Is(err, ssh.ErrNoDevice) {
+			t.Errorf("DialUnix() for another device error = %v, want ErrNoDevice", err)
+		}
+		// The failed attempt let go of the connection, so it can idle out.
+		time.Sleep(2 * ssh.IdleTimeout)
+		synctest.Wait()
+		if n := e.laptop.Conns(); n != 0 {
+			t.Errorf("%d connections open after the failed dial and %v idle, want 0", n, 2*ssh.IdleTimeout)
+		}
+	})
+}
+
 func TestManager_reconnectsAfterDrop(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newEnv(t, envOptions{})
