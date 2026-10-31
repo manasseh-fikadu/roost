@@ -13,6 +13,7 @@
 	import type { AgentCode, AgentRun, Device } from '#lib/api/types.js';
 	import { timeOfDay } from '#lib/format.js';
 	import { live } from '#lib/live.svelte.js';
+	import { toast } from '#lib/toast.svelte.js';
 	import Button from '#lib/ui/Button.svelte';
 	import type { ButtonSize, ButtonVariant } from '#lib/ui/button.js';
 	import CodeLine from '#lib/ui/CodeLine.svelte';
@@ -58,6 +59,10 @@
 		ran = null;
 		try {
 			ran = await installAgentOverSSH(device.id);
+			if (ran.ok) {
+				// The dialog may go once the device has an agent.
+				toast(`Installed the agent on ${device.name}`);
+			}
 		} catch {
 			// The client showed the error as a toast.
 		} finally {
