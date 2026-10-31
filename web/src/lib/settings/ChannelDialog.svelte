@@ -23,7 +23,7 @@
 	import Select from '#lib/ui/Select.svelte';
 	import Switch from '#lib/ui/Switch.svelte';
 	import Textarea from '#lib/ui/Textarea.svelte';
-	import { channelIcons } from './channelIcons.js';
+	import ChannelIcon from './ChannelIcon.svelte';
 	import SecretInput from './SecretInput.svelte';
 
 	interface Props {
@@ -94,7 +94,6 @@
 			<fieldset class="grid grid-cols-3 gap-2 sm:col-span-2">
 				<legend class="sr-only">Kind of channel</legend>
 				{#each kinds as k (k.value)}
-					{@const KindIcon = channelIcons[k.value]}
 					<label class="cursor-pointer">
 						<input
 							type="radio"
@@ -106,7 +105,7 @@
 						<span
 							class="flex flex-col items-center gap-1.5 rounded-lg border border-line-strong bg-canvas px-2 py-3 text-[12.5px] text-fg-muted transition-colors peer-checked:border-fg-subtle peer-checked:bg-hover peer-checked:text-fg peer-focus-visible:border-fg-subtle hover:border-line-heavy"
 						>
-							<KindIcon class="size-5" strokeWidth={1.75} />
+							<ChannelIcon kind={k.value} class="size-5" />
 							{k.label}
 						</span>
 					</label>

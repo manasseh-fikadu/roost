@@ -28,8 +28,8 @@
 	import MenuSeparator from '#lib/ui/MenuSeparator.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import Switch from '#lib/ui/Switch.svelte';
-	import { channelIcons } from './channelIcons.js';
 	import ChannelDialog from './ChannelDialog.svelte';
+	import ChannelIcon from './ChannelIcon.svelte';
 
 	interface Props {
 		/** Whether the tab is showing. The list loads again each time it does, to show how the latest messages went. */
@@ -174,7 +174,6 @@
 	{:else}
 		<ul class="divide-y divide-line">
 			{#each channels as c (c.id)}
-				{@const KindIcon = channelIcons[c.kind]}
 				<li class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
 					<div class="flex min-w-0 flex-1 basis-64 items-start gap-3">
 						<span
@@ -183,7 +182,7 @@
 								c.enabled ? 'text-fg-muted' : 'text-fg-faint'
 							]}
 						>
-							<KindIcon class="size-4" strokeWidth={1.75} />
+							<ChannelIcon kind={c.kind} class="size-4" />
 						</span>
 						<div class="min-w-0">
 							<div class="flex items-center gap-2">
