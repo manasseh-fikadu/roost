@@ -15,6 +15,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	// The notifications' quiet hours can name any time zone, and a minimal
+	// container has no database of them.
+	_ "time/tzdata"
 	"unicode"
 	"unicode/utf8"
 
@@ -37,8 +41,9 @@ type Settings struct {
 	// WatchedUnits are the systemd units on the machine Roost runs on that
 	// it watches, such as "ssh.service", or "user:app.service" for a user
 	// unit of the user Roost runs as. Roost always watches failed units.
-	WatchedUnits []string  `json:"watchedUnits"`
-	Retention    Retention `json:"retention"`
+	WatchedUnits  []string      `json:"watchedUnits"`
+	Retention     Retention     `json:"retention"`
+	Notifications Notifications `json:"notifications"`
 }
 
 // General is how Roost presents itself.
@@ -133,6 +138,78 @@ type Retention struct {
 	ChecksDays int `json:"checksDays"`
 }
 
+// Notifications are when Roost sends the notifications that its channels
+// send. Which alerts a channel hears about is up to the channel.
+type Notifications struct {
+	// RemindHours is how many hours after the last notification about an
+	// alert Roost sends another, while the alert is open and nobody has
+	// acknowledged or snoozed it. 0 sends none.
+	RemindHours int `json:"remindHours"`
+	// Quiet holds notifications back at night.
+	Quiet QuietHours `json:"quiet"`
+}
+
+// MaxRemindHours is the longest time between reminders: a week.
+const MaxRemindHours = 7 * 24
+
+// Remind is RemindHours as a duration, or 0 for no reminders.
+func (n Notifications) Remind() time.Duration {
+	return time.Duration(n.RemindHours) * time.Hour
+}
+
+// QuietHours are the hours of the day when Roost holds notifications back,
+// and sends them when the hours end if the alert they're about is still
+// there, and nobody has acknowledged it.
+type QuietHours struct {
+	Enabled bool `json:"enabled"`
+	// Start and End are times of the day, such as "22:00" and "07:00". The
+	// hours run from Start until End, through midnight if End is earlier.
+	Start string `json:"start"`
+	End   string `json:"end"`
+	// Timezone is the name of the time zone the times are in, such as
+	// "Europe/Berlin". It's "" for the one that Roost's machine is in.
+	Timezone string `json:"timezone"`
+	// AllowCritical sends notifications about critical alerts during the
+	// quiet hours too.
+	AllowCritical bool `json:"allowCritical"`
+}
+
+// Active reports whether t is in the quiet hours.
+func (q QuietHours) Active(t time.Time) bool {
+	start, ok1 := clock(q.Start)
+	end, ok2 := clock(q.End)
+	if !q.Enabled || !ok1 || !ok2 || start == end {
+		return false
+	}
+	loc, err := q.location()
+	if err != nil {
+		loc = time.Local
+	}
+	t = t.In(loc)
+	now := t.Hour()*60 + t.Minute()
+	if start < end {
+		return now >= start && now < end
+	}
+	return now >= start || now < end
+}
+
+func (q QuietHours) location() (*time.Location, error) {
+	if q.Timezone == "" {
+		return time.Local, nil
+	}
+	return time.LoadLocation(q.Timezone)
+}
+
+// clock returns the minutes since midnight of a time of day written as
+// "15:04", and whether it is one.
+func clock(s string) (int, bool) {
+	t, err := time.Parse("15:04", s)
+	if err != nil || len(s) != len("15:04") {
+		return 0, false
+	}
+	return t.Hour()*60 + t.Minute(), true
+}
+
 // Limits of a retention, in days.
 const (
 	MaxActivityDays = 365
@@ -172,6 +249,9 @@ func Defaults() Settings {
 		// ones a machine doesn't have.
 		WatchedUnits: []string{"ssh.service", "sshd.service", "docker.service", "tailscaled.service", "cron.service"},
 		Retention:    Retention{ActivityDays: 30, HistoryDays: 7, ChecksDays: 7},
+		Notifications: Notifications{
+			Quiet: QuietHours{Start: "22:00", End: "07:00", AllowCritical: true},
+		},
 	}
 }
 
@@ -226,7 +306,7 @@ func (e *InvalidError) Unwrap() error { return e.Err }
 // Check returns an *InvalidError that says what's wrong with s, if anything
 // is.
 func (s Settings) Check() error {
-	for _, err := range []error{s.General.Check(), s.Thresholds.Check(), checkUnits(s.WatchedUnits), s.Retention.Check()} {
+	for _, err := range []error{s.General.Check(), s.Thresholds.Check(), checkUnits(s.WatchedUnits), s.Retention.Check(), s.Notifications.Check()} {
 		if err != nil {
 			return &InvalidError{err}
 		}
@@ -343,6 +423,30 @@ func (r Retention) Check() error {
 		if p.got < 1 || p.got > p.max {
 			return fmt.Errorf("the days to keep %s must be from 1 to %d", p.name, p.max)
 		}
+	}
+	return nil
+}
+
+// Check returns an error that says what's wrong with n, if anything is.
+func (n Notifications) Check() error {
+	if n.RemindHours < 0 || n.RemindHours > MaxRemindHours {
+		return fmt.Errorf("the hours between reminders must be from 1 to %d, or 0 for none", MaxRemindHours)
+	}
+	return n.Quiet.Check()
+}
+
+// Check returns an error that says what's wrong with q, if anything is.
+func (q QuietHours) Check() error {
+	start, ok1 := clock(q.Start)
+	end, ok2 := clock(q.End)
+	switch {
+	case !ok1 || !ok2:
+		return errors.New("the quiet hours must start and end at a time of the day, such as 22:00")
+	case start == end:
+		return errors.New("the quiet hours can't start when they end")
+	}
+	if _, err := q.location(); err != nil {
+		return fmt.Errorf("%q isn't the name of a time zone, such as Europe/Berlin", q.Timezone)
 	}
 	return nil
 }

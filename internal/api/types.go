@@ -128,8 +128,9 @@ type Settings struct {
 	// WatchedUnits are the systemd units on the machine Roost runs on that
 	// it watches, such as "ssh.service", or "user:app.service" for a unit of
 	// the user Roost runs as. Roost always shows failed units too.
-	WatchedUnits []string          `json:"watchedUnits"`
-	Retention    RetentionSettings `json:"retention"`
+	WatchedUnits  []string             `json:"watchedUnits"`
+	Retention     RetentionSettings    `json:"retention"`
+	Notifications NotificationSettings `json:"notifications"`
 }
 
 // GeneralSettings are how Roost presents itself.
@@ -205,6 +206,33 @@ type RetentionSettings struct {
 	ChecksDays int `json:"checksDays"`
 }
 
+// NotificationSettings are when Roost sends notifications. Which alerts each
+// channel hears about is up to the channel.
+type NotificationSettings struct {
+	// RemindHours is how many hours after the last notification about an
+	// alert Roost sends another, while the alert is open and nobody has
+	// acknowledged or snoozed it. 0 sends none.
+	RemindHours int `json:"remindHours"`
+	// Quiet holds notifications back at night.
+	Quiet QuietHours `json:"quiet"`
+}
+
+// QuietHours are the hours when Roost holds notifications back. Those that
+// are still due when the hours end are sent then.
+type QuietHours struct {
+	Enabled bool `json:"enabled"`
+	// Start and End are times of the day, such as "22:00" and "07:00". The
+	// hours run from Start until End, through midnight if End is earlier.
+	Start string `json:"start"`
+	End   string `json:"end"`
+	// Timezone is the name of the time zone the times are in, such as
+	// "Europe/Berlin". It's empty for the one Roost's machine is in.
+	Timezone string `json:"timezone"`
+	// AllowCritical sends notifications about critical alerts during the
+	// quiet hours too.
+	AllowCritical bool `json:"allowCritical"`
+}
+
 // SettingsView is the response to GET /api/settings and to the request that
 // changes them. Only admins can see or change them.
 type SettingsView struct {
@@ -238,6 +266,9 @@ type ChangeSettings struct {
 	Thresholds *ChangeThresholds `json:"thresholds,omitempty"`
 	Rules      *ChangeRules      `json:"rules,omitempty"`
 	Retention  *ChangeRetention  `json:"retention,omitempty"`
+	// Notifications changes when notifications are sent. The channels they
+	// go to are changed by their own requests.
+	Notifications *ChangeNotifications `json:"notifications,omitempty"`
 	// WatchedUnits replaces the whole list when it's there, even if it's
 	// empty.
 	WatchedUnits []string `json:"watchedUnits,omitempty"`
@@ -280,6 +311,21 @@ type ChangeRetention struct {
 	ActivityDays *int `json:"activityDays,omitempty"`
 	HistoryDays  *int `json:"historyDays,omitempty"`
 	ChecksDays   *int `json:"checksDays,omitempty"`
+}
+
+// ChangeNotifications changes NotificationSettings.
+type ChangeNotifications struct {
+	RemindHours *int         `json:"remindHours,omitempty"`
+	Quiet       *ChangeQuiet `json:"quiet,omitempty"`
+}
+
+// ChangeQuiet changes QuietHours.
+type ChangeQuiet struct {
+	Enabled       *bool   `json:"enabled,omitempty"`
+	Start         *string `json:"start,omitempty"`
+	End           *string `json:"end,omitempty"`
+	Timezone      *string `json:"timezone,omitempty"`
+	AllowCritical *bool   `json:"allowCritical,omitempty"`
 }
 
 // InstalledServices is the response to GET /api/settings/units: the services
@@ -1222,6 +1268,9 @@ const (
 	// EventKindFiles is a change an admin made to a device's files, or a
 	// folder they downloaded.
 	EventKindFiles EventKind = "files"
+	// EventKindNotification is a notification Roost sent to a channel, or
+	// couldn't, and a channel an admin added, changed or deleted.
+	EventKindNotification EventKind = "notification"
 )
 
 // EventList is the response to GET /api/events?before=&after=&limit=&kind=&device=:
@@ -2106,4 +2155,113 @@ type DockerStreamEnd struct {
 // connection to it broke.
 type DockerStreamFailure struct {
 	Message string `json:"message"`
+}
+
+// ChannelKind is a sort of place that Roost sends notifications to.
+type ChannelKind string
+
+// The kinds of NotificationChannel.
+const (
+	// ChannelKindNtfy publishes to a topic on ntfy.sh or on an ntfy server
+	// of one's own.
+	ChannelKindNtfy ChannelKind = "ntfy"
+	// ChannelKindDiscord posts to a Discord channel through a webhook.
+	ChannelKindDiscord ChannelKind = "discord"
+	// ChannelKindSlack posts to a Slack channel through an incoming webhook.
+	ChannelKindSlack ChannelKind = "slack"
+	// ChannelKindTelegram sends a message from a Telegram bot.
+	ChannelKindTelegram ChannelKind = "telegram"
+	// ChannelKindEmail sends mail through an SMTP server.
+	ChannelKindEmail ChannelKind = "email"
+	// ChannelKindWebhook posts JSON to any web address.
+	ChannelKindWebhook ChannelKind = "webhook"
+)
+
+// NotificationChannels is the response to GET /api/notifications/channels.
+// Only admins can see them.
+type NotificationChannels struct {
+	Channels []NotificationChannel `json:"channels"`
+}
+
+// NotificationChannel is a place where Roost sends notifications. It leaves
+// out its secrets, such as a webhook's address or a password, and says which
+// of them are saved.
+type NotificationChannel struct {
+	ID      int64       `json:"id"`
+	Name    string      `json:"name"`
+	Kind    ChannelKind `json:"kind"`
+	Enabled bool        `json:"enabled"`
+	// MinSeverity is the least severe alert it hears about.
+	MinSeverity AlertSeverity `json:"minSeverity"`
+	// OnResolve is whether it also hears when an alert resolves.
+	OnResolve bool          `json:"onResolve"`
+	Config    ChannelConfig `json:"config"`
+	// Secrets are the secret fields that have a value: "url", "token" or
+	// "password". Roost never sends their values.
+	Secrets []string `json:"secrets"`
+	// Summary says where the channel sends, without a secret, such as
+	// "ntfy.sh/roost-alerts".
+	Summary string `json:"summary"`
+	// Last is the latest time Roost sent to it since Roost started.
+	Last *ChannelDelivery `json:"last,omitempty"`
+}
+
+// ChannelConfig is what a channel needs to send, except its secrets. Each
+// kind uses some of the fields.
+type ChannelConfig struct {
+	// Server is the address of an ntfy server. It's empty for ntfy.sh.
+	Server string `json:"server,omitempty"`
+	// Topic is the ntfy topic.
+	Topic string `json:"topic,omitempty"`
+	// ChatID is the Telegram chat to send to.
+	ChatID string `json:"chatId,omitempty"`
+	// Host, Port and Security say how to reach the mail server. A Port of 0
+	// is the one Security uses, and Security is starttls, tls or none.
+	Host     string `json:"host,omitempty"`
+	Port     int    `json:"port,omitempty"`
+	Security string `json:"security,omitempty"`
+	// Username signs in to the mail server or the ntfy server.
+	Username string `json:"username,omitempty"`
+	// From and To are the addresses mail comes from and goes to.
+	From string   `json:"from,omitempty"`
+	To   []string `json:"to,omitempty"`
+}
+
+// ChannelDelivery is what happened when Roost last sent to a channel.
+type ChannelDelivery struct {
+	At time.Time `json:"at"`
+	// Event is why it sent: opened, escalated, reminder, resolved or test.
+	Event string `json:"event"`
+	OK    bool   `json:"ok"`
+	// Error says what went wrong, if something did.
+	Error string `json:"error,omitempty"`
+}
+
+// ChannelInput is the body of POST /api/notifications/channels, which adds a
+// channel, and of PUT /api/notifications/channels/{id}, which replaces one. A
+// channel's kind can't change. Both answer with the NotificationChannel.
+type ChannelInput struct {
+	Name string      `json:"name"`
+	Kind ChannelKind `json:"kind"`
+	// Enabled is whether Roost sends to it.
+	Enabled bool `json:"enabled"`
+	// MinSeverity is the least severe alert it hears about: info, warning or
+	// critical.
+	MinSeverity AlertSeverity      `json:"minSeverity"`
+	OnResolve   bool               `json:"onResolve"`
+	Config      ChannelConfigInput `json:"config"`
+}
+
+// ChannelConfigInput is the ChannelConfig of a request, with the secrets. A
+// secret that's left out stays as it is, which is how a channel is changed
+// without sending its secrets back, and an empty one takes it away.
+type ChannelConfigInput struct {
+	ChannelConfig `tstype:",extends"`
+	// URL is the webhook's address, for Discord, Slack and generic webhooks.
+	URL *string `json:"url,omitempty"`
+	// Token is an ntfy access token, a Telegram bot's token, or the bearer
+	// token that a generic webhook is sent.
+	Token *string `json:"token,omitempty"`
+	// Password signs in to the mail server or the ntfy server.
+	Password *string `json:"password,omitempty"`
 }

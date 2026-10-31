@@ -88,6 +88,17 @@ func (b ChangeSettings) apply(s *settings.Settings) error {
 		set(&s.Retention.HistoryDays, r.HistoryDays)
 		set(&s.Retention.ChecksDays, r.ChecksDays)
 	}
+	if n := b.Notifications; n != nil {
+		set(&s.Notifications.RemindHours, n.RemindHours)
+		if q := n.Quiet; q != nil {
+			qu := &s.Notifications.Quiet
+			set(&qu.Enabled, q.Enabled)
+			set(&qu.Start, q.Start)
+			set(&qu.End, q.End)
+			set(&qu.Timezone, q.Timezone)
+			set(&qu.AllowCritical, q.AllowCritical)
+		}
+	}
 	if b.WatchedUnits != nil {
 		s.WatchedUnits = cleanUnits(b.WatchedUnits)
 	}
@@ -136,6 +147,10 @@ func newSettings(s settings.Settings) Settings {
 		Rules:        AlertRules(s.Rules),
 		WatchedUnits: append([]string{}, s.WatchedUnits...),
 		Retention:    RetentionSettings(s.Retention),
+		Notifications: NotificationSettings{
+			RemindHours: s.Notifications.RemindHours,
+			Quiet:       QuietHours(s.Notifications.Quiet),
+		},
 	}
 }
 

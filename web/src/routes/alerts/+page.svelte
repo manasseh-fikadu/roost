@@ -6,7 +6,7 @@
 	import { page } from '$app/state';
 	import { activeAlerts, mergeById, parseAlertTab, type AlertTab } from '#lib/alerts.js';
 	import AlertCard from '#lib/alerts/AlertCard.svelte';
-	import { getResolvedAlerts } from '#lib/api/client.js';
+	import { ApiError, getAlert, getResolvedAlerts } from '#lib/api/client.js';
 	import type { Alert } from '#lib/api/types.js';
 	import { live } from '#lib/live.svelte.js';
 	import Button from '#lib/ui/Button.svelte';
@@ -33,6 +33,47 @@
 		} else {
 			url.searchParams.set('tab', t);
 		}
+		goto(url, { replace: true, reset: false });
+	}
+
+	// A link in a notification points at one alert, with ?alert=12. It's shown
+	// above the tabs: the live alert while it's open, and then the one the hub
+	// has on record, which is also there once it resolved.
+	const focusId = $derived.by(() => {
+		const n = Number(page.url.searchParams.get('alert'));
+		return Number.isSafeInteger(n) && n > 0 ? n : null;
+	});
+	const focusLive = $derived(focusId === null ? undefined : alerts.find((a) => a.id === focusId));
+	let focusFetched = $state.raw<Alert | null>(null);
+	let focusStatus = $state<'loading' | 'gone' | 'failed'>('loading');
+	const focus = $derived(focusLive ?? focusFetched);
+
+	$effect(() => {
+		if (focusId === null || focusLive) {
+			return;
+		}
+		let current = true;
+		focusFetched = null;
+		focusStatus = 'loading';
+		getAlert(focusId)
+			.then((a) => {
+				if (current) {
+					focusFetched = a;
+				}
+			})
+			.catch((err) => {
+				if (current) {
+					focusStatus = err instanceof ApiError && err.status === 404 ? 'gone' : 'failed';
+				}
+			});
+		return () => {
+			current = false;
+		};
+	});
+
+	function clearFocus() {
+		const url = new URL(page.url.href);
+		url.searchParams.delete('alert');
 		goto(url, { replace: true, reset: false });
 	}
 
@@ -114,6 +155,27 @@
 	title="Alerts"
 	description="Roost raises them from what it sees of devices, checks, containers and systemd units, and resolves them when the condition clears."
 />
+
+{#if focusId !== null}
+	<Card title="Alert {focusId}" class="mb-4">
+		{#snippet actions()}
+			<Button size="xs" variant="ghost" onclick={clearFocus}>Show all alerts</Button>
+		{/snippet}
+		{#if focus}
+			<div class="p-3 sm:p-4">
+				<AlertCard alert={focus} device={deviceOf(focus)} {now} />
+			</div>
+		{:else if focusStatus === 'loading'}
+			<div class="p-4"><Skeleton class="h-20" /></div>
+		{:else if focusStatus === 'gone'}
+			<EmptyState title="Roost doesn't have this alert">
+				Alerts that resolved are kept for 30 days, so this one may be older.
+			</EmptyState>
+		{:else}
+			<EmptyState title="Roost couldn't load this alert">Try again in a moment.</EmptyState>
+		{/if}
+	</Card>
+{/if}
 
 <Card>
 	<div class="px-2">

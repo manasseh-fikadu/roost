@@ -159,7 +159,8 @@ export const eventKindLabels: Record<EventKind, string> = {
 	settings: 'Settings',
 	ssh: 'SSH',
 	terminal: 'Terminals',
-	files: 'Files'
+	files: 'Files',
+	notification: 'Notifications'
 };
 
 /** The kinds of event only admins see: who has a role, SSH access, terminals and files. */

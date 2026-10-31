@@ -11,6 +11,8 @@ import type {
 	CheckInput,
 	CheckResult,
 	ChangeSettings,
+	ChannelDelivery,
+	ChannelInput,
 	DeviceHistory,
 	DeviceSettings,
 	DeviceSSH,
@@ -22,6 +24,8 @@ import type {
 	HealthHistory,
 	InstalledServices,
 	Me,
+	NotificationChannel,
+	NotificationChannels,
 	RecentResults,
 	Role,
 	SetDeviceSettings,
@@ -281,6 +285,11 @@ export function getResolvedAlerts(before?: number): Promise<AlertList> {
 	return request('GET', `alerts${before ? `?before=${before}` : ''}`);
 }
 
+/** An alert, open or resolved. */
+export function getAlert(id: number): Promise<Alert> {
+	return request('GET', `alerts/${encodeURIComponent(String(id))}`);
+}
+
 function alertPath(id: number): string {
 	return `alerts/${encodeURIComponent(String(id))}`;
 }
@@ -363,4 +372,40 @@ export function removeUser(login: string): Promise<Access> {
 /** Changes who can view Roost, other than the users with a role. Admins only. */
 export function setWhoCanView(whoCanView: WhoCanView): Promise<Access> {
 	return mutate('PATCH', 'access', { whoCanView }, { success: 'Saved' });
+}
+
+/** The notification channels, by name. Admins only. */
+export function getChannels(): Promise<NotificationChannels> {
+	return request('GET', 'notifications/channels');
+}
+
+function channelPath(id: number): string {
+	return `notifications/channels/${encodeURIComponent(String(id))}`;
+}
+
+/** Adds a notification channel, and says so in a toast. Admins only. */
+export function addChannel(input: ChannelInput): Promise<NotificationChannel> {
+	return mutate('POST', 'notifications/channels', input, { success: 'Channel added' });
+}
+
+/** Replaces a notification channel, and says so in a toast. Admins only. */
+export function putChannel(
+	id: number,
+	input: ChannelInput,
+	success = 'Saved'
+): Promise<NotificationChannel> {
+	return mutate('PUT', channelPath(id), input, { success });
+}
+
+/** Deletes a notification channel, and says so in a toast. Admins only. */
+export function deleteChannel(id: number): Promise<void> {
+	return mutate('DELETE', channelPath(id), undefined, { success: 'Channel deleted' });
+}
+
+/**
+ * Sends a test message to a channel and says how it went. A message that
+ * didn't go isn't an error: the answer says why. Admins only.
+ */
+export function testChannel(id: number): Promise<ChannelDelivery> {
+	return mutate('POST', `${channelPath(id)}/test`);
 }
