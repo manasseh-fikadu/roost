@@ -36,15 +36,24 @@ func TestStore_DeviceSettings(t *testing.T) {
 	set("phone", phone)
 	set("laptop", store.DeviceSettings{DisplayName: "Work laptop"})
 	set("laptop", store.DeviceSettings{Notes: "Replaced"})
-	want := map[string]store.DeviceSettings{"phone": phone, "laptop": {Notes: "Replaced"}}
+	// A device can have some thresholds of its own and not others.
+	nas := store.DeviceSettings{Thresholds: store.ThresholdOverrides{DiskWarn: new(97.0), DiskCritical: new(99.0), OfflineMinutes: new(60)}}
+	set("nas", nas)
+	want := map[string]store.DeviceSettings{"phone": phone, "laptop": {Notes: "Replaced"}, "nas": nas}
 	if got := get(); !reflect.DeepEqual(got, want) {
 		t.Errorf("settings = %+v, want %+v", got, want)
+	}
+	nas.Thresholds = store.ThresholdOverrides{CPUWarn: new(100.0), MemoryWarn: new(99.5)}
+	set("nas", nas)
+	if got := get()["nas"]; !reflect.DeepEqual(got, nas) {
+		t.Errorf("thresholds after changing them = %+v, want %+v", got, nas)
 	}
 
 	// The defaults need no row.
 	set("laptop", store.DeviceSettings{})
+	set("nas", store.DeviceSettings{})
 	if got := firstColumn(t, s.DB(), "SELECT device_id FROM device_settings"); !reflect.DeepEqual(got, []string{"phone"}) {
-		t.Errorf("rows after resetting the laptop = %q, want only the phone's", got)
+		t.Errorf("rows after resetting the laptop and the NAS = %q, want only the phone's", got)
 	}
 }
 
