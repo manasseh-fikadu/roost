@@ -49,7 +49,7 @@
 		page.data.title ??
 			deviceName ??
 			(page.error ? (page.status === 404 ? 'Not found' : 'Error') : item?.label) ??
-			'Roost'
+			live.name
 	);
 	/** The page is for admins, and the caller isn't one. */
 	const forbidden = $derived(item?.adminOnly === true && !isAdmin(page.data.me));
@@ -79,7 +79,7 @@
 </script>
 
 <svelte:head>
-	<title>{title === 'Roost' ? title : `${title} · Roost`}</title>
+	<title>{title === live.name ? title : `${title} · ${live.name}`}</title>
 </svelte:head>
 
 <div class="min-h-dvh">
@@ -114,7 +114,8 @@
 			<nav class="flex min-w-0 items-center gap-2 text-[14px]" aria-label="Breadcrumb">
 				<a
 					href={resolve('/')}
-					class="hidden text-fg-faint transition-colors hover:text-fg-muted sm:inline">Roost</a
+					class="hidden text-fg-faint transition-colors hover:text-fg-muted sm:inline"
+					>{live.name}</a
 				>
 				<span class="hidden text-line-heavy sm:inline" aria-hidden="true">/</span>
 				<span class="truncate font-medium text-fg" aria-current="page">{title}</span>

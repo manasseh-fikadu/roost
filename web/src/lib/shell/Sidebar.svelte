@@ -38,7 +38,7 @@
 		</span>
 		<span class="min-w-0">
 			<span class="block truncate text-[14px] leading-4 font-semibold tracking-[-0.01em]"
-				>Roost</span
+				>{live.name}</span
 			>
 			<span
 				class="block truncate font-mono text-[10px] leading-4 tracking-wider text-fg-faint uppercase"

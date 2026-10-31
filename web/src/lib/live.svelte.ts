@@ -23,12 +23,53 @@ const staleAfter = 35_000;
  */
 const hiddenFor = 30_000;
 
+/** Where the browser keeps Roost's name, so a reload shows it before the first snapshot. */
+const nameKey = 'roost:name';
+
+function storedName(): string {
+	try {
+		return localStorage.getItem(nameKey) ?? '';
+	} catch {
+		// Storage is off, as in some private windows.
+		return '';
+	}
+}
+
+function storeName(name: string) {
+	try {
+		localStorage.setItem(nameKey, name);
+	} catch {
+		// Not worth telling anyone: the name just shows late next time.
+	}
+}
+
 class Live {
 	/** The latest snapshot, or null before the first. */
 	snapshot: Snapshot | null = $state(null);
 	connection: Connection = $state('connecting');
 	/** When the latest snapshot arrived, in Unix milliseconds, or 0. */
 	receivedAt = $state(0);
+	/** The name an admin gave this Roost in the settings. */
+	#stored = $state(storedName());
+
+	/**
+	 * What Roost is called: the latest snapshot's name, else the last one this
+	 * browser saw, else "Roost".
+	 */
+	get name(): string {
+		return this.snapshot?.hub.name || this.#stored || 'Roost';
+	}
+
+	/** Takes a snapshot as the latest. */
+	receive(snapshot: Snapshot) {
+		this.snapshot = snapshot;
+		this.receivedAt = Date.now();
+		this.connection = 'live';
+		if (snapshot.hub.name && snapshot.hub.name !== this.#stored) {
+			this.#stored = snapshot.hub.name;
+			storeName(snapshot.hub.name);
+		}
+	}
 }
 
 /** What the hub last sent, and whether it's still connected. */
@@ -64,9 +105,7 @@ export function connect({ onDrop }: Options = {}): () => void {
 		source = new EventSource('/api/stream');
 		openedAt = Date.now();
 		source.addEventListener('snapshot', (e) => {
-			live.snapshot = JSON.parse(e.data);
-			live.receivedAt = Date.now();
-			live.connection = 'live';
+			live.receive(JSON.parse(e.data));
 			failures = 0;
 		});
 		// EventSource retries some failures by itself, at its own pace, and
