@@ -19,6 +19,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/docker"
+	"github.com/manasseh-fikadu/roost/internal/settings"
 	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
@@ -59,13 +60,17 @@ func TestStream(t *testing.T) {
 					Agents: agents.NewRegistry(st, nil), Usage: usage.NewRecorder(st, nil),
 					Checks: checks.NewRunner(st, checks.Options{Dial: tn.Dial}), Alerts: alerts.NewEngine(st, nil),
 					SSH:    ssh.NewManager(ssh.Options{KeyDir: t.TempDir(), Store: st, Tailnet: snapshot, Dial: tn.Dial}),
-					Docker: docker.NewFleet(nil, nil),
+					Docker: docker.NewFleet(nil, nil), Settings: settings.NewCache(st, nil),
 				})
 				events := openStream(t, tn, h, tt.from, tt.gzip)
 
 				synctest.Wait()
 				first := nextSnapshot(t, events)
-				if want := (api.Hub{Version: "v1.2.3", DNSName: roostHost, Tailnet: tt.tailnet}); first.Hub != want {
+				want := api.Hub{
+					Name: "Roost", Version: "v1.2.3", DNSName: roostHost, Tailnet: tt.tailnet,
+					Thresholds: api.Thresholds(settings.Defaults().Thresholds),
+				}
+				if first.Hub != want {
 					t.Errorf("hub = %+v, want %+v", first.Hub, want)
 				}
 				if !first.GeneratedAt.Equal(time.Now()) {

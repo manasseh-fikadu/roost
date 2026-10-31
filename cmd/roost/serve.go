@@ -76,7 +76,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	}
 
 	dbPath := filepath.Join(cfg.DataDir, "roost.db")
-	st, err := store.Open(ctx, dbPath, store.Options{Logger: logger})
+	st, err := store.Open(ctx, dbPath, store.Options{Logger: logger, Retention: settings.StoreRetention})
 	if err != nil {
 		return fmt.Errorf("open %s: %w", dbPath, err)
 	}
@@ -158,7 +158,12 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	if err := addFirstAdmins(ctx, st, node, cfg.Admins, logger); err != nil {
 		return errors.Join(err, res.ln.Close(), srvs.stop(ctx))
 	}
+	// Everything that follows reads what admins changed in the settings from
+	// here, so a change applies at once.
+	prefs := settings.NewCache(st, logger)
+	cpuWindow := func() time.Duration { return prefs.Get(ctx).Thresholds.CPUWindow() }
 	registry := agents.NewRegistry(st, logger)
+	registry.SetWindow(cpuWindow)
 	if err := registry.Load(ctx); err != nil {
 		// The agents report again within seconds.
 		logger.Warn("read the agents' last reports", "error", err)
@@ -202,10 +207,12 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		SSH:            remote.Access,
 		SSHChanged:     remote.Changes(),
 		Store:          st,
+		Settings:       prefs,
 		Logger:         logger,
 	}
 	if hostmetrics.Supported {
 		host := hostmetrics.NewCollector(hostmetrics.Local(), logger)
+		host.SetWindow(cpuWindow)
 		wg.Go(func() { host.Run(ctx) })
 		feedOpts.Host, feedOpts.HostChanged = host.Reading, host.Changes()
 		sampler := usage.NewSampler(os.DirFS("/"))
@@ -230,10 +237,11 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		Logger:  logger,
 	})
 	wg.Go(func() { sampler.Run(ctx) })
+	var units *systemd.Collector
 	if systemd.Available() {
-		units := systemd.NewCollector(systemd.Options{
+		units = systemd.NewCollector(systemd.Options{
 			UserScope: systemd.HasUserScope(),
-			Watched:   watchedUnits(ctx, st, logger),
+			Watched:   func() []string { return prefs.Get(ctx).WatchedUnits },
 			Logger:    logger,
 		})
 		wg.Go(func() { units.Run(ctx) })
@@ -264,9 +272,13 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		Alerts:   engine,
 		SSH:      remote,
 		Docker:   fleet,
-		AppURL:   res.url,
-		Stopping: stopping,
-		Logger:   logger,
+		Settings: prefs,
+		Systemd:  units,
+		// config.Parse has checked it.
+		Tailscale: api.TailscaleMode(cfg.Tailscale),
+		AppURL:    res.url,
+		Stopping:  stopping,
+		Logger:    logger,
 	}), res.ln)
 	// Shutdown waits for every response to finish, and live streams don't
 	// until they're told to.
@@ -305,26 +317,6 @@ func dockerTargets(fleet *docker.Fleet, snap tailnet.Snapshot, access map[string
 		}
 	}
 	return out
-}
-
-// watchedUnits returns a function that returns the systemd units the
-// settings say to watch, or the last ones it read if the store can't say.
-func watchedUnits(ctx context.Context, st *store.Store, logger *slog.Logger) func() []string {
-	var last []string
-	return func() []string {
-		s, err := settings.Load(ctx, st)
-		if err != nil {
-			if ctx.Err() == nil {
-				logger.Warn("read the watched units", "error", err)
-			}
-			if last == nil {
-				return settings.Defaults().WatchedUnits
-			}
-			return last
-		}
-		last = s.WatchedUnits
-		return last
-	}
 }
 
 // addFirstAdmins makes the owner of Roost's node and the logins in admins

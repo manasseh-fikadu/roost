@@ -258,8 +258,12 @@ func (h *handler) nodesOf(id string) []string {
 	return ids
 }
 
-// appURL returns where the app is on the tailnet, without a trailing slash.
+// appURL returns where the app is, without a trailing slash: the public URL
+// if an admin set one, else where Roost listens on the tailnet.
 func (h *handler) appURL(r *http.Request) string {
+	if u := h.opts.Settings.Get(r.Context()).General.PublicURL; u != "" {
+		return u
+	}
 	if h.opts.AppURL != "" {
 		return strings.TrimSuffix(h.opts.AppURL, "/")
 	}

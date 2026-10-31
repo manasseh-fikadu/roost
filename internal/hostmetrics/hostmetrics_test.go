@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"math"
 	"sync"
 	"testing"
 	"testing/fstest"
@@ -105,9 +106,16 @@ func newFake() *fakeSystem {
 // returns its reading after each.
 func collect(t *testing.T, sys *fakeSystem, n int, between func(i int)) []hostmetrics.Reading {
 	t.Helper()
+	return collectOver(t, sys, n, hostmetrics.DefaultWindow, between)
+}
+
+// collectOver is collect for a Collector that averages the CPU over window.
+func collectOver(t *testing.T, sys *fakeSystem, n int, window time.Duration, between func(i int)) []hostmetrics.Reading {
+	t.Helper()
 	var readings []hostmetrics.Reading
 	synctest.Test(t, func(t *testing.T) {
 		c := hostmetrics.NewCollector(sys.system(), nil)
+		c.SetWindow(func() time.Duration { return window })
 		go c.Run(t.Context())
 		for i := range n {
 			<-c.Changes()
@@ -250,33 +258,86 @@ func TestCollector_recovers(t *testing.T) {
 
 func TestCollector_sustainedCPU(t *testing.T) {
 	t.Parallel()
-	sys := newFake()
-	var busy, total uint64 = 1500, 10000
-	n := int(hostmetrics.SustainedWindow/hostmetrics.Interval) + 2
-	readings := collect(t, sys, n, func(i int) {
-		// Busy 50% for the first half of the window, then 90%.
-		pct := uint64(50)
-		if i >= n/2 {
-			pct = 90
-		}
-		busy += pct * 10
-		total += 1000
-		idle := total - busy
-		sys.change(map[string]string{
-			"proc/stat": fmt.Sprintf("cpu  %d 0 0 %d 0 0 0 0 0 0\n", busy, idle),
-		})
-	})
+	for _, window := range []time.Duration{hostmetrics.DefaultWindow, time.Minute, 20 * time.Minute} {
+		t.Run(window.String(), func(t *testing.T) {
+			t.Parallel()
+			sys := newFake()
+			var busy, total uint64 = 1500, 10000
+			n := int(window/hostmetrics.Interval) + 2
+			readings := collectOver(t, sys, n, window, func(i int) {
+				// Busy 50% for the first half of the window, then 90%.
+				pct := uint64(50)
+				if i >= n/2 {
+					pct = 90
+				}
+				busy += pct * 10
+				total += 1000
+				idle := total - busy
+				sys.change(map[string]string{
+					"proc/stat": fmt.Sprintf("cpu  %d 0 0 %d 0 0 0 0 0 0\n", busy, idle),
+				})
+			})
 
-	// The window isn't mostly covered until 4 minutes in.
-	for i, r := range readings {
-		covered := time.Duration(i-1) * hostmetrics.Interval
-		if got := r.Sample.CPUSustained; (got != nil) != (covered >= hostmetrics.SustainedWindow*8/10) {
-			t.Fatalf("sample %d, %v in: sustained CPU = %v", i, covered, got)
+			// The window isn't mostly covered until 4/5 of it is.
+			for i, r := range readings {
+				covered := time.Duration(i-1) * hostmetrics.Interval
+				if got := r.Sample.CPUSustained; (got != nil) != (covered >= window*8/10) {
+					t.Fatalf("sample %d, %v in: sustained CPU = %v", i, covered, got)
+				}
+			}
+			last := readings[len(readings)-1].Sample
+			if got := *last.CPUSustained; got <= 50 || got >= 90 {
+				t.Errorf("sustained CPU = %v, want between the two halves' 50 and 90", got)
+			}
+		})
+	}
+}
+
+func TestCPUWindow(t *testing.T) {
+	t.Parallel()
+	start := time.Unix(1_800_000_000, 0)
+	var w hostmetrics.CPUWindow
+	// Ten minutes of readings a minute apart: 10% for the first six, then 100%.
+	for i := range 11 {
+		cpu := 10.0
+		if i > 5 {
+			cpu = 100
+		}
+		w.Add(start.Add(time.Duration(i)*time.Minute), cpu)
+	}
+	now := start.Add(10 * time.Minute)
+	for _, tt := range []struct {
+		name   string
+		window time.Duration
+		want   float64 // 0 for none
+	}{
+		{"the busy 4 minutes", 4 * time.Minute, 100},
+		{"8 minutes", 8 * time.Minute, (4*10 + 5*100) / 9.0},
+		{"longer than the readings go back", 30 * time.Minute, 0},
+		{"too few readings", time.Minute, 0},
+	} {
+		got := w.Average(now, tt.window)
+		switch {
+		case tt.want == 0 && got != nil:
+			t.Errorf("Average(%s) = %v, want none", tt.name, *got)
+		case tt.want != 0 && (got == nil || math.Abs(*got-tt.want) > 1e-9):
+			t.Errorf("Average(%s) = %v, want %v", tt.name, got, tt.want)
 		}
 	}
-	last := readings[len(readings)-1].Sample
-	if got := *last.CPUSustained; got <= 50 || got >= 90 {
-		t.Errorf("sustained CPU = %v, want between the two halves' 50 and 90", got)
+
+	// It remembers no more than MaxWindow: of three hours of readings, idle
+	// for two and busy for the last, a window of three hours sees one.
+	var long hostmetrics.CPUWindow
+	for i := range 181 {
+		cpu := 0.0
+		if i >= 120 {
+			cpu = 100
+		}
+		long.Add(start.Add(time.Duration(i)*time.Minute), cpu)
+	}
+	now = start.Add(180 * time.Minute)
+	if got := long.Average(now, 3*time.Hour); got == nil || *got != 100 {
+		t.Errorf("Average() of a window longer than MaxWindow = %v, want 100", got)
 	}
 }
 

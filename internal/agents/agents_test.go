@@ -162,6 +162,33 @@ func TestRegistry_Record_rates(t *testing.T) {
 	}
 }
 
+func TestRegistry_SetWindow(t *testing.T) {
+	t.Parallel()
+	start := time.Unix(1_800_000_000, 0)
+	for _, tt := range []struct {
+		window time.Duration
+		// beats is how many heartbeats, a minute apart, it takes to cover
+		// most of the window.
+		beats int
+	}{{2 * time.Minute, 2}, {10 * time.Minute, 8}} {
+		reg := agents.NewRegistry(openStore(t), nil)
+		reg.SetWindow(func() time.Duration { return tt.window })
+		var hb agents.Heartbeat
+		if err := json.Unmarshal([]byte(`{"v":1,"metrics":{"cpu":95}}`), &hb); err != nil {
+			t.Fatal(err)
+		}
+		for i := range tt.beats + 1 {
+			r, err := reg.Record(t.Context(), "laptop", hb, start.Add(time.Duration(i)*time.Minute))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, want := r.Sample.CPUSustained != nil, i == tt.beats; got != want {
+				t.Fatalf("window %v, heartbeat %d: has a sustained CPU = %v, want %v", tt.window, i, got, want)
+			}
+		}
+	}
+}
+
 func TestRegistry_storesReports(t *testing.T) {
 	t.Parallel()
 	st := openStore(t)

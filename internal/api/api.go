@@ -18,8 +18,10 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/files"
+	"github.com/manasseh-fikadu/roost/internal/settings"
 	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/roost/internal/systemd"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/usage"
 )
@@ -57,6 +59,13 @@ type Options struct {
 	SSH *ssh.Manager
 	// Docker finds the Docker of each machine. Required.
 	Docker *docker.Fleet
+	// Settings holds what admins changed in the settings. Required.
+	Settings *settings.Cache
+	// Systemd watches the units on Roost's machine. It's nil if Roost can't
+	// ask systemd there.
+	Systemd *systemd.Collector
+	// Tailscale is how Roost joined the tailnet, which the settings show.
+	Tailscale TailscaleMode
 	// AppURL is where the app is on the tailnet, such as
 	// https://roost.example.ts.net, which the agent sends its heartbeats to.
 	// If it's empty, it's worked out from each request.
@@ -82,8 +91,9 @@ func New(opts Options) http.Handler {
 
 func newHandler(opts Options) *handler {
 	if opts.WhoIs == nil || opts.Snapshot == nil || opts.Feed == nil || opts.Store == nil || opts.Agents == nil ||
-		opts.Usage == nil || opts.Checks == nil || opts.Alerts == nil || opts.SSH == nil || opts.Docker == nil {
-		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents, Usage, Checks, Alerts, SSH and Docker are required")
+		opts.Usage == nil || opts.Checks == nil || opts.Alerts == nil || opts.SSH == nil || opts.Docker == nil ||
+		opts.Settings == nil {
+		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents, Usage, Checks, Alerts, SSH, Docker and Settings are required")
 	}
 	h := &handler{opts: opts, log: opts.Logger}
 	if h.log == nil {
@@ -187,6 +197,10 @@ func (h *handler) routes(rt *router) {
 	rt.enroll("POST /api/agent/enroll", h.enroll)
 	rt.agent("POST /api/agent/heartbeat", h.heartbeat)
 	rt.agent("DELETE /api/agent/enrollment", h.unenroll)
+
+	rt.read("GET /api/settings", admins, h.settings)
+	rt.write("PATCH /api/settings", h.changeSettings)
+	rt.read("GET /api/settings/units", admins, h.installedServices)
 
 	rt.read("GET /api/access", admins, h.access)
 	rt.write("PATCH /api/access", h.changeAccess)

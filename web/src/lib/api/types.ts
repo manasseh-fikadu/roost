@@ -160,6 +160,223 @@ export interface SetRole {
   role: Role;
 }
 /**
+ * Settings are what admins can change about how Roost works. GET
+ * /api/settings has them, and PATCH changes them. They're live: Roost uses a
+ * change as soon as it's saved.
+ */
+export interface Settings {
+  general: GeneralSettings;
+  thresholds: Thresholds;
+  /**
+   * Rules say which alerts Roost raises.
+   */
+  rules: AlertRules;
+  /**
+   * WatchedUnits are the systemd units on the machine Roost runs on that
+   * it watches, such as "ssh.service", or "user:app.service" for a unit of
+   * the user Roost runs as. Roost always shows failed units too.
+   */
+  watchedUnits: string[];
+  retention: RetentionSettings;
+}
+/**
+ * GeneralSettings are how Roost presents itself.
+ */
+export interface GeneralSettings {
+  /**
+   * Name is shown in the app's header and in the title of every page.
+   */
+  name: string;
+  /**
+   * PublicURL is the address that people and agents reach Roost at, such
+   * as https://roost.example.ts.net, if it isn't the one Roost knows. It
+   * is used in the links and commands Roost writes, such as the agent's
+   * install command. It's empty to use the address of the request.
+   */
+  publicUrl: string;
+}
+/**
+ * Thresholds are when a device needs attention, and when an alert opens.
+ */
+export interface Thresholds {
+  /**
+   * DiskWarn and DiskCritical are how full a disk can get, in percent,
+   * before a warning, and before a critical alert.
+   */
+  diskWarn: number /* float64 */;
+  diskCritical: number /* float64 */;
+  /**
+   * MemoryWarn is how much memory can be used, in percent.
+   */
+  memoryWarn: number /* float64 */;
+  /**
+   * CPUWarn is how busy the CPUs can be, in percent, on average over the
+   * last CPUWindowMinutes.
+   */
+  cpuWarn: number /* float64 */;
+  cpuWindowMinutes: number /* int */;
+  /**
+   * OfflineMinutes is how long a device can be offline before an alert,
+   * if it alerts when it's offline.
+   */
+  offlineMinutes: number /* int */;
+  /**
+   * KeyExpiryDays is how soon before a device's Tailscale key expires to
+   * warn about it.
+   */
+  keyExpiryDays: number /* int */;
+  /**
+   * CheckFailures is how many times in a row a check must fail before an
+   * alert.
+   */
+  checkFailures: number /* int */;
+}
+/**
+ * AlertRules say which alerts Roost raises. A device that a rule is off for
+ * isn't flagged for it on the dashboard either, and turning a rule off
+ * resolves its open alerts.
+ */
+export interface AlertRules {
+  /**
+   * Offline is a device that has been off the tailnet for too long.
+   */
+  offline: boolean;
+  /**
+   * KeyExpiry is a Tailscale key that is about to expire.
+   */
+  keyExpiry: boolean;
+  /**
+   * AgentStopped is an agent that stopped reporting.
+   */
+  agentStopped: boolean;
+  /**
+   * Disk, Memory and CPU are a device that is past its threshold.
+   */
+  disk: boolean;
+  memory: boolean;
+  cpu: boolean;
+  /**
+   * Checks is a check that keeps failing.
+   */
+  checks: boolean;
+  /**
+   * Containers is a Docker container on Roost's machine that stopped
+   * unexpectedly.
+   */
+  containers: boolean;
+  /**
+   * Units is a systemd unit that failed, or a watched one that isn't
+   * running.
+   */
+  units: boolean;
+  /**
+   * Collectors is one of Roost's own jobs that keeps failing.
+   */
+  collectors: boolean;
+}
+/**
+ * RetentionSettings are how many days Roost keeps each kind of history.
+ * Roost deletes what is older within the hour.
+ */
+export interface RetentionSettings {
+  /**
+   * ActivityDays is how long the activity log and resolved alerts last.
+   */
+  activityDays: number /* int */;
+  /**
+   * HistoryDays is how long what devices and containers used, and the
+   * round-trip times to devices, last.
+   */
+  historyDays: number /* int */;
+  /**
+   * ChecksDays is how long the results of checks, and the health score,
+   * last.
+   */
+  checksDays: number /* int */;
+}
+/**
+ * SettingsView is the response to GET /api/settings and to the request that
+ * changes them. Only admins can see or change them.
+ */
+export interface SettingsView {
+  settings: Settings;
+  /**
+   * Defaults are the settings of a new Roost, so the app can say what
+   * resetting one would do.
+   */
+  defaults: Settings;
+  /**
+   * Tailscale is how Roost joins the tailnet. It's set when Roost starts.
+   */
+  tailscale: TailscaleMode;
+}
+/**
+ * TailscaleMode is how Roost joins the tailnet.
+ */
+/**
+ * TailscaleModeEmbedded runs a Tailscale node inside Roost, so Roost is
+ * its own machine on the tailnet.
+ */
+export const TailscaleModeEmbedded = "embedded";
+/**
+ * TailscaleModeHost uses the Tailscale already running on Roost's
+ * machine.
+ */
+export const TailscaleModeHost = "host";
+/**
+ * The ways Roost can join the tailnet.
+ */
+export type TailscaleMode = typeof TailscaleModeEmbedded | typeof TailscaleModeHost;
+/**
+ * ChangeSettings is the body of PATCH /api/settings. Each part it has
+ * replaces that part of the settings, and the parts it leaves out stay as
+ * they are, so two admins who change different parts don't undo each other.
+ */
+export interface ChangeSettings {
+  general?: GeneralSettings;
+  thresholds?: Thresholds;
+  rules?: AlertRules;
+  retention?: RetentionSettings;
+  /**
+   * WatchedUnits replaces the list when it's there, even if it's empty.
+   */
+  watchedUnits?: string[];
+}
+/**
+ * InstalledServices is the response to GET /api/settings/units: the services
+ * on the machine Roost runs on, to pick the ones to watch from. Only admins
+ * can see it.
+ */
+export interface InstalledServices {
+  /**
+   * Available is false if Roost can't ask systemd on its machine, which
+   * is the case on a machine that doesn't run it.
+   */
+  available: boolean;
+  /**
+   * Services are the system's first, by name.
+   */
+  services: InstalledService[];
+}
+/**
+ * InstalledService is a systemd service that the machine has.
+ */
+export interface InstalledService {
+  /**
+   * Key is how the settings name it: its name, or "user:" and its name for
+   * a unit of the user Roost runs as.
+   */
+  key: string;
+  name: string;
+  scope: UnitScope;
+  description?: string;
+  /**
+   * Active is systemd's state for it, such as "active" or "failed", or
+   * empty if it is installed and not loaded.
+   */
+  active?: string;
+}
+/**
  * Snapshot is the data of each "snapshot" event on GET /api/stream: what
  * Roost knows at one moment. The hub builds one each time something changes,
  * at most once a second, and at least every few seconds. The stream sends the
@@ -217,6 +434,11 @@ export interface Snapshot {
  */
 export interface Hub {
   /**
+   * Name is what Roost is called, which the app shows in its header. Admins
+   * can change it in the settings.
+   */
+  name: string;
+  /**
    * Version is the hub's build version.
    */
   version: string;
@@ -230,6 +452,11 @@ export interface Hub {
    * it: a personal tailnet is named after its owner's email address.
    */
   tailnet: string;
+  /**
+   * Thresholds are when a device needs attention, unless it has some of
+   * its own, as the settings have them now.
+   */
+  thresholds: Thresholds;
 }
 /**
  * A Collector is a job that gathers what Roost knows, such as polling
@@ -676,10 +903,32 @@ export interface DeviceSettings {
    */
   alertOffline: boolean;
   /**
+   * Thresholds are the thresholds an admin set for this device in place of
+   * the settings'.
+   */
+  thresholds: DeviceThresholds;
+  /**
    * Notes are anything admins want to remember about the device. Viewers
    * can read them too.
    */
   notes: string;
+}
+/**
+ * DeviceThresholds are thresholds that an admin set for one device. One that
+ * is left out is the settings'.
+ */
+export interface DeviceThresholds {
+  /**
+   * DiskWarn, DiskCritical, MemoryWarn and CPUWarn are in percent.
+   */
+  diskWarn?: number /* float64 */;
+  diskCritical?: number /* float64 */;
+  memoryWarn?: number /* float64 */;
+  cpuWarn?: number /* float64 */;
+  /**
+   * OfflineMinutes is how long the device can be offline before an alert.
+   */
+  offlineMinutes?: number /* int */;
 }
 /**
  * SetDeviceSettings is the body of PUT /api/devices/{id}/settings, which
@@ -692,6 +941,10 @@ export interface SetDeviceSettings {
    * AlertOffline is on if it's left out, except for phones and tablets.
    */
   alertOffline?: boolean;
+  /**
+   * Thresholds are the device's own, and none if it's left out.
+   */
+  thresholds?: DeviceThresholds;
   notes?: string;
 }
 /**
@@ -1468,6 +1721,10 @@ export const EventKindContainer = "container";
  */
 export const EventKindAccess = "access";
 /**
+ * EventKindSettings is a change an admin made to Roost's settings.
+ */
+export const EventKindSettings = "settings";
+/**
  * EventKindSSH is SSH access to a device that an admin set up, changed
  * or removed, or a host key that changed.
  */
@@ -1485,7 +1742,7 @@ export const EventKindFiles = "files";
 /**
  * The kinds of Event.
  */
-export type EventKind = typeof EventKindDevice | typeof EventKindAgent | typeof EventKindAlert | typeof EventKindCheck | typeof EventKindContainer | typeof EventKindAccess | typeof EventKindSSH | typeof EventKindTerminal | typeof EventKindFiles;
+export type EventKind = typeof EventKindDevice | typeof EventKindAgent | typeof EventKindAlert | typeof EventKindCheck | typeof EventKindContainer | typeof EventKindAccess | typeof EventKindSettings | typeof EventKindSSH | typeof EventKindTerminal | typeof EventKindFiles;
 /**
  * EventList is the response to GET /api/events?before=&after=&limit=&kind=&device=:
  * events, newest first. Before and After are event IDs.

@@ -1,9 +1,14 @@
 package settings_test
 
 import (
+	"errors"
+	"math"
 	"path/filepath"
-	"slices"
+	"reflect"
+	"strings"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/settings"
 	"github.com/manasseh-fikadu/roost/internal/store"
@@ -26,33 +31,46 @@ func TestLoadAndSave(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if want := settings.Defaults(); got.Thresholds != want.Thresholds || !slices.Equal(got.WatchedUnits, want.WatchedUnits) {
+	if want := settings.Defaults(); !reflect.DeepEqual(got, want) {
 		t.Errorf("Load() of a new store = %+v, want the defaults", got)
 	}
 
-	got.Thresholds.DiskWarn, got.WatchedUnits = 80, []string{"nginx.service", "user:app.service"}
+	got.General = settings.General{Name: "Home lab", PublicURL: "https://roost.example.com"}
+	got.Thresholds.DiskWarn, got.Thresholds.CPUWindowMinutes = 80, 15
+	got.Rules.CPU = false
+	got.WatchedUnits = []string{"nginx.service", "user:app.service"}
+	got.Retention.HistoryDays = 14
 	if err := settings.Save(t.Context(), st, got); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 	again, err := settings.Load(t.Context(), st)
-	if err != nil || again.Thresholds != got.Thresholds || !slices.Equal(again.WatchedUnits, got.WatchedUnits) {
+	if err != nil || !reflect.DeepEqual(again, got) {
 		t.Errorf("Load() after Save() = %+v, %v, want %+v", again, err, got)
+	}
+	if keep, err := settings.StoreRetention(t.Context(), st); err != nil || keep.History != 14*24*time.Hour || keep.Activity != 30*24*time.Hour {
+		t.Errorf("StoreRetention() = %+v, %v, want 14 days of history and 30 of activity", keep, err)
 	}
 
 	// A setting that wasn't saved, such as one a later version adds, gets
 	// its default.
+	// This is how #26 saved them, before Roost had a Settings page.
 	if err := st.SetKV(t.Context(), "settings", `{"thresholds":{"diskWarn":70}}`); err != nil {
 		t.Fatal(err)
 	}
 	partial, err := settings.Load(t.Context(), st)
-	if err != nil || partial.Thresholds.DiskWarn != 70 || partial.Thresholds.MemoryWarn != 92 || len(partial.WatchedUnits) == 0 {
+	want := settings.Defaults()
+	want.Thresholds.DiskWarn = 70
+	if err != nil || !reflect.DeepEqual(partial, want) {
 		t.Errorf("Load() of partial settings = %+v, %v, want the defaults for the rest", partial, err)
 	}
 	if err := st.SetKV(t.Context(), "settings", `{`); err != nil {
 		t.Fatal(err)
 	}
-	if bad, err := settings.Load(t.Context(), st); err == nil || bad.Thresholds != settings.Defaults().Thresholds {
+	if bad, err := settings.Load(t.Context(), st); err == nil || !reflect.DeepEqual(bad, settings.Defaults()) {
 		t.Errorf("Load() of broken settings = %+v, %v, want the defaults and an error", bad, err)
+	}
+	if keep, err := settings.StoreRetention(t.Context(), st); err == nil {
+		t.Errorf("StoreRetention() of broken settings = %+v, want an error, so the store keeps everything", keep)
 	}
 }
 
@@ -67,6 +85,10 @@ func TestCheck(t *testing.T) {
 		{"no disk threshold", func(s *settings.Settings) { s.Thresholds.DiskWarn = 0 }, true},
 		{"memory over 100%", func(s *settings.Settings) { s.Thresholds.MemoryWarn = 101 }, true},
 		{"critical before warning", func(s *settings.Settings) { s.Thresholds.DiskCritical = 80 }, true},
+		{"not a number", func(s *settings.Settings) { s.Thresholds.CPUWarn = math.NaN() }, true},
+		{"CPU for no time", func(s *settings.Settings) { s.Thresholds.CPUWindowMinutes = 0 }, true},
+		{"CPU for a day", func(s *settings.Settings) { s.Thresholds.CPUWindowMinutes = 24 * 60 }, true},
+		{"CPU for an hour", func(s *settings.Settings) { s.Thresholds.CPUWindowMinutes = 60 }, false},
 		{"offline for no time", func(s *settings.Settings) { s.Thresholds.OfflineMinutes = 0 }, true},
 		{"no key warning", func(s *settings.Settings) { s.Thresholds.KeyExpiryDays = 0 }, true},
 		{"no failures", func(s *settings.Settings) { s.Thresholds.CheckFailures = 0 }, true},
@@ -74,6 +96,24 @@ func TestCheck(t *testing.T) {
 		{"a unit with a space", func(s *settings.Settings) { s.WatchedUnits = []string{"my app"} }, true},
 		{"a flag for a unit", func(s *settings.Settings) { s.WatchedUnits = []string{"--all"} }, true},
 		{"an empty user unit", func(s *settings.Settings) { s.WatchedUnits = []string{"user:"} }, true},
+		{"no units", func(s *settings.Settings) { s.WatchedUnits = nil }, false},
+		{"no name", func(s *settings.Settings) { s.General.Name = "" }, true},
+		{"a name with spaces around it", func(s *settings.Settings) { s.General.Name = " Roost" }, true},
+		{"a two line name", func(s *settings.Settings) { s.General.Name = "Home\nlab" }, true},
+		{"a long name", func(s *settings.Settings) { s.General.Name = strings.Repeat("é", settings.MaxName) }, false},
+		{"a name that is too long", func(s *settings.Settings) { s.General.Name = strings.Repeat("é", settings.MaxName+1) }, true},
+		{"a public URL", func(s *settings.Settings) { s.General.PublicURL = "https://roost.example.com:8443" }, false},
+		{"a public URL with a path", func(s *settings.Settings) { s.General.PublicURL = "https://example.com/roost" }, true},
+		{"a public URL with a slash", func(s *settings.Settings) { s.General.PublicURL = "https://example.com/" }, true},
+		{"a public URL with a login", func(s *settings.Settings) { s.General.PublicURL = "https://alice:secret@example.com" }, true},
+		{"a public URL without a scheme", func(s *settings.Settings) { s.General.PublicURL = "roost.example.com" }, true},
+		{"a public URL with another scheme", func(s *settings.Settings) { s.General.PublicURL = "ftp://roost.example.com" }, true},
+		{"a public URL with a query", func(s *settings.Settings) { s.General.PublicURL = "https://example.com?a=b" }, true},
+		{"no activity log", func(s *settings.Settings) { s.Retention.ActivityDays = 0 }, true},
+		{"a year of activity", func(s *settings.Settings) { s.Retention.ActivityDays = 365 }, false},
+		{"over a year of activity", func(s *settings.Settings) { s.Retention.ActivityDays = 366 }, true},
+		{"a long history", func(s *settings.Settings) { s.Retention.HistoryDays = settings.MaxHistoryDays + 1 }, true},
+		{"long check results", func(s *settings.Settings) { s.Retention.ChecksDays = settings.MaxChecksDays + 1 }, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -84,4 +124,185 @@ func TestCheck(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCleanPublicURL(t *testing.T) {
+	t.Parallel()
+	for in, want := range map[string]string{
+		"":                               "",
+		"  https://roost.example.com/ ":  "https://roost.example.com",
+		"http://100.64.0.1:4700":         "http://100.64.0.1:4700",
+		"https://roost.example.com":      "https://roost.example.com",
+		"https://example.com/roost":      "!",
+		"https://example.com//":          "!",
+		"mailto:alice@example.com":       "!",
+		"https://exa mple.com":           "!",
+		"https://example.com/\nhttp://x": "!",
+	} {
+		got, err := settings.CleanPublicURL(in)
+		if want == "!" {
+			if err == nil {
+				t.Errorf("CleanPublicURL(%q) = %q, want an error", in, got)
+			}
+			continue
+		}
+		if err != nil || got != want {
+			t.Errorf("CleanPublicURL(%q) = %q, %v, want %q", in, got, err, want)
+		}
+	}
+}
+
+func TestThresholds_For(t *testing.T) {
+	t.Parallel()
+	base := settings.Defaults().Thresholds // disk 85/95, memory 92, CPU 90, offline 10
+	for _, tt := range []struct {
+		name    string
+		o       store.ThresholdOverrides
+		want    func(t *settings.Thresholds)
+		wantErr bool
+	}{
+		{"none", store.ThresholdOverrides{}, func(*settings.Thresholds) {}, false},
+		{"a big disk", store.ThresholdOverrides{DiskWarn: new(97.0), DiskCritical: new(99.0)},
+			func(t *settings.Thresholds) { t.DiskWarn, t.DiskCritical = 97, 99 }, false},
+		{"everything", store.ThresholdOverrides{DiskWarn: new(70.0), DiskCritical: new(80.0), MemoryWarn: new(50.0), CPUWarn: new(100.0), OfflineMinutes: new(60)},
+			func(t *settings.Thresholds) {
+				t.DiskWarn, t.DiskCritical, t.MemoryWarn, t.CPUWarn, t.OfflineMinutes = 70, 80, 50, 100, 60
+			}, false},
+		// The critical level follows the warning level up, so the device
+		// isn't critical before it needs a warning, but a pair of overrides
+		// that's backwards is a mistake.
+		{"a warning past the settings' critical", store.ThresholdOverrides{DiskWarn: new(97.0)},
+			func(t *settings.Thresholds) { t.DiskWarn, t.DiskCritical = 97, 97 }, false},
+		{"a backwards pair", store.ThresholdOverrides{DiskWarn: new(97.0), DiskCritical: new(96.0)}, nil, true},
+		{"memory over 100%", store.ThresholdOverrides{MemoryWarn: new(101.0)}, nil, true},
+		{"never offline", store.ThresholdOverrides{OfflineMinutes: new(0)}, nil, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := base.CheckOverrides(tt.o)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("CheckOverrides() error = %v, want an error: %v", err, tt.wantErr)
+			}
+			if tt.wantErr {
+				return
+			}
+			want := base
+			tt.want(&want)
+			if got := base.For(tt.o); got != want {
+				t.Errorf("For() = %+v, want %+v", got, want)
+			}
+		})
+	}
+	if base.DiskWarn != 85 {
+		t.Error("For() changed the thresholds it was called on")
+	}
+}
+
+func TestChanges(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct {
+		name   string
+		change func(s *settings.Settings)
+		want   []string
+	}{
+		{"nothing", func(*settings.Settings) {}, nil},
+		{"a name", func(s *settings.Settings) { s.General.Name = "Home lab" }, []string{`Renamed Roost to "Home lab"`}},
+		{"a public URL, whose value stays out", func(s *settings.Settings) { s.General.PublicURL = "https://secret.example.com" },
+			[]string{"Changed the public URL"}},
+		{"thresholds", func(s *settings.Settings) {
+			s.Thresholds.DiskWarn, s.Thresholds.CPUWindowMinutes, s.Thresholds.CheckFailures = 80.5, 1, 3
+		}, []string{"Changed the alert thresholds: disk warning 85% → 80.5%, CPU window 5 minutes → 1 minute, failing checks 2 failures → 3 failures"}},
+		{"rules", func(s *settings.Settings) { s.Rules.CPU, s.Rules.Units = false, false },
+			[]string{"Turned off alerts for CPU, systemd units"}},
+		{"units", func(s *settings.Settings) {
+			s.WatchedUnits = []string{"ssh.service", "nginx.service", "a.service", "b.service", "c.service", "d.service"}
+		}, []string{
+			"Changed the watched systemd units: started watching nginx.service, a.service, b.service, c.service and 1 more, " +
+				"stopped watching sshd.service, docker.service, tailscaled.service, cron.service",
+		}},
+		{"retention", func(s *settings.Settings) { s.Retention.HistoryDays, s.Retention.ActivityDays = 1, 90 },
+			[]string{"Changed how long Roost keeps history: activity log 30 days → 90 days, device history 7 days → 1 day"}},
+		{"several parts", func(s *settings.Settings) { s.General.Name, s.Rules.Disk = "Lab", false },
+			[]string{`Renamed Roost to "Lab"`, "Turned off alerts for disk"}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			after := settings.Defaults()
+			tt.change(&after)
+			got := settings.Changes(settings.Defaults(), after)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Changes() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+	off := settings.Defaults()
+	off.Rules.CPU = false
+	if got := settings.Changes(off, settings.Defaults()); !reflect.DeepEqual(got, []string{"Turned on alerts for CPU"}) {
+		t.Errorf("Changes() of turning a rule on = %q", got)
+	}
+}
+
+func TestCache(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		st := openStore(t)
+		c := settings.NewCache(st, nil)
+		if got := c.Get(t.Context()); !reflect.DeepEqual(got, settings.Defaults()) {
+			t.Errorf("Get() of a new store = %+v, want the defaults", got)
+		}
+
+		// A change through the cache is there at once.
+		before, after, err := c.Update(t.Context(), func(s *settings.Settings) error {
+			s.Thresholds.MemoryWarn = 80
+			return nil
+		})
+		if err != nil || before.Thresholds.MemoryWarn != 92 || after.Thresholds.MemoryWarn != 80 {
+			t.Fatalf("Update() = %v, %v, %v, want memory 92 → 80", before.Thresholds.MemoryWarn, after.Thresholds.MemoryWarn, err)
+		}
+		if got := c.Get(t.Context()).Thresholds.MemoryWarn; got != 80 {
+			t.Errorf("Get() after Update() = memory %v, want 80", got)
+		}
+
+		// A change that fails Check, or that change itself refuses, saves nothing.
+		bad := errors.New("no")
+		for name, change := range map[string]func(*settings.Settings) error{
+			"a failing check": func(s *settings.Settings) error { s.Thresholds.MemoryWarn = 0; return nil },
+			"a refusal":       func(*settings.Settings) error { return bad },
+		} {
+			if _, _, err := c.Update(t.Context(), change); err == nil {
+				t.Errorf("Update(%s) didn't fail", name)
+			}
+		}
+		if got := c.Get(t.Context()).Thresholds.MemoryWarn; got != 80 {
+			t.Errorf("Get() after failed updates = memory %v, want 80", got)
+		}
+
+		// A change made behind its back shows up once the cache is old.
+		if err := st.SetKV(t.Context(), "settings", `{"thresholds":{"memoryWarn":70}}`); err != nil {
+			t.Fatal(err)
+		}
+		if got := c.Get(t.Context()).Thresholds.MemoryWarn; got != 80 {
+			t.Errorf("Get() right after an edit of the database = memory %v, want 80 still", got)
+		}
+		time.Sleep(3 * time.Second)
+		if got := c.Get(t.Context()).Thresholds.MemoryWarn; got != 70 {
+			t.Errorf("Get() 3 seconds after an edit of the database = memory %v, want 70", got)
+		}
+
+		// Whoever gets the settings can change them without changing the cache's.
+		got := c.Get(t.Context())
+		got.WatchedUnits[0] = "changed"
+		if again := c.Get(t.Context()); again.WatchedUnits[0] == "changed" {
+			t.Error("changing the settings Get() returned changed the cache's")
+		}
+
+		// A store that can't be read leaves the last settings.
+		if err := st.SetKV(t.Context(), "settings", `{`); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(3 * time.Second)
+		if got := c.Get(t.Context()).Thresholds.MemoryWarn; got != 70 {
+			t.Errorf("Get() with broken settings in the database = memory %v, want the last, 70", got)
+		}
+	})
 }

@@ -7,7 +7,6 @@ import (
 
 	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 )
 
 const (
@@ -22,7 +21,7 @@ const (
 // at now from src, with the machines Roost measures, and says whose data was
 // fresh. started is when Roost started.
 func alertConditions(snap Snapshot, machines []machine, src sources, started, now time.Time) ([]alerts.Condition, alerts.FreshFunc) {
-	t := src.thresholds
+	rules := src.global.Rules
 	var out []alerts.Condition
 	add := func(c alerts.Condition) { out = append(out, c) }
 	byID := make(map[string]Device, len(snap.Devices))
@@ -31,7 +30,8 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 	}
 
 	for _, d := range snap.Devices {
-		if !d.Self && !d.Online && d.Settings.AlertOffline && d.LastSeen != nil {
+		t := src.thresholdsFor(d.ID)
+		if rules.Offline && !d.Self && !d.Online && d.Settings.AlertOffline && d.LastSeen != nil {
 			if gone := now.Sub(*d.LastSeen); gone >= t.OfflineAfter() {
 				add(alerts.Condition{
 					Key: "offline:" + d.ID, Source: string(AlertSourceDevice), DeviceID: d.ID, Severity: alerts.Warning,
@@ -40,7 +40,7 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 				})
 			}
 		}
-		if d.KeyExpiry != nil {
+		if d.KeyExpiry != nil && rules.KeyExpiry {
 			if left := d.KeyExpiry.Sub(now); left < t.KeyExpiryWarn() {
 				c := alerts.Condition{
 					Key: "key-expiry:" + d.ID, Source: string(AlertSourceDevice), DeviceID: d.ID, Severity: alerts.Warning,
@@ -56,7 +56,7 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 				add(c)
 			}
 		}
-		if a := d.Agent; a != nil && a.Stale && a.LastSeen != nil {
+		if a := d.Agent; a != nil && a.Stale && a.LastSeen != nil && rules.AgentStopped {
 			add(alerts.Condition{
 				Key: "agent:" + d.ID, Source: string(AlertSourceAgent), DeviceID: d.ID, Severity: alerts.Warning,
 				Title:  "Agent on " + d.Name + " stopped reporting",
@@ -72,13 +72,14 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 			continue
 		}
 		current[m.deviceID] = true
+		t := src.thresholdsFor(d.ID)
 		metrics := func(kind string, sev alerts.Severity, title, detail string) {
 			add(alerts.Condition{
 				Key: kind + ":" + d.ID, Source: string(AlertSourceMetrics), DeviceID: d.ID, Severity: sev,
 				Title: title, Detail: detail,
 			})
 		}
-		if u := d.Metrics.Disk; u != nil {
+		if u := d.Metrics.Disk; u != nil && rules.Disk {
 			if pct, ok := percent(u); ok && pct >= t.DiskWarn {
 				sev := alerts.Warning
 				if pct >= t.DiskCritical {
@@ -88,20 +89,20 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 					fmt.Sprintf("%s of %s left on /.", sizeText(u.Total-u.Used), sizeText(u.Total)))
 			}
 		}
-		if u := d.Metrics.Memory; u != nil {
+		if u := d.Metrics.Memory; u != nil && rules.Memory {
 			if pct, ok := percent(u); ok && pct >= t.MemoryWarn {
 				metrics("memory", alerts.Warning, fmt.Sprintf("Memory %.0f%% used on %s", pct, d.Name),
 					fmt.Sprintf("%s of %s free.", sizeText(u.Total-u.Used), sizeText(u.Total)))
 			}
 		}
-		if cpu := m.sustained; cpu != nil && *cpu >= t.CPUWarn {
+		if cpu := m.sustained; cpu != nil && rules.CPU && *cpu >= t.CPUWarn {
 			metrics("cpu", alerts.Warning, fmt.Sprintf("CPU %.0f%% busy on %s", *cpu, d.Name),
-				"On average over the last "+shortDuration(hostmetrics.SustainedWindow)+".")
+				"On average over the last "+shortDuration(t.CPUWindow())+".")
 		}
 	}
 
 	for _, c := range snap.Checks {
-		if c.State != CheckStateFailing || c.Failures < t.CheckFailures {
+		if !rules.Checks || c.State != CheckStateFailing || c.Failures < src.global.Thresholds.CheckFailures {
 			continue
 		}
 		cond := alerts.Condition{
@@ -120,6 +121,9 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 	}
 
 	for _, c := range snap.Containers {
+		if !rules.Containers {
+			break
+		}
 		r := findContainer(src, c.Name)
 		problem, sev := containerProblem(r)
 		if problem == "" {
@@ -132,6 +136,9 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 	}
 
 	for _, u := range snap.Units {
+		if !rules.Units {
+			break
+		}
 		problem := unitProblem(u)
 		if problem == "" {
 			continue
@@ -147,7 +154,7 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 	}
 
 	for _, c := range snap.Collectors {
-		if c.State != CollectorStateFailing {
+		if !rules.Collectors || c.State != CollectorStateFailing {
 			continue
 		}
 		since := started

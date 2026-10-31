@@ -75,6 +75,8 @@ type FeedOptions struct {
 	SSHChanged <-chan struct{}
 	// Store holds the devices' settings and history. Required.
 	Store *store.Store
+	// Settings holds the settings admins changed. Nil reads them from Store.
+	Settings *settings.Cache
 	// Logger receives errors. Nil discards them.
 	Logger *slog.Logger
 }
@@ -104,15 +106,12 @@ type Feed struct {
 	pingsErr  error
 	// metricsAt holds when each device's metrics were last recorded, by
 	// the ID their history is kept under.
-	metricsAt  map[string]time.Time
-	metricsErr error
-	healthErr  error
-	// thresholds are from the settings, as last read.
-	thresholds    settings.Thresholds
-	thresholdsErr error
-	activity      activity
-	eventsErr     error
-	lastEventID   int64
+	metricsAt   map[string]time.Time
+	metricsErr  error
+	healthErr   error
+	activity    activity
+	eventsErr   error
+	lastEventID int64
 	// started is when the feed was made, which is about when Roost started.
 	started time.Time
 
@@ -140,10 +139,13 @@ func NewFeed(opts FeedOptions) *Feed {
 	}
 	f := &Feed{
 		opts: opts, log: opts.Logger, poked: make(chan struct{}, 1), metricsAt: map[string]time.Time{},
-		thresholds: settings.Defaults().Thresholds, started: time.Now(),
+		started: time.Now(),
 	}
 	if f.log == nil {
 		f.log = slog.New(slog.DiscardHandler)
+	}
+	if f.opts.Settings == nil {
+		f.opts.Settings = settings.NewCache(opts.Store, f.log)
 	}
 	return f
 }
@@ -268,7 +270,7 @@ func (f *Feed) publish(ctx context.Context) *published {
 		c.ObservePings(src.tailnet)
 		src.checks, src.pings = c.Checks(), c.Pings()
 	}
-	src.thresholds = f.loadThresholds(ctx)
+	src.global = f.opts.Settings.Get(ctx)
 	if f.opts.Docker != nil {
 		r := f.opts.Docker()
 		src.docker = &r
@@ -463,23 +465,6 @@ func (f *Feed) recordHealth(ctx context.Context, snap Snapshot) {
 		f.log.Info("recorded the health score again")
 	}
 	f.healthErr = err
-}
-
-// loadThresholds returns the thresholds in the settings, or the last ones it
-// read if the store can't say.
-func (f *Feed) loadThresholds(ctx context.Context) settings.Thresholds {
-	s, err := settings.Load(ctx, f.opts.Store)
-	switch {
-	case err != nil && ctx.Err() == nil && f.thresholdsErr == nil:
-		f.log.Warn("read the settings", "error", err)
-	case err == nil && f.thresholdsErr != nil:
-		f.log.Info("read the settings again")
-	}
-	f.thresholdsErr = err
-	if err == nil {
-		f.thresholds = s.Thresholds
-	}
-	return f.thresholds
 }
 
 // logActivity adds events to the activity log.
