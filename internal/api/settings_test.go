@@ -90,6 +90,16 @@ func TestSettings(t *testing.T) {
 		t.Errorf("settings after changing two fields = %+v, want the rest kept", v.Settings)
 	}
 	patchSettings(t, h, `{"general": {"name": "Home lab"}, "thresholds": {"memoryWarn": 80}}`)
+	// Finishing the setup is a setting too, and leaves the rest of General alone.
+	if v.Settings.General.SetupDone {
+		t.Error("the setup is done in a new Roost, want it to wait for an admin")
+	}
+	v = patchSettings(t, h, `{"general": {"setupDone": true}}`)
+	if want := (api.GeneralSettings{Name: "Home lab", PublicURL: "https://roost.example.com", SetupDone: true}); v.Settings.General != want {
+		t.Errorf("general after finishing the setup = %+v, want %+v", v.Settings.General, want)
+	}
+	patchSettings(t, h, `{"general": {"setupDone": false}}`)
+	patchSettings(t, h, `{"general": {"name": "Home lab"}}`)
 	v = patchSettings(t, h, `{"watchedUnits": [" nginx.service", "user:app.service", "nginx.service", ""],
 		"retention": {"activityDays": 90, "historyDays": 14, "checksDays": 30}}`)
 	if want := []string{"nginx.service", "user:app.service"}; !slices.Equal(v.Settings.WatchedUnits, want) {
@@ -134,6 +144,8 @@ func TestSettings(t *testing.T) {
 		"Changed the alert thresholds: memory 80% → 60% by " + alice,
 		`Renamed Roost to "Home lab" by ` + alice,
 		"Changed the alert thresholds: memory 60% → 80% by " + alice,
+		"Finished the first-run setup by " + alice,
+		"Turned the first-run setup back on by " + alice,
 		"Changed the watched systemd units: started watching nginx.service, user:app.service, stopped watching " +
 			"ssh.service, sshd.service, docker.service, tailscaled.service and 1 more by " + alice,
 		"Changed how long Roost keeps history: activity log 30 days → 90 days, device history 7 days → 14 days, " +
@@ -349,8 +361,12 @@ func TestFeed_settingsChangeAlerts(t *testing.T) {
 			t.Errorf("CPU alert detail = %q, want the window", a.Detail)
 		}
 	}
-	if snap.Hub.Thresholds.CPUWindowMinutes != 15 || snap.Hub.Name != "Roost" {
-		t.Errorf("hub = %+v, want the settings' thresholds", snap.Hub)
+	if snap.Hub.Thresholds.CPUWindowMinutes != 15 || snap.Hub.Name != "Roost" || snap.Hub.SetupDone {
+		t.Errorf("hub = %+v, want the settings' thresholds, and the setup waiting", snap.Hub)
+	}
+	cfg.General.SetupDone = true
+	if snap = look(); !snap.Hub.SetupDone {
+		t.Error("the hub says the setup is waiting, want it done once the settings say so")
 	}
 
 	// A device's own thresholds beat the settings'. The server has been gone

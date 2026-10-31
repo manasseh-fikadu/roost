@@ -280,6 +280,8 @@ func TestChanges(t *testing.T) {
 		{"a name", func(s *settings.Settings) { s.General.Name = "Home lab" }, []string{`Renamed Roost to "Home lab"`}},
 		{"a public URL, whose value stays out", func(s *settings.Settings) { s.General.PublicURL = "https://secret.example.com" },
 			[]string{"Changed the public URL"}},
+		{"finishing the setup", func(s *settings.Settings) { s.General.SetupDone = true },
+			[]string{"Finished the first-run setup"}},
 		{"thresholds", func(s *settings.Settings) {
 			s.Thresholds.DiskWarn, s.Thresholds.CPUWindowMinutes, s.Thresholds.CheckFailures = 80.5, 1, 3
 		}, []string{"Changed the alert thresholds: disk warning 85% → 80.5%, CPU window 5 minutes → 1 minute, failing checks 2 failures → 3 failures"}},
@@ -317,6 +319,11 @@ func TestChanges(t *testing.T) {
 	off.Rules.CPU = false
 	if got := settings.Changes(off, settings.Defaults()); !reflect.DeepEqual(got, []string{"Turned on alerts for CPU"}) {
 		t.Errorf("Changes() of turning a rule on = %q", got)
+	}
+	done := settings.Defaults()
+	done.General.SetupDone = true
+	if got := settings.Changes(done, settings.Defaults()); !reflect.DeepEqual(got, []string{"Turned the first-run setup back on"}) {
+		t.Errorf("Changes() of turning the setup back on = %q", got)
 	}
 }
 

@@ -195,6 +195,11 @@ export interface GeneralSettings {
    * install command. It's empty to use the address of the request.
    */
   publicUrl: string;
+  /**
+   * SetupDone is whether an admin finished or skipped the first-run setup,
+   * which the app shows admins until then.
+   */
+  setupDone: boolean;
 }
 /**
  * Thresholds are when a device needs attention, and when an alert opens.
@@ -395,6 +400,7 @@ export interface ChangeSettings {
 export interface ChangeGeneral {
   name?: string;
   publicUrl?: string;
+  setupDone?: boolean;
 }
 /**
  * ChangeThresholds changes Thresholds.
@@ -545,6 +551,11 @@ export interface Hub {
    * can change it in the settings.
    */
   name: string;
+  /**
+   * SetupDone is whether an admin finished or skipped the first-run setup.
+   * Until then, the app shows it to admins.
+   */
+  setupDone: boolean;
   /**
    * Version is the hub's build version.
    */

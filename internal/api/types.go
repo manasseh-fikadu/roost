@@ -142,6 +142,9 @@ type GeneralSettings struct {
 	// is used in the links and commands Roost writes, such as the agent's
 	// install command. It's empty to use the address of the request.
 	PublicURL string `json:"publicUrl"`
+	// SetupDone is whether an admin finished or skipped the first-run setup,
+	// which the app shows admins until then.
+	SetupDone bool `json:"setupDone"`
 }
 
 // Thresholds are when a device needs attention, and when an alert opens.
@@ -278,6 +281,7 @@ type ChangeSettings struct {
 type ChangeGeneral struct {
 	Name      *string `json:"name,omitempty"`
 	PublicURL *string `json:"publicUrl,omitempty"`
+	SetupDone *bool   `json:"setupDone,omitempty"`
 }
 
 // ChangeThresholds changes Thresholds.
@@ -391,6 +395,9 @@ type Hub struct {
 	// Name is what Roost is called, which the app shows in its header. Admins
 	// can change it in the settings.
 	Name string `json:"name"`
+	// SetupDone is whether an admin finished or skipped the first-run setup.
+	// Until then, the app shows it to admins.
+	SetupDone bool `json:"setupDone"`
 	// Version is the hub's build version.
 	Version string `json:"version"`
 	// DNSName is the MagicDNS name of Roost's node, such as
