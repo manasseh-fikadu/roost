@@ -2,6 +2,7 @@ import { toast } from '#lib/toast.svelte.js';
 import type {
 	Access,
 	AgentCode,
+	AgentRun,
 	AgentSetup,
 	Alert,
 	AlertList,
@@ -163,6 +164,23 @@ export function revokeAgent(id: string): Promise<void> {
 	return mutate('DELETE', `devices/${encodeURIComponent(id)}/agent`, undefined, {
 		success: 'Agent revoked'
 	});
+}
+
+/**
+ * Installs the agent on a device over SSH, as the user Roost logs in as,
+ * with a new enrollment code. A script that fails is an answer with `ok`
+ * false, not an error. Admins only.
+ */
+export function installAgentOverSSH(id: string): Promise<AgentRun> {
+	return mutate('POST', `devices/${encodeURIComponent(id)}/agent/install`);
+}
+
+/**
+ * Removes the agent from a device over SSH, for the user Roost logs in as.
+ * Admins only.
+ */
+export function uninstallAgentOverSSH(id: string): Promise<AgentRun> {
+	return mutate('POST', `devices/${encodeURIComponent(id)}/agent/uninstall`);
 }
 
 /** Replaces a device's settings, and says so in a toast. Admins only. */

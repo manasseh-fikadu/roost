@@ -11,6 +11,7 @@
 	import { deviceIcon } from '#lib/device.js';
 	import AddAgent from '#lib/devices/AddAgent.svelte';
 	import AgentUninstall from '#lib/devices/AgentUninstall.svelte';
+	import UninstallAgent from '#lib/devices/UninstallAgent.svelte';
 	import { dateTime, osLabel, plural } from '#lib/format.js';
 	import { live } from '#lib/live.svelte.js';
 	import type { Status } from '#lib/status.js';
@@ -143,6 +144,9 @@
 										size="xs"
 										variant="ghost"
 									/>
+									{#if d.ssh?.state === 'ok'}
+										<UninstallAgent device={d} />
+									{/if}
 									<Button size="xs" variant="ghost" onclick={() => askRevoke(d)}>Revoke</Button>
 								</span>
 							{:else if d.measuredBy !== 'hub' && agentRuns(d.os)}
@@ -159,7 +163,8 @@
 		<div class="space-y-3 p-4 text-[13px] text-fg-muted">
 			<p>
 				Add agent makes an install command for macOS or Linux. It works on one machine for an hour,
-				and installs the agent for the user who runs it, without root.
+				and installs the agent for the user who runs it, without root. On a machine Roost can log in
+				to over SSH, it can run the install for you.
 			</p>
 			<p class="flex items-start gap-2.5">
 				<KeyRound class="mt-0.5 size-4 shrink-0 text-fg-faint" />
