@@ -2,7 +2,7 @@
 // with a hint for each thing it can't, and when to send an admin there.
 
 import { roleLabel } from './access.js';
-import type { Collector, Me, Snapshot, TailscaleMode } from './api/types.js';
+import type { Collector, Device, Me, Snapshot, TailscaleMode } from './api/types.js';
 import { plural } from './format.js';
 import type { Status } from './status.js';
 
@@ -247,4 +247,13 @@ export function markSetupSent(): void {
 	} catch {
 		// See setupSent.
 	}
+}
+
+/**
+ * The device to set up SSH access to next: the first that's online and that
+ * Roost can log in to but doesn't yet. The machine Roost runs on comes first,
+ * where it takes one click.
+ */
+export function sshCandidate(devices: readonly Device[]): Device | undefined {
+	return devices.find((d) => d.online && d.ssh?.state === 'not-set-up');
 }

@@ -136,7 +136,13 @@
 	<Card>
 		{#if checks.length === 0}
 			<EmptyState title="No checks yet" icon={HeartPulse}>
-				Add a check of a website, a port or a host name, and Roost runs it from the hub.
+				Add a check of a website, a port or a host name, and Roost runs it from the hub and alerts
+				you when it fails.
+				<AdminOnly>
+					<div class="mt-3">
+						<Button variant="primary" icon={plus} onclick={() => edit(null)}>Add a check</Button>
+					</div>
+				</AdminOnly>
 			</EmptyState>
 		{:else}
 			<EmptyState title="No checks match" icon={HeartPulse}>

@@ -13,6 +13,7 @@
 	import type { Snapshot } from '#lib/api/types.js';
 	import AddAgent from '#lib/devices/AddAgent.svelte';
 	import { plural } from '#lib/format.js';
+	import { sshCandidate } from '#lib/setup.js';
 	import Card from '#lib/ui/Card.svelte';
 	import { buttonClass } from '#lib/ui/button.js';
 
@@ -29,7 +30,7 @@
 	/** The machines Roost can log in to, those it does, and the first that it doesn't. */
 	const loginable = $derived(devices.filter((d) => d.ssh));
 	const loggedIn = $derived(loginable.filter((d) => d.ssh?.state !== 'not-set-up'));
-	const first = $derived(loginable.find((d) => d.ssh?.state === 'not-set-up' && d.online));
+	const first = $derived(sshCandidate(devices));
 </script>
 
 {#snippet row(Icon: Component, title: string, text: string)}

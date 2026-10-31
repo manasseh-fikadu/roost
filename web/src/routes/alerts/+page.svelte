@@ -4,8 +4,10 @@
 	import ShieldCheck from '@lucide/svelte/icons/shield-check';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import AdminOnly from '#lib/AdminOnly.svelte';
 	import { activeAlerts, mergeById, parseAlertTab, type AlertTab } from '#lib/alerts.js';
 	import AlertCard from '#lib/alerts/AlertCard.svelte';
+	import NotificationsHint from '#lib/alerts/NotificationsHint.svelte';
 	import { ApiError, getAlert, getResolvedAlerts } from '#lib/api/client.js';
 	import type { Alert } from '#lib/api/types.js';
 	import { live } from '#lib/live.svelte.js';
@@ -188,7 +190,9 @@
 					</div>
 				{:else if open.length === 0}
 					<EmptyState title="No open alerts" icon={ShieldCheck}>
-						Everything the hub can see looks fine.
+						Everything the hub can see looks fine. Roost opens an alert when a machine goes offline,
+						a disk fills up, a check keeps failing or a service stops.
+						<AdminOnly><NotificationsHint /></AdminOnly>
 					</EmptyState>
 				{:else}
 					{@render list(open)}

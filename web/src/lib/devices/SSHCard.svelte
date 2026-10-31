@@ -281,7 +281,9 @@
 <div id="ssh" class="scroll-mt-24">
 	<Card
 		title="SSH access"
-		description="Terminals, files and Docker on this machine go over SSH, with Tailscale SSH or Roost's own key."
+		description={setUp
+			? "Terminals, files and Docker on this machine go over SSH, with Tailscale SSH or Roost's own key."
+			: 'Set up access for terminal, files and Docker on this machine.'}
 	>
 		{#snippet actions()}
 			{#if setUp && !editing}

@@ -6,6 +6,7 @@ import {
 	nextStep,
 	setupChecks,
 	shouldOpenSetup,
+	sshCandidate,
 	stepOf
 } from './setup.js';
 
@@ -250,5 +251,27 @@ describe('shouldOpenSetup', () => {
 		{ name: 'no snapshot yet', admin: true, hub: undefined, sent: false, want: false }
 	])('$name', ({ admin, hub, sent, want }) => {
 		expect(shouldOpenSetup(admin, hub, sent)).toBe(want);
+	});
+});
+
+describe('sshCandidate', () => {
+	const dev = (id: string, online: boolean, state?: 'not-set-up' | 'ok' | 'failing') =>
+		({ id, online, ssh: state && { state } }) as Device;
+
+	test('the first online device without access', () => {
+		const devices = [
+			dev('phone', true), // no sshd to log in to
+			dev('off', false, 'not-set-up'),
+			dev('done', true, 'ok'),
+			dev('broken', true, 'failing'),
+			dev('next', true, 'not-set-up'),
+			dev('later', true, 'not-set-up')
+		];
+		expect(sshCandidate(devices)?.id).toBe('next');
+	});
+
+	test('nothing left to set up', () => {
+		expect(sshCandidate([dev('a', true, 'ok'), dev('b', false, 'not-set-up')])).toBeUndefined();
+		expect(sshCandidate([])).toBeUndefined();
 	});
 });

@@ -244,17 +244,19 @@
 				</Card>
 			{:else if !device.measuredBy}
 				<Card
-					title="No agent on this machine"
+					title={agentRuns(device.os)
+						? 'Install the agent for CPU, memory and disk'
+						: 'No agent on this machine'}
 					description="Tailscale shows whether it's connected and how the hub reaches it. The agent adds CPU, memory, disk, battery and what's running."
 				>
 					<div class="space-y-3 p-4 text-[13px] text-fg-muted">
 						{#if agentRuns(device.os)}
 							<AdminOnly>
 								<p>
-									Add agent gives you a command to run on {device.name}. It installs a small
-									background service for your user, without root.
+									Run one command on {device.name}, or let Roost run it over SSH once it can log in.
+									It installs a small background service for your user, without root.
 								</p>
-								<AddAgent {device} variant="primary" />
+								<AddAgent {device} label="Install the agent" variant="primary" />
 								{#snippet fallback()}
 									<p>An admin can install the agent from the {@render agentsLink()} page.</p>
 								{/snippet}
