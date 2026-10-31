@@ -129,6 +129,19 @@ func TestCheck(t *testing.T) {
 		{"over a year of activity", func(s *settings.Settings) { s.Retention.ActivityDays = 366 }, true},
 		{"a long history", func(s *settings.Settings) { s.Retention.HistoryDays = settings.MaxHistoryDays + 1 }, true},
 		{"long check results", func(s *settings.Settings) { s.Retention.ChecksDays = settings.MaxChecksDays + 1 }, true},
+		{"daily reminders", func(s *settings.Settings) { s.Notifications.RemindHours = 24 }, false},
+		{"a reminder every week", func(s *settings.Settings) { s.Notifications.RemindHours = settings.MaxRemindHours }, false},
+		{"a reminder less often than that", func(s *settings.Settings) { s.Notifications.RemindHours = settings.MaxRemindHours + 1 }, true},
+		{"a reminder in the past", func(s *settings.Settings) { s.Notifications.RemindHours = -1 }, true},
+		{"quiet hours in a time zone", func(s *settings.Settings) {
+			s.Notifications.Quiet.Enabled, s.Notifications.Quiet.Timezone = true, "Europe/Berlin"
+		}, false},
+		{"quiet hours in UTC", func(s *settings.Settings) { s.Notifications.Quiet.Timezone = "UTC" }, false},
+		{"quiet hours in a time zone that doesn't exist", func(s *settings.Settings) { s.Notifications.Quiet.Timezone = "Mars/Olympus" }, true},
+		{"quiet hours that start late", func(s *settings.Settings) { s.Notifications.Quiet.Start = "25:00" }, true},
+		{"quiet hours without a minute", func(s *settings.Settings) { s.Notifications.Quiet.End = "7" }, true},
+		{"quiet hours with a space", func(s *settings.Settings) { s.Notifications.Quiet.End = " 07:00" }, true},
+		{"quiet hours that never end", func(s *settings.Settings) { s.Notifications.Quiet.Start, s.Notifications.Quiet.End = "07:00", "07:00" }, true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
@@ -138,6 +151,49 @@ func TestCheck(t *testing.T) {
 				t.Errorf("Check() error = %v, want an error: %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestQuietHours_Active(t *testing.T) {
+	t.Parallel()
+	night := settings.QuietHours{Enabled: true, Start: "22:00", End: "07:00", Timezone: "UTC"}
+	day := settings.QuietHours{Enabled: true, Start: "09:00", End: "17:30", Timezone: "UTC"}
+	berlin := settings.QuietHours{Enabled: true, Start: "22:00", End: "07:00", Timezone: "Europe/Berlin"}
+	at := func(s string) time.Time {
+		t.Helper()
+		v, err := time.Parse(time.RFC3339, s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return v
+	}
+	for _, tt := range []struct {
+		name string
+		q    settings.QuietHours
+		at   time.Time
+		want bool
+	}{
+		{"before the night", night, at("2026-11-01T21:59:00Z"), false},
+		{"as the night starts", night, at("2026-11-01T22:00:00Z"), true},
+		{"after midnight", night, at("2026-11-02T03:15:00Z"), true},
+		{"just before it ends", night, at("2026-11-02T06:59:00Z"), true},
+		{"as it ends", night, at("2026-11-02T07:00:00Z"), false},
+		{"midday", night, at("2026-11-02T12:00:00Z"), false},
+		{"a day's hours, inside", day, at("2026-11-02T17:29:00Z"), true},
+		{"a day's hours, as they end", day, at("2026-11-02T17:30:00Z"), false},
+		{"a day's hours, before", day, at("2026-11-02T08:59:00Z"), false},
+		// 21:30 UTC is 22:30 in Berlin in winter and 23:30 in summer.
+		{"another time zone in winter", berlin, at("2026-11-02T21:30:00Z"), true},
+		{"another time zone, an hour earlier", berlin, at("2026-11-02T20:30:00Z"), false},
+		{"another time zone in summer", berlin, at("2026-07-02T20:30:00Z"), true},
+		{"another time zone in summer, just before", berlin, at("2026-07-02T19:30:00Z"), false},
+		{"off", settings.QuietHours{Start: "22:00", End: "07:00", Timezone: "UTC"}, at("2026-11-01T23:00:00Z"), false},
+		{"hours that can't be read", settings.QuietHours{Enabled: true, Start: "late", End: "07:00"}, at("2026-11-01T23:00:00Z"), false},
+		{"hours that never end", settings.QuietHours{Enabled: true, Start: "07:00", End: "07:00"}, at("2026-11-01T07:00:00Z"), false},
+	} {
+		if got := tt.q.Active(tt.at); got != tt.want {
+			t.Errorf("%s: Active(%s) = %v, want %v", tt.name, tt.at.Format(time.RFC3339), got, tt.want)
+		}
 	}
 }
 
@@ -237,6 +293,13 @@ func TestChanges(t *testing.T) {
 		}},
 		{"retention", func(s *settings.Settings) { s.Retention.HistoryDays, s.Retention.ActivityDays = 1, 90 },
 			[]string{"Changed how long Roost keeps history: activity log 30 days → 90 days, device history 7 days → 1 day"}},
+		{"reminders", func(s *settings.Settings) { s.Notifications.RemindHours = 6 },
+			[]string{"Set reminders about open alerts to every 6 hours"}},
+		{"an hourly reminder", func(s *settings.Settings) { s.Notifications.RemindHours = 1 },
+			[]string{"Set reminders about open alerts to every hour"}},
+		{"quiet hours", func(s *settings.Settings) {
+			s.Notifications.Quiet = settings.QuietHours{Enabled: true, Start: "23:00", End: "06:30", Timezone: "Europe/Berlin", AllowCritical: true}
+		}, []string{"Set quiet hours to 23:00–06:30 Europe/Berlin, with critical alerts getting through"}},
 		{"several parts", func(s *settings.Settings) { s.General.Name, s.Rules.Disk = "Lab", false },
 			[]string{`Renamed Roost to "Lab"`, "Turned off alerts for disk"}},
 	} {

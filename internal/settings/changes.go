@@ -92,7 +92,40 @@ func Changes(before, after Settings) []string {
 	if len(keep) > 0 {
 		out = append(out, "Changed how long Roost keeps history: "+strings.Join(keep, ", "))
 	}
+	return append(out, notificationChanges(before.Notifications, after.Notifications)...)
+}
+
+func notificationChanges(b, a Notifications) []string {
+	var out []string
+	switch {
+	case b.RemindHours == a.RemindHours:
+	case a.RemindHours == 0:
+		out = append(out, "Turned off reminders about open alerts")
+	default:
+		out = append(out, "Set reminders about open alerts to every "+hours(a.RemindHours))
+	}
+	switch {
+	case b.Quiet == a.Quiet:
+	case !a.Quiet.Enabled:
+		out = append(out, "Turned off quiet hours")
+	default:
+		msg := fmt.Sprintf("Set quiet hours to %s–%s", a.Quiet.Start, a.Quiet.End)
+		if a.Quiet.Timezone != "" {
+			msg += " " + a.Quiet.Timezone
+		}
+		if a.Quiet.AllowCritical {
+			msg += ", with critical alerts getting through"
+		}
+		out = append(out, msg)
+	}
 	return out
+}
+
+func hours(n int) string {
+	if n == 1 {
+		return "hour"
+	}
+	return fmt.Sprintf("%d hours", n)
 }
 
 // ruleLabels name the rules in ruleFlags' order.
