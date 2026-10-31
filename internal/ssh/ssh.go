@@ -1,8 +1,10 @@
 // Package ssh is how Roost logs in to the tailnet's machines over SSH, for
 // terminals, files and Docker. Roost has its own key (see LoadKey), and an
 // admin adds it to a machine's authorized_keys, for the account Roost should
-// log in as. Roost trusts the host key a machine offers the first time, and
-// refuses one that changes until an admin resets it.
+// log in as. A machine that runs Tailscale SSH needs no key, if the tailnet
+// policy lets Roost in (see Method and Refusal). Roost trusts the host key a
+// machine offers the first time, and refuses one that changes until an admin
+// resets it.
 //
 // A Manager keeps one connection to each machine for commands, files and the
 // Docker socket, and closes it after it's been idle for IdleTimeout. Each
