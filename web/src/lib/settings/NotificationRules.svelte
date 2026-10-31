@@ -56,7 +56,13 @@
 			const saved = await changeSettings({
 				notifications: {
 					remindHours: change.remindHours,
-					quiet: change.quiet ? changedFields(edited.quiet, draft.base.quiet) : undefined
+					// The hours are hidden while quiet hours are off, so whatever was typed
+					// in them and left isn't sent.
+					quiet: change.quiet
+						? edited.quiet.enabled
+							? changedFields(edited.quiet, draft.base.quiet)
+							: { enabled: false }
+						: undefined
 				}
 			});
 			draft.adopt(saved.settings.notifications);
