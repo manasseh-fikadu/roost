@@ -11,6 +11,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os/exec"
@@ -35,8 +36,13 @@ type Server struct {
 	handler    Handler
 	sockets    map[string]func(net.Conn)
 	// sftp is the folder SFTP starts in, or "" while the server offers none.
-	sftp     string
-	refuse   bool
+	sftp   string
+	refuse bool
+	// tailscale is the policy of a server that answers as Tailscale SSH
+	// does, or nil.
+	tailscale *Policy
+	// holds are the logins that wait for a browser check, which Drop ends.
+	holds    []chan struct{}
 	dialed   []string
 	logins   []string
 	conns    map[net.Conn]struct{}
@@ -170,6 +176,43 @@ func (s *Server) ServeSFTP(home string) {
 	s.sftp = home
 }
 
+// Policy is what the tailnet policy says of the client that logs in to a
+// server that answers as Tailscale SSH does.
+type Policy int
+
+// The policies a server can follow.
+const (
+	// PolicyAccept lets the client in, whatever key it has, as an "accept"
+	// rule does.
+	PolicyAccept Policy = iota
+	// PolicyCheck holds the login while it asks the client to visit a URL, as
+	// a "check" rule does.
+	PolicyCheck
+	// PolicyDenyNode turns the client away: no rule lets it SSH to this
+	// machine.
+	PolicyDenyNode
+	// PolicyDenyUser turns the client away: no rule lets it log in as the
+	// user it asked for.
+	PolicyDenyUser
+)
+
+// The banners that Tailscale SSH sends before it turns a client away or
+// holds it. CheckBanner is what the control server's check action says.
+const (
+	CheckBanner    = "# Tailscale SSH requires an additional check.\n# To authenticate, visit: https://login.tailscale.com/a/abc123\n"
+	DenyNodeBanner = "tailscale: tailnet policy does not permit you to SSH to this node\n"
+	DenyUserBanner = "tailscale: tailnet policy does not permit you to SSH as user %q\n"
+)
+
+// TailscaleSSH makes the server answer as Tailscale SSH does: it says so in
+// its version, takes a client in without a key if p lets it, and otherwise
+// sends a banner that says why not. Authorize makes no difference.
+func (s *Server) TailscaleSSH(p Policy) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.tailscale = &p
+}
+
 // Refuse makes Dial refuse connections while refuse is true, as if nothing
 // listened.
 func (s *Server) Refuse(refuse bool) {
@@ -265,6 +308,10 @@ func (s *Server) Drop() {
 	for c := range s.conns {
 		_ = c.Close()
 	}
+	for _, h := range s.holds {
+		close(h)
+	}
+	s.holds = nil
 }
 
 // Close closes every connection, refuses new ones, and waits for the
@@ -300,6 +347,9 @@ func (s *Server) serve(conn net.Conn) {
 	config.AddHostKey(s.hostKey)
 	for _, k := range s.others {
 		config.AddHostKey(k)
+	}
+	if s.tailscale != nil {
+		s.tailscaleConfig(config)
 	}
 	s.mu.Unlock()
 	sconn, chans, reqs, err := gossh.NewServerConn(conn, config)
@@ -351,6 +401,44 @@ func (s *Server) serve(conn net.Conn) {
 		default:
 			_ = nc.Reject(gossh.UnknownChannelType, "unknown channel type")
 		}
+	}
+}
+
+// tailscaleConfig makes config follow the server's Tailscale SSH policy, the
+// way tailscaled does: it lets in "none" authentication and any key
+// alike, and the policy decides.
+func (s *Server) tailscaleConfig(config *gossh.ServerConfig) {
+	var pre gossh.ServerPreAuthConn
+	hold := make(chan struct{})
+	s.holds = append(s.holds, hold)
+	auth := func(c gossh.ConnMetadata) (*gossh.Permissions, error) {
+		s.mu.Lock()
+		policy := *s.tailscale
+		s.mu.Unlock()
+		banner := ""
+		switch policy {
+		case PolicyAccept:
+			return &gossh.Permissions{}, nil
+		case PolicyCheck:
+			_ = pre.SendAuthBanner(CheckBanner)
+			<-hold
+		case PolicyDenyNode:
+			banner = DenyNodeBanner
+		case PolicyDenyUser:
+			banner = fmt.Sprintf(DenyUserBanner, c.User())
+		}
+		if banner != "" {
+			_ = pre.SendAuthBanner(banner)
+		}
+		// An empty partial success ends the login, as tailscaled's does.
+		return nil, &gossh.PartialSuccessError{}
+	}
+	config.ServerVersion = "SSH-2.0-Tailscale"
+	config.PreAuthConnCallback = func(c gossh.ServerPreAuthConn) { pre = c }
+	config.NoClientAuth = true
+	config.NoClientAuthCallback = auth
+	config.PublicKeyCallback = func(c gossh.ConnMetadata, _ gossh.PublicKey) (*gossh.Permissions, error) {
+		return auth(c)
 	}
 }
 

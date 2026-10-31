@@ -109,6 +109,12 @@ type Access struct {
 	// Error says why the last try failed, while the State is StateFailing
 	// or StateHostKeyChanged.
 	Error string
+	// Method is how Roost logged in the last time it did, or "" if it hasn't
+	// since it started, or while it can't.
+	Method Method
+	// Refusal says why the machine's Tailscale SSH turned Roost away, while
+	// the State is StateFailing and the tailnet policy needs a change.
+	Refusal Refusal
 	// CheckedAt is when Roost last checked the machine, or zero.
 	CheckedAt time.Time
 	// Tmux and Docker say whether the machine has tmux, and a Docker
@@ -610,9 +616,18 @@ func (m *Manager) connect(ctx context.Context, t target, a store.SSHAccess) (*go
 	ctx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
 	var hostKeyErr error
+	// Tailscale SSH says why it turns a client away in a banner. The
+	// handshake calls this on this goroutine.
+	var banners []string
 	config := &gossh.ClientConfig{
 		User: a.User,
+		// Before it tries these, the client sends "none", which is all that
+		// Tailscale SSH asks for.
 		Auth: []gossh.AuthMethod{gossh.PublicKeys(key.signer)},
+		BannerCallback: func(message string) error {
+			banners = append(banners, message)
+			return nil
+		},
 		HostKeyCallback: func(_ string, _ net.Addr, offered gossh.PublicKey) error {
 			hostKeyErr = m.checkHostKey(ctx, t, offered)
 			return hostKeyErr
@@ -628,7 +643,7 @@ func (m *Manager) connect(ctx context.Context, t target, a store.SSHAccess) (*go
 		}
 	}
 	if err != nil {
-		return nil, m.connectError(t, a, err)
+		return nil, m.connectError(t, a, err, nil)
 	}
 	// The deadline bounds the handshake, and stopping clears it.
 	stop := context.AfterFunc(ctx, func() { _ = conn.SetDeadline(time.Now()) })
@@ -638,7 +653,7 @@ func (m *Manager) connect(ctx context.Context, t target, a store.SSHAccess) (*go
 		if hostKeyErr != nil {
 			return nil, hostKeyErr
 		}
-		return nil, m.connectError(t, a, cmp.Or(err, ctx.Err()))
+		return nil, m.connectError(t, a, cmp.Or(err, ctx.Err()), banners)
 	}
 	_ = conn.SetDeadline(time.Time{})
 	client := gossh.NewClient(c, chans, reqs)
@@ -720,9 +735,13 @@ func refused(err error) bool {
 	return errors.Is(err, syscall.ECONNREFUSED) || strings.Contains(err.Error(), "connection refused")
 }
 
-// connectError says why logging in to t failed with err.
-func (m *Manager) connectError(t target, a store.SSHAccess, err error) error {
+// connectError says why logging in to t failed with err, after the banners
+// it sent.
+func (m *Manager) connectError(t target, a store.SSHAccess, err error, banners []string) error {
 	msg := err.Error()
+	if refusal, why := tailscaleRefusal(t.name, a.User, banners); why != "" {
+		return &ConnectError{Msg: why, Err: err, Refusal: refusal}
+	}
 	switch {
 	case strings.Contains(msg, "unable to authenticate"):
 		msg = "Roost's key isn't in the authorized_keys of " + a.User + " on " + t.name
@@ -746,6 +765,9 @@ type ConnectError struct {
 	// Msg says why, for people.
 	Msg string
 	Err error
+	// Refusal is set if the machine's Tailscale SSH turned Roost away because
+	// of the tailnet policy.
+	Refusal Refusal
 }
 
 func (e *ConnectError) Error() string { return e.Msg }

@@ -107,7 +107,7 @@ func (m *Manager) dialShared(ctx context.Context, t target, a store.SSHAccess, g
 	// What a caller finds once it stops waiting has to be settled by then. A
 	// caller that retries at once must dial afresh, not join the attempt that
 	// failed, and one that asks what happened must find out.
-	m.record(t.id, gen, err)
+	m.record(t.id, gen, client, err)
 	if err != nil {
 		drop()
 	}
