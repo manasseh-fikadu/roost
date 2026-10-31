@@ -23,7 +23,10 @@ type fakeSystemctl struct {
 	aliases map[string]string
 	// fail makes a scope's runs fail.
 	fail map[systemd.Scope]error
-	runs []string
+	// files holds the state of each service installed in each scope, such as
+	// "enabled", whether or not systemd has loaded it.
+	files map[systemd.Scope]map[string]string
+	runs  []string
 }
 
 type fakeUnit struct {
@@ -44,10 +47,24 @@ func (f *fakeSystemctl) run(_ context.Context, args ...string) ([]byte, error) {
 	var out strings.Builder
 	switch args[0] {
 	case "list-units":
+		all := slices.Contains(args, "--all")
 		for _, name := range sortedKeys(f.units[scope]) {
-			if u := f.units[scope][name]; u.active == "failed" {
-				fmt.Fprintf(&out, "%s loaded failed %s %s\n", name, u.sub, u.desc)
+			if u := f.units[scope][name]; all || u.active == "failed" {
+				fmt.Fprintf(&out, "%s loaded %s %s %s\n", name, u.active, u.sub, u.desc)
 			}
+		}
+		if all {
+			// Another unit needs this one, which isn't there.
+			out.WriteString("ghost.service not-found inactive dead ghost.service\n")
+		}
+	case "list-unit-files":
+		names := make([]string, 0, len(f.files[scope]))
+		for name := range f.files[scope] {
+			names = append(names, name)
+		}
+		slices.Sort(names)
+		for _, name := range names {
+			fmt.Fprintf(&out, "%s %s enabled\n", name, f.files[scope][name])
 		}
 	case "show":
 		names := args[slices.Index(args, "--")+1:]
@@ -123,6 +140,13 @@ func newFake() *fakeSystemctl {
 		},
 		aliases: map[string]string{"sshd.service": "ssh.service"},
 		fail:    map[systemd.Scope]error{},
+		files: map[systemd.Scope]map[string]string{
+			systemd.System: {
+				"ssh.service": "enabled", "docker.service": "enabled", "nginx.service": "enabled", "cron.service": "enabled",
+				"postgresql.service": "disabled", "getty@.service": "enabled", "systemd-tmpfiles.service": "static",
+			},
+			systemd.User: {"app.service": "enabled", "old.service": "disabled"},
+		},
 	}
 }
 
@@ -214,6 +238,90 @@ func TestCollector_nothingToShow(t *testing.T) {
 		}
 		if len(f.runs) != 1 {
 			t.Errorf("systemctl ran %q, want only list-units with nothing to show", f.runs)
+		}
+	})
+}
+
+func TestCollector_Installed(t *testing.T) {
+	t.Parallel()
+	list := func(t *testing.T, c *systemd.Collector) []string {
+		t.Helper()
+		got, err := c.Installed(t.Context())
+		if err != nil {
+			t.Fatalf("Installed() error = %v", err)
+		}
+		var out []string
+		for _, i := range got {
+			out = append(out, fmt.Sprintf("%s %s %q", i.Key(), i.Active, i.Description))
+		}
+		return out
+	}
+
+	f := newFake()
+	c := systemd.NewCollector(systemd.Options{Run: f.run, UserScope: true})
+	want := []string{
+		// Loaded services come with what systemd says of them, and the ones
+		// installed and not loaded come without. Templates, static units and
+		// the units that don't exist aren't listed.
+		`cron.service inactive "Regular background program processing daemon"`,
+		`docker.service active "Docker Application Container Engine"`,
+		`nginx.service failed "A high performance web server"`,
+		`postgresql.service  ""`,
+		`ssh.service active "OpenBSD Secure Shell server"`,
+		`user:app.service active "My app"`,
+		`user:backup.service failed "Nightly backup"`,
+		`user:old.service  ""`,
+	}
+	if got := list(t, c); !slices.Equal(got, want) {
+		t.Errorf("Installed() =\n%q\nwant\n%q", got, want)
+	}
+
+	// Without a user session, only the system's.
+	system := systemd.NewCollector(systemd.Options{Run: f.run})
+	for _, line := range list(t, system) {
+		if strings.HasPrefix(line, "user:") {
+			t.Errorf("Installed() without the user scope listed %s", line)
+		}
+	}
+
+	// One scope failing leaves the other's.
+	f.failScope(systemd.User, errors.New("no bus"))
+	if got := list(t, c); len(got) != 5 {
+		t.Errorf("Installed() with the user scope failing = %q, want the system's 5", got)
+	}
+	f.failScope(systemd.System, errors.New("no systemd"))
+	if got, err := c.Installed(t.Context()); err == nil {
+		t.Errorf("Installed() with every scope failing = %v, want an error", got)
+	}
+}
+
+func TestCollector_Refresh(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		f := newFake()
+		var (
+			mu      sync.Mutex
+			watched = []string{"ssh.service"}
+		)
+		c := systemd.NewCollector(systemd.Options{Run: f.run, Watched: func() []string {
+			mu.Lock()
+			defer mu.Unlock()
+			return slices.Clone(watched)
+		}})
+		go c.Run(t.Context())
+		<-c.Changes()
+		if got := summary(c.Reading().Units); !slices.Contains(got, "ssh.service active/running *") || slices.Contains(got, "cron.service inactive/dead *") {
+			t.Fatalf("units = %q, want only ssh watched", got)
+		}
+
+		mu.Lock()
+		watched = append(watched, "cron.service")
+		mu.Unlock()
+		c.Refresh()
+		c.Refresh() // One is enough.
+		<-c.Changes()
+		if got := summary(c.Reading().Units); !slices.Contains(got, "cron.service inactive/dead *") {
+			t.Errorf("units after Refresh() = %q, want cron watched, without waiting for the interval", got)
 		}
 	})
 }

@@ -142,6 +142,8 @@ type Collector struct {
 	userScope bool
 	log       *slog.Logger
 	changes   chan struct{}
+	// refresh asks Run to ask systemd now.
+	refresh chan struct{}
 
 	mu      sync.Mutex
 	reading Reading
@@ -157,6 +159,7 @@ func NewCollector(opts Options) *Collector {
 		userScope: opts.UserScope,
 		log:       opts.Logger,
 		changes:   make(chan struct{}, 1),
+		refresh:   make(chan struct{}, 1),
 		byScope:   map[Scope][]Unit{},
 	}
 	if c.run == nil {
@@ -181,7 +184,17 @@ func (c *Collector) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-t.C:
+		case <-c.refresh:
 		}
+	}
+}
+
+// Refresh makes Run ask systemd soon, such as after the watched units
+// change, instead of when its interval ends.
+func (c *Collector) Refresh() {
+	select {
+	case c.refresh <- struct{}{}:
+	default:
 	}
 }
 
