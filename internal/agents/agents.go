@@ -146,6 +146,8 @@ type Registry struct {
 	st      *store.Store
 	log     *slog.Logger
 	changes chan struct{}
+	// window is how far back an agent's sustained CPU averages.
+	window func() time.Duration
 
 	mu     sync.Mutex
 	agents map[string]*agent
@@ -170,8 +172,16 @@ func NewRegistry(st *store.Store, log *slog.Logger) *Registry {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Registry{st: st, log: log, changes: make(chan struct{}, 1), agents: map[string]*agent{}}
+	return &Registry{
+		st: st, log: log, changes: make(chan struct{}, 1), agents: map[string]*agent{},
+		window: func() time.Duration { return hostmetrics.DefaultWindow },
+	}
 }
+
+// SetWindow makes the registry average each agent's CPU over the span that
+// window returns, up to hostmetrics.MaxWindow, as heartbeats come in. Call it
+// before the first heartbeat.
+func (r *Registry) SetWindow(window func() time.Duration) { r.window = window }
 
 // Load reads the reports the store kept, so Roost knows the devices before
 // their agents report again. A report it can't read is skipped.
@@ -215,6 +225,8 @@ func (r *Registry) Record(ctx context.Context, deviceID string, hb Heartbeat, no
 	if hb.V != 1 {
 		return Report{}, ErrVersion
 	}
+	// The window can come from the store, so it isn't asked for under the lock.
+	window := r.window()
 	r.mu.Lock()
 	a := r.agents[deviceID]
 	switch {
@@ -225,7 +237,7 @@ func (r *Registry) Record(ctx context.Context, deviceID string, hb Heartbeat, no
 	case a.report.Stale(now):
 		r.log.Info("an agent is reporting again", "device", deviceID, "after", now.Sub(a.report.ReceivedAt).Round(time.Second))
 	}
-	a.report = a.parse(hb, now)
+	a.report = a.parse(hb, now, window)
 	var (
 		save    []byte
 		saveErr error
@@ -277,13 +289,13 @@ func (r *Registry) changed() {
 
 // parse checks a heartbeat that arrived at now, and works out network rates
 // from the counters in it and the previous one.
-func (a *agent) parse(hb Heartbeat, now time.Time) Report {
+func (a *agent) parse(hb Heartbeat, now time.Time, window time.Duration) Report {
 	m := hb.Metrics
 	s := hostmetrics.Sample{At: now, CPU: percent(m.CPU), Procs: int(upTo(m.Procs, maxProcs))}
 	if s.CPU != nil {
 		a.cpu.Add(now, *s.CPU)
 	}
-	s.CPUSustained = a.cpu.Average(now)
+	s.CPUSustained = a.cpu.Average(now, window)
 	if len(m.Load) == 3 && m.Load[0].v != nil && m.Load[1].v != nil && m.Load[2].v != nil {
 		s.Load = &[3]float64{max(0, *m.Load[0].v), max(0, *m.Load[1].v), max(0, *m.Load[2].v)}
 	}

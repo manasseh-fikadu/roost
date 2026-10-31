@@ -74,7 +74,8 @@ func admin(ctx context.Context, args []string, stdout, stderr io.Writer) (err er
 	}
 
 	dbPath := filepath.Join(dataDir, "roost.db")
-	st, err := store.Open(ctx, dbPath, store.Options{})
+	// This command doesn't know how long an admin chose to keep history.
+	st, err := store.Open(ctx, dbPath, store.Options{NoPrune: true})
 	if err != nil {
 		return fmt.Errorf("open %s: %w", dbPath, err)
 	}

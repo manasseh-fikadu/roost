@@ -39,8 +39,8 @@ type sources struct {
 	checks []checks.Status
 	// pings holds the latest pings of each peer, by device ID.
 	pings map[string]checks.PingStatus
-	// thresholds are when a device needs attention, from the settings.
-	thresholds settings.Thresholds
+	// global holds the settings admins changed.
+	global settings.Settings
 	// docker is what Roost read of the containers on its machine, and
 	// systemd of its units, or nil if it doesn't read them.
 	docker  *docker.Reading
@@ -54,8 +54,8 @@ type sources struct {
 // machine Roost runs on can be two nodes, and only Roost's own counts.
 type machine struct {
 	deviceID string
-	// sustained is its CPU, averaged over hostmetrics.SustainedWindow, if
-	// Roost knows it.
+	// sustained is its CPU, averaged over the settings' window, if Roost
+	// knows it.
 	sustained *float64
 	// current reports whether its metrics say what's true now: Roost's
 	// own, while it can measure, or its agent's, while it reports.
@@ -68,10 +68,12 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 	s := src.tailnet
 	out := Snapshot{
 		GeneratedAt: now,
-		Hub:         Hub{Version: src.version},
-		Collectors:  []Collector{newCollector("Tailscale status", s.StatusAt, s.StatusErr)},
-		Uplink:      newUplink(s),
-		Devices:     []Device{},
+		Hub: Hub{
+			Name: src.global.General.Name, Version: src.version, Thresholds: Thresholds(src.global.Thresholds),
+		},
+		Collectors: []Collector{newCollector("Tailscale status", s.StatusAt, s.StatusErr)},
+		Uplink:     newUplink(s),
+		Devices:    []Device{},
 	}
 	if h := src.host; h != nil {
 		var at time.Time
@@ -112,7 +114,10 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 	hostNode := slices.ContainsFunc(st.Peers, func(d tailnet.Device) bool { return d.SameMachine })
 	var machines []machine
 	for i, d := range devices {
-		dev := deviceInput{device: d, self: i == 0, settings: src.settings[d.ID], thresholds: src.thresholds}
+		dev := deviceInput{
+			device: d, self: i == 0, settings: src.settings[d.ID],
+			thresholds: src.thresholdsFor(d.ID), rules: src.global.Rules,
+		}
 		// Roost measures the machine it runs on, and on a machine it can't
 		// measure, an agent can. In embedded mode, that machine's own node
 		// is a peer.
@@ -208,7 +213,9 @@ type deviceInput struct {
 	// when it enrolled, if it has. They're only used if host is nil.
 	agent      *agents.Report
 	enrollment *store.Enrollment
+	// thresholds are the device's own, or else the settings'.
 	thresholds settings.Thresholds
+	rules      settings.Rules
 }
 
 // newDevice returns the device of in, and the machine it is, if Roost
@@ -287,12 +294,13 @@ func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) (Device, machi
 		DisplayName:  in.settings.DisplayName,
 		Kind:         DeviceKind(in.settings.Kind),
 		AlertOffline: alertOffline(d, in.settings),
+		Thresholds:   newDeviceThresholds(in.settings.Thresholds),
 		Notes:        in.settings.Notes,
 	}
 	if !validKind(out.Settings.Kind) {
 		out.Settings.Kind = ""
 	}
-	out.Status, out.StatusReason = deviceStatus(out, m.sustained, in.thresholds, now)
+	out.Status, out.StatusReason = deviceStatus(out, m.sustained, in.thresholds, in.rules, now)
 	return out, m
 }
 
@@ -357,25 +365,25 @@ func historyID(d tailnet.Device, self bool) string {
 }
 
 // deviceStatus works out whether d needs attention at now, by the
-// thresholds t, and why. sustained is its CPU averaged over
-// hostmetrics.SustainedWindow, if Roost knows it.
-func deviceStatus(d Device, sustained *float64, t settings.Thresholds, now time.Time) (Status, string) {
+// thresholds t, and why, for the rules that are on. sustained is its CPU
+// averaged over t's CPU window, if Roost knows it.
+func deviceStatus(d Device, sustained *float64, t settings.Thresholds, rules settings.Rules, now time.Time) (Status, string) {
 	if !d.Online {
 		return StatusOffline, "Not connected to the tailnet"
 	}
 	var reasons []string
 	if m := d.Metrics; m != nil {
-		if pct, ok := percent(m.Disk); ok && pct >= t.DiskWarn {
+		if pct, ok := percent(m.Disk); ok && rules.Disk && pct >= t.DiskWarn {
 			reasons = append(reasons, fmt.Sprintf("Disk %.0f%% full", pct))
 		}
-		if pct, ok := percent(m.Memory); ok && pct >= t.MemoryWarn {
+		if pct, ok := percent(m.Memory); ok && rules.Memory && pct >= t.MemoryWarn {
 			reasons = append(reasons, fmt.Sprintf("Memory %.0f%% used", pct))
 		}
 	}
-	if sustained != nil && *sustained >= t.CPUWarn {
-		reasons = append(reasons, fmt.Sprintf("CPU %.0f%% for %v", *sustained, shortDuration(hostmetrics.SustainedWindow)))
+	if sustained != nil && rules.CPU && *sustained >= t.CPUWarn {
+		reasons = append(reasons, fmt.Sprintf("CPU %.0f%% for %v", *sustained, shortDuration(t.CPUWindow())))
 	}
-	if d.KeyExpiry != nil {
+	if d.KeyExpiry != nil && rules.KeyExpiry {
 		switch left := d.KeyExpiry.Sub(now); {
 		case left <= 0:
 			reasons = append(reasons, "Tailscale key expired")
@@ -386,7 +394,7 @@ func deviceStatus(d Device, sustained *float64, t settings.Thresholds, now time.
 	if d.Path.Unanswered {
 		reasons = append(reasons, "Not answering pings")
 	}
-	if d.Agent != nil && d.Agent.Stale {
+	if d.Agent != nil && d.Agent.Stale && rules.AgentStopped {
 		reasons = append(reasons, "Agent stopped reporting")
 	}
 	if len(reasons) > 0 {
@@ -506,4 +514,42 @@ func hasDocker(d tailnet.Device, self, hostNode bool, src sources) bool {
 		return src.docker != nil && (d.SameMachine || !hostNode)
 	}
 	return src.ssh[id].DockerSocket != ""
+}
+
+// thresholdsFor returns the thresholds for the device with an ID: its own,
+// where an admin set them, and else the settings'.
+func (s sources) thresholdsFor(deviceID string) settings.Thresholds {
+	return s.global.Thresholds.For(s.overridesFor(deviceID))
+}
+
+// overridesFor returns the thresholds an admin set for the device with an ID.
+// The machine Roost runs on can be two nodes in embedded mode, Roost's own and
+// a peer, and Roost measures the machine once, so both nodes get the same
+// thresholds: those of Roost's own node, and for what it leaves out, the
+// peer's.
+func (s sources) overridesFor(deviceID string) store.ThresholdOverrides {
+	st := s.tailnet.Status
+	if st == nil {
+		return s.settings[deviceID].Thresholds
+	}
+	nodes := []string{st.Self.ID}
+	for _, p := range st.Peers {
+		if p.SameMachine {
+			nodes = append(nodes, p.ID)
+		}
+	}
+	if !slices.Contains(nodes, deviceID) {
+		return s.settings[deviceID].Thresholds
+	}
+	var out store.ThresholdOverrides
+	for _, id := range nodes {
+		out = out.Or(s.settings[id].Thresholds)
+	}
+	return out
+}
+
+// newDeviceThresholds returns the thresholds of a device as the API shows
+// them.
+func newDeviceThresholds(o store.ThresholdOverrides) DeviceThresholds {
+	return DeviceThresholds(o)
 }

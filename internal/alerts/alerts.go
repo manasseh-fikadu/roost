@@ -74,10 +74,10 @@ type Condition struct {
 	Title, Detail string
 }
 
-// FreshFunc reports whether the rules looked at fresh data about a source,
-// on a device, or with deviceID "", about the source as a whole. An open
-// alert only resolves when its data was fresh.
-type FreshFunc func(source, deviceID string) bool
+// FreshFunc reports whether the rules looked at fresh data for the alert with
+// a key: about its source, on a device, or with deviceID "", about the source
+// as a whole. An open alert only resolves when its data was fresh.
+type FreshFunc func(key, source, deviceID string) bool
 
 // An Engine keeps the open alerts, and opens and resolves them as Apply is
 // told the conditions. It's safe for concurrent use.
@@ -175,7 +175,7 @@ func (e *Engine) Apply(ctx context.Context, conds []Condition, fresh FreshFunc, 
 			continue
 		}
 		a := &o.alert
-		if !fresh(a.Source, a.DeviceID) {
+		if !fresh(key, a.Source, a.DeviceID) {
 			// Without fresh data, Roost can't say it's gone.
 			o.missingSince = time.Time{}
 			continue

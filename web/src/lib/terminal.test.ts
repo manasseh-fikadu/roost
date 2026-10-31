@@ -31,7 +31,7 @@ function device(id: string, ssh?: DeviceSSH, { online = true, self = false } = {
 		rxBytes: 0,
 		txBytes: 0,
 		docker: false,
-		settings: { displayName: '', alertOffline: true, notes: '' },
+		settings: { displayName: '', alertOffline: true, thresholds: {}, notes: '' },
 		ssh
 	};
 }

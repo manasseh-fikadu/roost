@@ -15,6 +15,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/docker"
+	"github.com/manasseh-fikadu/roost/internal/settings"
 	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
@@ -112,8 +113,13 @@ func withStore(t *testing.T, tn *tailnettest.Tailnet, st *store.Store, opts api.
 		opts.Docker = docker.NewFleet(nil, nil)
 		t.Cleanup(opts.Docker.Close)
 	}
+	if opts.Settings == nil {
+		opts.Settings = settings.NewCache(st, nil)
+	}
 	if opts.Feed == nil {
-		opts.Feed = api.NewFeed(api.FeedOptions{Tailnet: opts.Snapshot, Agents: opts.Agents, Checks: opts.Checks, Alerts: opts.Alerts, Store: st})
+		opts.Feed = api.NewFeed(api.FeedOptions{
+			Tailnet: opts.Snapshot, Agents: opts.Agents, Checks: opts.Checks, Alerts: opts.Alerts, Store: st, Settings: opts.Settings,
+		})
 	}
 	return opts
 }

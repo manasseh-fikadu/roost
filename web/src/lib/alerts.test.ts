@@ -45,7 +45,7 @@ function device(id: string, measuredBy?: MeasuredBy): Device {
 		txBytes: 0,
 		measuredBy,
 		docker: false,
-		settings: { displayName: '', alertOffline: true, notes: '' }
+		settings: { displayName: '', alertOffline: true, thresholds: {}, notes: '' }
 	};
 }
 

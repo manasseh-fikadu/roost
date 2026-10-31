@@ -393,7 +393,7 @@ func openAlert(t *testing.T) (http.Handler, *store.Store, *api.Feed, int64) {
 	engine := alerts.NewEngine(st, nil)
 	engine.Apply(t.Context(), []alerts.Condition{{
 		Key: "disk:roost", Source: "metrics", DeviceID: "roost", Severity: alerts.Warning, Title: "Disk 90% full on roost",
-	}}, func(string, string) bool { return true }, time.Now())
+	}}, func(string, string, string) bool { return true }, time.Now())
 	opts := withStore(t, tn, st, api.Options{Alerts: engine})
 	return api.New(opts), st, opts.Feed, engine.Open()[0].ID
 }
@@ -494,7 +494,7 @@ func TestAddAlertNote_storeFails(t *testing.T) {
 	engine := alerts.NewEngine(alertStore, nil)
 	engine.Apply(t.Context(), []alerts.Condition{{
 		Key: "disk:roost", Source: "metrics", DeviceID: "roost", Severity: alerts.Warning, Title: "Disk 90% full on roost",
-	}}, func(string, string) bool { return true }, time.Now())
+	}}, func(string, string, string) bool { return true }, time.Now())
 	id := engine.Open()[0].ID
 	if err := alertStore.Close(); err != nil {
 		t.Fatal(err)

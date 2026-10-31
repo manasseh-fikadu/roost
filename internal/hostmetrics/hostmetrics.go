@@ -24,8 +24,12 @@ const (
 	// Interval is how often a Collector measures the machine, as the old
 	// dashboard did.
 	Interval = 5 * time.Second
-	// SustainedWindow is how far back Sample.CPUSustained averages.
-	SustainedWindow = 5 * time.Minute
+	// DefaultWindow is how far back Sample.CPUSustained averages unless a
+	// Collector is told otherwise.
+	DefaultWindow = 5 * time.Minute
+	// MaxWindow is the longest span a CPUWindow averages over, and so how far
+	// back it remembers.
+	MaxWindow = time.Hour
 )
 
 // Sample is what the machine was doing at one moment. A field is nil, or
@@ -35,8 +39,9 @@ type Sample struct {
 	// CPU is the percentage of time the CPUs were busy since the previous
 	// sample. It's nil in the first sample.
 	CPU *float64
-	// CPUSustained is CPU averaged over the last SustainedWindow. It's nil
-	// until the samples cover most of the window.
+	// CPUSustained is CPU averaged over the last window, which is
+	// DefaultWindow unless the Collector is told otherwise. It's nil until
+	// the samples cover most of the window.
 	CPUSustained *float64
 	// Load is the 1, 5 and 15 minute load averages.
 	Load *[3]float64
@@ -117,8 +122,15 @@ func NewCollector(sys System, log *slog.Logger) *Collector {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Collector{r: &reader{sys: sys}, log: log, changes: make(chan struct{}, 1)}
+	return &Collector{
+		r:   &reader{sys: sys, window: func() time.Duration { return DefaultWindow }},
+		log: log, changes: make(chan struct{}, 1),
+	}
 }
+
+// SetWindow makes the collector average the CPU over the span that window
+// returns, up to MaxWindow, each time it measures. Call it before Run.
+func (c *Collector) SetWindow(window func() time.Duration) { c.r.window = window }
 
 // Run measures the machine now and then every Interval, until ctx ends.
 func (c *Collector) Run(ctx context.Context) {
@@ -180,6 +192,8 @@ type reader struct {
 	prevCPU *cpuTimes
 	prevNet *netTotals
 	recent  CPUWindow
+	// window is how far back CPUSustained averages.
+	window func() time.Duration
 }
 
 type cpuTimes struct{ busy, total uint64 }
@@ -204,7 +218,7 @@ func (r *reader) sample(now time.Time) (Sample, error) {
 		r.recent.Add(now, pct)
 	}
 	r.prevCPU = &cpu
-	s.CPUSustained = r.recent.Average(now)
+	s.CPUSustained = r.recent.Average(now, r.window())
 
 	mem, swap, err := r.memory()
 	if err != nil {
@@ -481,8 +495,8 @@ func findLine(text, prefix string) (string, bool) {
 	return "", false
 }
 
-// CPUWindow holds the CPU readings of the last SustainedWindow, to tell a
-// busy moment from a busy stretch. The zero value is an empty window.
+// CPUWindow holds the CPU readings of the last MaxWindow, to tell a busy
+// moment from a busy stretch. The zero value is an empty window.
 type CPUWindow struct {
 	points []cpuPoint
 }
@@ -493,26 +507,31 @@ type cpuPoint struct {
 }
 
 // Add adds the percentage of time the CPUs were busy at a moment. Moments
-// must be added in order.
+// must be added in order. It forgets readings older than MaxWindow.
 func (w *CPUWindow) Add(at time.Time, cpu float64) {
-	w.points = append(w.points, cpuPoint{at, cpu})
-}
-
-// Average returns the average CPU over the SustainedWindow before now, if
-// the readings cover most of it. It forgets older readings.
-func (w *CPUWindow) Average(now time.Time) *float64 {
 	drop := 0
-	for drop < len(w.points) && now.Sub(w.points[drop].at) > SustainedWindow {
+	for drop < len(w.points) && at.Sub(w.points[drop].at) > MaxWindow {
 		drop++
 	}
-	w.points = w.points[drop:]
-	if len(w.points) < 3 || now.Sub(w.points[0].at) < SustainedWindow*8/10 {
+	w.points = append(w.points[drop:], cpuPoint{at, cpu})
+}
+
+// Average returns the average CPU over the span before now, which can be up
+// to MaxWindow, if the readings cover most of it.
+func (w *CPUWindow) Average(now time.Time, window time.Duration) *float64 {
+	window = min(window, MaxWindow)
+	first := len(w.points)
+	for first > 0 && now.Sub(w.points[first-1].at) <= window {
+		first--
+	}
+	recent := w.points[first:]
+	if len(recent) < 3 || now.Sub(recent[0].at) < window*8/10 {
 		return nil
 	}
 	var sum float64
-	for _, p := range w.points {
+	for _, p := range recent {
 		sum += p.cpu
 	}
-	avg := sum / float64(len(w.points))
+	avg := sum / float64(len(recent))
 	return &avg
 }

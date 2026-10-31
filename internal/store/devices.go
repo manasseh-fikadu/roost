@@ -19,14 +19,42 @@ type DeviceSettings struct {
 	// AlertOffline says whether to alert when the device goes offline, or is
 	// nil for the default.
 	AlertOffline *bool
-	Notes        string
+	// Thresholds replace the settings' for this device.
+	Thresholds ThresholdOverrides
+	Notes      string
+}
+
+// ThresholdOverrides are the thresholds an admin set for one device. A nil
+// one is the settings'.
+type ThresholdOverrides struct {
+	// DiskWarn, DiskCritical, MemoryWarn and CPUWarn are in percent.
+	DiskWarn, DiskCritical, MemoryWarn, CPUWarn *float64
+	// OfflineMinutes is how long the device can be offline before an alert.
+	OfflineMinutes *int
+}
+
+// Or returns o with the thresholds it leaves out taken from other.
+func (o ThresholdOverrides) Or(other ThresholdOverrides) ThresholdOverrides {
+	pick := func(a, b *float64) *float64 {
+		if a != nil {
+			return a
+		}
+		return b
+	}
+	o.DiskWarn, o.DiskCritical = pick(o.DiskWarn, other.DiskWarn), pick(o.DiskCritical, other.DiskCritical)
+	o.MemoryWarn, o.CPUWarn = pick(o.MemoryWarn, other.MemoryWarn), pick(o.CPUWarn, other.CPUWarn)
+	if o.OfflineMinutes == nil {
+		o.OfflineMinutes = other.OfflineMinutes
+	}
+	return o
 }
 
 // DeviceSettings returns the settings of every device that has any, by
 // device ID.
 func (s *Store) DeviceSettings(ctx context.Context) (map[string]DeviceSettings, error) {
 	rows, err := s.db.QueryContext(ctx,
-		"SELECT device_id, display_name, kind, alert_offline, notes FROM device_settings")
+		`SELECT device_id, display_name, kind, alert_offline, notes,
+			disk_warn, disk_critical, memory_warn, cpu_warn, offline_minutes FROM device_settings`)
 	if err != nil {
 		return nil, fmt.Errorf("read device settings: %w", err)
 	}
@@ -34,15 +62,26 @@ func (s *Store) DeviceSettings(ctx context.Context) (map[string]DeviceSettings, 
 	out := map[string]DeviceSettings{}
 	for rows.Next() {
 		var (
-			id    string
-			ds    DeviceSettings
-			alert sql.NullBool
+			id       string
+			ds       DeviceSettings
+			alert    sql.NullBool
+			diskW    sql.NullFloat64
+			diskC    sql.NullFloat64
+			memory   sql.NullFloat64
+			cpu      sql.NullFloat64
+			offlineM sql.NullInt64
 		)
-		if err := rows.Scan(&id, &ds.DisplayName, &ds.Kind, &alert, &ds.Notes); err != nil {
+		if err := rows.Scan(&id, &ds.DisplayName, &ds.Kind, &alert, &ds.Notes, &diskW, &diskC, &memory, &cpu, &offlineM); err != nil {
 			return nil, fmt.Errorf("read device settings: %w", err)
 		}
 		if alert.Valid {
 			ds.AlertOffline = &alert.Bool
+		}
+		ds.Thresholds = ThresholdOverrides{
+			DiskWarn: floatPtr(diskW), DiskCritical: floatPtr(diskC), MemoryWarn: floatPtr(memory), CPUWarn: floatPtr(cpu),
+		}
+		if offlineM.Valid {
+			ds.Thresholds.OfflineMinutes = new(int(offlineM.Int64))
 		}
 		out[id] = ds
 	}
@@ -55,15 +94,21 @@ func (s *Store) DeviceSettings(ctx context.Context) (map[string]DeviceSettings, 
 // SetDeviceSettings replaces a device's settings.
 func (s *Store) SetDeviceSettings(ctx context.Context, deviceID string, ds DeviceSettings) error {
 	var err error
+	t := ds.Thresholds
 	if ds == (DeviceSettings{}) {
 		_, err = s.db.ExecContext(ctx, "DELETE FROM device_settings WHERE device_id = ?", deviceID)
 	} else {
 		_, err = s.db.ExecContext(ctx, `
-			INSERT INTO device_settings (device_id, display_name, kind, alert_offline, notes)
-			VALUES (?, ?, ?, ?, ?)
+			INSERT INTO device_settings (device_id, display_name, kind, alert_offline, notes,
+				disk_warn, disk_critical, memory_warn, cpu_warn, offline_minutes)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT (device_id) DO UPDATE SET display_name = excluded.display_name,
-				kind = excluded.kind, alert_offline = excluded.alert_offline, notes = excluded.notes`,
-			deviceID, ds.DisplayName, ds.Kind, nullBool(ds.AlertOffline), ds.Notes)
+				kind = excluded.kind, alert_offline = excluded.alert_offline, notes = excluded.notes,
+				disk_warn = excluded.disk_warn, disk_critical = excluded.disk_critical,
+				memory_warn = excluded.memory_warn, cpu_warn = excluded.cpu_warn,
+				offline_minutes = excluded.offline_minutes`,
+			deviceID, ds.DisplayName, ds.Kind, nullBool(ds.AlertOffline), ds.Notes,
+			nullFloat(t.DiskWarn), nullFloat(t.DiskCritical), nullFloat(t.MemoryWarn), nullFloat(t.CPUWarn), nullInt(t.OfflineMinutes))
 	}
 	if err != nil {
 		return fmt.Errorf("save device settings: %w", err)
@@ -76,6 +121,13 @@ func nullBool(b *bool) sql.NullBool {
 		return sql.NullBool{}
 	}
 	return sql.NullBool{Bool: *b, Valid: true}
+}
+
+func nullInt(n *int) sql.NullInt64 {
+	if n == nil {
+		return sql.NullInt64{}
+	}
+	return sql.NullInt64{Int64: int64(*n), Valid: true}
 }
 
 // A Ping is the outcome of pinging a device once.

@@ -156,6 +156,7 @@ export const eventKindLabels: Record<EventKind, string> = {
 	check: 'Checks',
 	container: 'Containers',
 	access: 'Access',
+	settings: 'Settings',
 	ssh: 'SSH',
 	terminal: 'Terminals',
 	files: 'Files'

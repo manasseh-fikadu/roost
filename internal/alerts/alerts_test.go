@@ -34,7 +34,7 @@ func newEngine(t *testing.T, st *store.Store) *alerts.Engine {
 	return e
 }
 
-func always(string, string) bool { return true }
+func always(string, string, string) bool { return true }
 
 func disk(pct string, sev alerts.Severity) alerts.Condition {
 	return alerts.Condition{
@@ -151,7 +151,7 @@ func TestEngine_onlyResolvesWithFreshData(t *testing.T) {
 		e.Apply(ctx, []alerts.Condition{disk("90", alerts.Warning), check}, always, time.Now())
 
 		// The laptop's agent went quiet, so its metrics say nothing.
-		stale := func(source, device string) bool { return source != "metrics" || device != "laptop" }
+		stale := func(_, source, device string) bool { return source != "metrics" || device != "laptop" }
 		for range 10 {
 			time.Sleep(time.Minute)
 			e.Apply(ctx, nil, stale, time.Now())

@@ -45,19 +45,34 @@ type Store struct {
 
 	stopPruning context.CancelFunc
 	pruned      chan struct{} // closed when the pruner has stopped
+	// retention says how long to keep history, or is nil for the defaults.
+	// retentionErr is the latest error it returned, so it's logged once. Only
+	// the pruner touches it.
+	retention    func(ctx context.Context, s *Store) (Retention, error)
+	retentionErr error
 }
 
 // Options configures Open.
 type Options struct {
 	// Logger receives migration progress and pruning errors. Nil discards them.
 	Logger *slog.Logger
+	// Retention says how long to keep history, each time the store prunes. It
+	// is given the store to read the setting from. If it returns an error,
+	// the store keeps everything until it works. Nil keeps the defaults of
+	// DefaultRetention.
+	Retention func(ctx context.Context, s *Store) (Retention, error)
+	// NoPrune stops the store deleting history, for a command that opens it
+	// for something else, since it doesn't know how long an admin chose to
+	// keep it.
+	NoPrune bool
 }
 
 // Open opens the SQLite database at path, creating it and its directory if they
 // don't exist, and migrates it to the latest schema. Before migrating a database
 // that already has a schema, it copies it to path + ".bak".
 //
-// Until Close is called, the store deletes expired history once an hour.
+// Until Close is called, the store deletes expired history once an hour,
+// unless opts.NoPrune says not to.
 func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 	return open(ctx, path, opts, migrationFiles())
 }
@@ -74,7 +89,7 @@ func open(ctx context.Context, path string, opts Options, files fs.FS) (*Store, 
 	if err != nil {
 		return nil, err
 	}
-	s := &Store{db: db, log: opts.Logger, pruned: make(chan struct{})}
+	s := &Store{db: db, log: opts.Logger, pruned: make(chan struct{}), retention: opts.Retention}
 	if s.log == nil {
 		s.log = slog.New(slog.DiscardHandler)
 	}
@@ -85,6 +100,10 @@ func open(ctx context.Context, path string, opts Options, files fs.FS) (*Store, 
 	// Pruning runs until Close, even if ctx was only for opening.
 	var pruneCtx context.Context
 	pruneCtx, s.stopPruning = context.WithCancel(context.WithoutCancel(ctx))
+	if opts.NoPrune {
+		close(s.pruned)
+		return s, nil
+	}
 	go func() {
 		defer close(s.pruned)
 		s.pruneHourly(pruneCtx)

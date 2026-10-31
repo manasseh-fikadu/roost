@@ -117,6 +117,195 @@ type SetRole struct {
 	Role Role `json:"role"`
 }
 
+// Settings are what admins can change about how Roost works. GET
+// /api/settings has them, and PATCH changes them. They're live: Roost uses a
+// change as soon as it's saved.
+type Settings struct {
+	General    GeneralSettings `json:"general"`
+	Thresholds Thresholds      `json:"thresholds"`
+	// Rules say which alerts Roost raises.
+	Rules AlertRules `json:"rules"`
+	// WatchedUnits are the systemd units on the machine Roost runs on that
+	// it watches, such as "ssh.service", or "user:app.service" for a unit of
+	// the user Roost runs as. Roost always shows failed units too.
+	WatchedUnits []string          `json:"watchedUnits"`
+	Retention    RetentionSettings `json:"retention"`
+}
+
+// GeneralSettings are how Roost presents itself.
+type GeneralSettings struct {
+	// Name is shown in the app's header and in the title of every page.
+	Name string `json:"name"`
+	// PublicURL is the address that people and agents reach Roost at, such
+	// as https://roost.example.ts.net, if it isn't the one Roost knows. It
+	// is used in the links and commands Roost writes, such as the agent's
+	// install command. It's empty to use the address of the request.
+	PublicURL string `json:"publicUrl"`
+}
+
+// Thresholds are when a device needs attention, and when an alert opens.
+type Thresholds struct {
+	// DiskWarn and DiskCritical are how full a disk can get, in percent,
+	// before a warning, and before a critical alert.
+	DiskWarn     float64 `json:"diskWarn"`
+	DiskCritical float64 `json:"diskCritical"`
+	// MemoryWarn is how much memory can be used, in percent.
+	MemoryWarn float64 `json:"memoryWarn"`
+	// CPUWarn is how busy the CPUs can be, in percent, on average over the
+	// last CPUWindowMinutes.
+	CPUWarn          float64 `json:"cpuWarn"`
+	CPUWindowMinutes int     `json:"cpuWindowMinutes"`
+	// OfflineMinutes is how long a device can be offline before an alert,
+	// if it alerts when it's offline.
+	OfflineMinutes int `json:"offlineMinutes"`
+	// KeyExpiryDays is how soon before a device's Tailscale key expires to
+	// warn about it.
+	KeyExpiryDays int `json:"keyExpiryDays"`
+	// CheckFailures is how many times in a row a check must fail before an
+	// alert.
+	CheckFailures int `json:"checkFailures"`
+}
+
+// AlertRules say which alerts Roost raises. A device that a rule is off for
+// isn't flagged for it on the dashboard either, and turning a rule off
+// resolves its open alerts.
+type AlertRules struct {
+	// Offline is a device that has been off the tailnet for too long.
+	Offline bool `json:"offline"`
+	// KeyExpiry is a Tailscale key that is about to expire.
+	KeyExpiry bool `json:"keyExpiry"`
+	// AgentStopped is an agent that stopped reporting.
+	AgentStopped bool `json:"agentStopped"`
+	// Disk, Memory and CPU are a device that is past its threshold.
+	Disk   bool `json:"disk"`
+	Memory bool `json:"memory"`
+	CPU    bool `json:"cpu"`
+	// Checks is a check that keeps failing.
+	Checks bool `json:"checks"`
+	// Containers is a Docker container on Roost's machine that stopped
+	// unexpectedly.
+	Containers bool `json:"containers"`
+	// Units is a systemd unit that failed, or a watched one that isn't
+	// running.
+	Units bool `json:"units"`
+	// Collectors is one of Roost's own jobs that keeps failing.
+	Collectors bool `json:"collectors"`
+}
+
+// RetentionSettings are how many days Roost keeps each kind of history.
+// Roost deletes what is older within the hour.
+type RetentionSettings struct {
+	// ActivityDays is how long the activity log and resolved alerts last.
+	ActivityDays int `json:"activityDays"`
+	// HistoryDays is how long what devices and containers used, and the
+	// round-trip times to devices, last.
+	HistoryDays int `json:"historyDays"`
+	// ChecksDays is how long the results of checks, and the health score,
+	// last.
+	ChecksDays int `json:"checksDays"`
+}
+
+// SettingsView is the response to GET /api/settings and to the request that
+// changes them. Only admins can see or change them.
+type SettingsView struct {
+	Settings Settings `json:"settings"`
+	// Defaults are the settings of a new Roost, so the app can say what
+	// resetting one would do.
+	Defaults Settings `json:"defaults"`
+	// Tailscale is how Roost joins the tailnet. It's set when Roost starts.
+	Tailscale TailscaleMode `json:"tailscale"`
+}
+
+// TailscaleMode is how Roost joins the tailnet.
+type TailscaleMode string
+
+// The ways Roost can join the tailnet.
+const (
+	// TailscaleModeEmbedded runs a Tailscale node inside Roost, so Roost is
+	// its own machine on the tailnet.
+	TailscaleModeEmbedded TailscaleMode = "embedded"
+	// TailscaleModeHost uses the Tailscale already running on Roost's
+	// machine.
+	TailscaleModeHost TailscaleMode = "host"
+)
+
+// ChangeSettings is the body of PATCH /api/settings. Each setting it has
+// changes, and the ones it leaves out stay as they are, so two admins who
+// change different settings don't undo each other, and a request can say
+// just what it means. The fields are those of Settings.
+type ChangeSettings struct {
+	General    *ChangeGeneral    `json:"general,omitempty"`
+	Thresholds *ChangeThresholds `json:"thresholds,omitempty"`
+	Rules      *ChangeRules      `json:"rules,omitempty"`
+	Retention  *ChangeRetention  `json:"retention,omitempty"`
+	// WatchedUnits replaces the whole list when it's there, even if it's
+	// empty.
+	WatchedUnits []string `json:"watchedUnits,omitempty"`
+}
+
+// ChangeGeneral changes GeneralSettings.
+type ChangeGeneral struct {
+	Name      *string `json:"name,omitempty"`
+	PublicURL *string `json:"publicUrl,omitempty"`
+}
+
+// ChangeThresholds changes Thresholds.
+type ChangeThresholds struct {
+	DiskWarn         *float64 `json:"diskWarn,omitempty"`
+	DiskCritical     *float64 `json:"diskCritical,omitempty"`
+	MemoryWarn       *float64 `json:"memoryWarn,omitempty"`
+	CPUWarn          *float64 `json:"cpuWarn,omitempty"`
+	CPUWindowMinutes *int     `json:"cpuWindowMinutes,omitempty"`
+	OfflineMinutes   *int     `json:"offlineMinutes,omitempty"`
+	KeyExpiryDays    *int     `json:"keyExpiryDays,omitempty"`
+	CheckFailures    *int     `json:"checkFailures,omitempty"`
+}
+
+// ChangeRules turns AlertRules on or off.
+type ChangeRules struct {
+	Offline      *bool `json:"offline,omitempty"`
+	KeyExpiry    *bool `json:"keyExpiry,omitempty"`
+	AgentStopped *bool `json:"agentStopped,omitempty"`
+	Disk         *bool `json:"disk,omitempty"`
+	Memory       *bool `json:"memory,omitempty"`
+	CPU          *bool `json:"cpu,omitempty"`
+	Checks       *bool `json:"checks,omitempty"`
+	Containers   *bool `json:"containers,omitempty"`
+	Units        *bool `json:"units,omitempty"`
+	Collectors   *bool `json:"collectors,omitempty"`
+}
+
+// ChangeRetention changes RetentionSettings.
+type ChangeRetention struct {
+	ActivityDays *int `json:"activityDays,omitempty"`
+	HistoryDays  *int `json:"historyDays,omitempty"`
+	ChecksDays   *int `json:"checksDays,omitempty"`
+}
+
+// InstalledServices is the response to GET /api/settings/units: the services
+// on the machine Roost runs on, to pick the ones to watch from. Only admins
+// can see it.
+type InstalledServices struct {
+	// Available is false if Roost can't ask systemd on its machine, which
+	// is the case on a machine that doesn't run it.
+	Available bool `json:"available"`
+	// Services are the system's first, by name.
+	Services []InstalledService `json:"services"`
+}
+
+// InstalledService is a systemd service that the machine has.
+type InstalledService struct {
+	// Key is how the settings name it: its name, or "user:" and its name for
+	// a unit of the user Roost runs as.
+	Key         string    `json:"key"`
+	Name        string    `json:"name"`
+	Scope       UnitScope `json:"scope"`
+	Description string    `json:"description,omitempty"`
+	// Active is systemd's state for it, such as "active" or "failed", or
+	// empty if it is installed and not loaded.
+	Active string `json:"active,omitempty"`
+}
+
 // Snapshot is the data of each "snapshot" event on GET /api/stream: what
 // Roost knows at one moment. The hub builds one each time something changes,
 // at most once a second, and at least every few seconds. The stream sends the
@@ -153,6 +342,9 @@ type Snapshot struct {
 
 // Hub is the Roost server itself.
 type Hub struct {
+	// Name is what Roost is called, which the app shows in its header. Admins
+	// can change it in the settings.
+	Name string `json:"name"`
 	// Version is the hub's build version.
 	Version string `json:"version"`
 	// DNSName is the MagicDNS name of Roost's node, such as
@@ -161,6 +353,9 @@ type Hub struct {
 	// Tailnet is the tailnet's name, such as example.com. Only admins get
 	// it: a personal tailnet is named after its owner's email address.
 	Tailnet string `json:"tailnet" roost:"secret"`
+	// Thresholds are when a device needs attention, unless it has some of
+	// its own, as the settings have them now.
+	Thresholds Thresholds `json:"thresholds"`
 }
 
 // A Collector is a job that gathers what Roost knows, such as polling
@@ -453,9 +648,24 @@ type DeviceSettings struct {
 	// offline. It's on by default, except for phones and tablets, which
 	// leave the tailnet all the time.
 	AlertOffline bool `json:"alertOffline"`
+	// Thresholds are the thresholds an admin set for this device in place of
+	// the settings'.
+	Thresholds DeviceThresholds `json:"thresholds"`
 	// Notes are anything admins want to remember about the device. Viewers
 	// can read them too.
 	Notes string `json:"notes"`
+}
+
+// DeviceThresholds are thresholds that an admin set for one device. One that
+// is left out is the settings'.
+type DeviceThresholds struct {
+	// DiskWarn, DiskCritical, MemoryWarn and CPUWarn are in percent.
+	DiskWarn     *float64 `json:"diskWarn,omitempty"`
+	DiskCritical *float64 `json:"diskCritical,omitempty"`
+	MemoryWarn   *float64 `json:"memoryWarn,omitempty"`
+	CPUWarn      *float64 `json:"cpuWarn,omitempty"`
+	// OfflineMinutes is how long the device can be offline before an alert.
+	OfflineMinutes *int `json:"offlineMinutes,omitempty"`
 }
 
 // SetDeviceSettings is the body of PUT /api/devices/{id}/settings, which
@@ -464,8 +674,10 @@ type SetDeviceSettings struct {
 	DisplayName string     `json:"displayName,omitempty"`
 	Kind        DeviceKind `json:"kind,omitempty"`
 	// AlertOffline is on if it's left out, except for phones and tablets.
-	AlertOffline *bool  `json:"alertOffline,omitempty"`
-	Notes        string `json:"notes,omitempty"`
+	AlertOffline *bool `json:"alertOffline,omitempty"`
+	// Thresholds are the device's own, and none if it's left out.
+	Thresholds DeviceThresholds `json:"thresholds,omitzero"`
+	Notes      string           `json:"notes,omitempty"`
 }
 
 // DeviceHistory is the response to GET /api/devices/{id}/history?range=,
@@ -999,6 +1211,8 @@ const (
 	EventKindContainer EventKind = "container"
 	// EventKindAccess is a change to who has a role in Roost.
 	EventKindAccess EventKind = "access"
+	// EventKindSettings is a change an admin made to Roost's settings.
+	EventKindSettings EventKind = "settings"
 	// EventKindSSH is SSH access to a device that an admin set up, changed
 	// or removed, or a host key that changed.
 	EventKindSSH EventKind = "ssh"

@@ -9,6 +9,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/manasseh-fikadu/roost/internal/settings"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 )
@@ -68,7 +69,7 @@ func (h *handler) setDeviceSettings(w http.ResponseWriter, r *http.Request) {
 	if !h.readJSON(w, r, &body) {
 		return
 	}
-	ds, err := cleanSettings(body, d)
+	ds, err := cleanSettings(body, d, h.opts.Settings.Get(r.Context()).Thresholds)
 	if err != nil {
 		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: err.Error()})
 		return
@@ -84,14 +85,16 @@ func (h *handler) setDeviceSettings(w http.ResponseWriter, r *http.Request) {
 		DisplayName:  ds.DisplayName,
 		Kind:         DeviceKind(ds.Kind),
 		AlertOffline: alertOffline(d, ds),
+		Thresholds:   newDeviceThresholds(ds.Thresholds),
 		Notes:        ds.Notes,
 	})
 }
 
 // cleanSettings checks the settings an admin sent for d, and returns them as
 // the store keeps them. Alerting when d goes offline is only stored if it
-// differs from the default, so the default can change later.
-func cleanSettings(s SetDeviceSettings, d tailnet.Device) (store.DeviceSettings, error) {
+// differs from the default, so the default can change later. global are the
+// settings' thresholds, which the device's own must fit with.
+func cleanSettings(s SetDeviceSettings, d tailnet.Device, global settings.Thresholds) (store.DeviceSettings, error) {
 	name := strings.TrimSpace(s.DisplayName)
 	switch {
 	case utf8.RuneCountInString(name) > maxDisplayName:
@@ -103,7 +106,14 @@ func cleanSettings(s SetDeviceSettings, d tailnet.Device) (store.DeviceSettings,
 	case utf8.RuneCountInString(s.Notes) > maxNotes:
 		return store.DeviceSettings{}, errors.New("the notes are too long")
 	}
-	out := store.DeviceSettings{DisplayName: name, Kind: string(s.Kind), Notes: strings.TrimRightFunc(s.Notes, unicode.IsSpace)}
+	own := store.ThresholdOverrides(s.Thresholds)
+	if err := global.CheckOverrides(own); err != nil {
+		return store.DeviceSettings{}, err
+	}
+	out := store.DeviceSettings{
+		DisplayName: name, Kind: string(s.Kind), Thresholds: own,
+		Notes: strings.TrimRightFunc(s.Notes, unicode.IsSpace),
+	}
 	if s.AlertOffline != nil && *s.AlertOffline != defaultAlertOffline(d) {
 		out.AlertOffline = s.AlertOffline
 	}
