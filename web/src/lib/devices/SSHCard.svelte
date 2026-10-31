@@ -303,7 +303,7 @@
 
 		{#if !setUp || editing}
 			<div class="p-4">
-				{#if device.tailscaleSsh && !setUp}
+				{#if device.tailscaleSsh && !ssh.hub && !setUp}
 					{@render tailscaleSetup()}
 				{:else}
 					{@render steps()}
