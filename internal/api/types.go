@@ -141,7 +141,7 @@ type Snapshot struct {
 	// severe first. GET /api/alerts has the resolved ones.
 	Alerts []Alert `json:"alerts"`
 	// Containers are the Docker containers on the machine Roost runs on, by
-	// name. Other machines' come with #29.
+	// name. GET /api/devices/{id}/docker/containers has any machine's.
 	Containers []Container `json:"containers"`
 	// Units are the systemd units Roost watches on the machine it runs on,
 	// and the ones that failed, the system's first, by name.
@@ -275,6 +275,11 @@ type Device struct {
 	// SSH is how Roost logs in to the device, if it can: Linux, macOS and
 	// FreeBSD machines. Only admins get it.
 	SSH *DeviceSSH `json:"ssh,omitempty" roost:"secret"`
+	// Docker reports whether Roost can read the Docker on the device: on the
+	// machine Roost runs on, if it has a Docker socket, and on another, if
+	// Roost has SSH access and found one there. Viewers get it too, since
+	// they can see Docker's overview, but not how Roost logs in.
+	Docker bool `json:"docker"`
 }
 
 // MeasuredBy says how Roost measures a device.
@@ -1438,4 +1443,453 @@ type MoveFiles struct {
 // FileBulk. A link goes without what it points to.
 type DeleteFiles struct {
 	Paths []string `json:"paths"`
+}
+
+// DockerOverview is the response to GET /api/devices/{id}/docker/overview:
+// the Docker daemon on a device, and what it holds.
+type DockerOverview struct {
+	// Name is the machine's name as Docker knows it.
+	Name    string `json:"name"`
+	Version string `json:"version"`
+	// APIVersion is the Engine API version the daemon speaks.
+	APIVersion string `json:"apiVersion,omitempty"`
+	OS         string `json:"os"`
+	// Kernel is the kernel's version. Only admins get it, as with a device's.
+	Kernel string `json:"kernel" roost:"secret"`
+	Arch   string `json:"arch"`
+	// CPUs and MemTotal are the machine's CPU cores and bytes of memory.
+	CPUs          int    `json:"cpus"`
+	MemTotal      int64  `json:"memTotal"`
+	StorageDriver string `json:"storageDriver"`
+	LoggingDriver string `json:"loggingDriver"`
+	// Cgroup is the cgroup version and driver, such as "v2 (systemd)".
+	Cgroup string `json:"cgroup,omitempty"`
+	// RootDir is where Docker keeps its data. Only admins get it.
+	RootDir    string       `json:"rootDir" roost:"secret"`
+	Containers DockerCounts `json:"containers"`
+	Images     int          `json:"images"`
+	Warnings   []string     `json:"warnings,omitempty" roost:"secret"`
+	// Disk is the disk space Docker uses. It's null until the daemon has
+	// worked it out, which takes a while on a big machine, so ask again soon.
+	Disk *DockerDisk `json:"disk" tstype:"DockerDisk | null,required"`
+}
+
+// DockerCounts is how many containers there are, by what they're doing.
+type DockerCounts struct {
+	Total   int `json:"total"`
+	Running int `json:"running"`
+	Paused  int `json:"paused"`
+	Stopped int `json:"stopped"`
+}
+
+// DockerDisk is the disk space Docker uses, in bytes.
+type DockerDisk struct {
+	Images     DockerDiskGroup `json:"images"`
+	Containers DockerDiskGroup `json:"containers"`
+	Volumes    DockerDiskGroup `json:"volumes"`
+	BuildCache DockerDiskGroup `json:"buildCache"`
+	Total      int64           `json:"total"`
+	// At is when the daemon worked it out.
+	At time.Time `json:"at"`
+}
+
+// DockerDiskGroup is the disk space one kind of thing uses.
+type DockerDiskGroup struct {
+	Size int64 `json:"size"`
+	// Count is how many there are, and Active how many are in use.
+	Count  int64 `json:"count"`
+	Active int64 `json:"active"`
+	// Reclaimable is the space that removing what isn't in use would free.
+	Reclaimable int64 `json:"reclaimable"`
+}
+
+// DockerStats is what a container uses at a moment. CPU is a percentage of
+// one CPU, as `docker stats` says it. A value is null if the container's
+// sample can't say it, such as a rate from its first sample.
+type DockerStats struct {
+	// TS is when Docker took the sample, in Unix milliseconds.
+	TS  int64    `json:"ts"`
+	CPU *float64 `json:"cpu" tstype:"number | null,required"`
+	// MemUsed is the bytes of memory in use, without the page cache that the
+	// kernel can drop. MemLimit is the container's limit, or the machine's
+	// memory if it has none.
+	MemUsed  *float64 `json:"memUsed" tstype:"number | null,required"`
+	MemLimit *float64 `json:"memLimit" tstype:"number | null,required"`
+	// NetRx and NetTx are the bytes per second received and sent, and
+	// NetRxTotal and NetTxTotal the bytes since it started.
+	NetRx      *float64 `json:"netRx" tstype:"number | null,required"`
+	NetTx      *float64 `json:"netTx" tstype:"number | null,required"`
+	NetRxTotal *float64 `json:"netRxTotal" tstype:"number | null,required"`
+	NetTxTotal *float64 `json:"netTxTotal" tstype:"number | null,required"`
+	// BlkRead and BlkWrite are the bytes read from and written to disks since
+	// it started, and BlkReadRate and BlkWriteRate the bytes per second.
+	BlkRead      *float64 `json:"blkRead" tstype:"number | null,required"`
+	BlkWrite     *float64 `json:"blkWrite" tstype:"number | null,required"`
+	BlkReadRate  *float64 `json:"blkReadRate" tstype:"number | null,required"`
+	BlkWriteRate *float64 `json:"blkWriteRate" tstype:"number | null,required"`
+	// Pids is how many processes run in it.
+	Pids *float64 `json:"pids" tstype:"number | null,required"`
+	// CPUs is how many CPUs it can see: 100% is one of them.
+	CPUs int `json:"cpus"`
+}
+
+// DockerContainerList is the response to GET
+// /api/devices/{id}/docker/containers: every container on the device, by
+// name.
+type DockerContainerList struct {
+	FetchedAt  time.Time            `json:"fetchedAt"`
+	Containers []DockerContainerRow `json:"containers"`
+}
+
+// DockerContainerRow is a container in the list.
+type DockerContainerRow struct {
+	// ID is Docker's full ID.
+	ID      string         `json:"id"`
+	Name    string         `json:"name"`
+	Image   string         `json:"image"`
+	ImageID string         `json:"imageId"`
+	Created time.Time      `json:"created"`
+	State   ContainerState `json:"state"`
+	// Status says it in Docker's words, such as "Up 2 hours (healthy)".
+	Status string `json:"status"`
+	// Health is "healthy", "unhealthy" or "starting", or missing if it has
+	// no health check.
+	Health     string     `json:"health,omitempty"`
+	StartedAt  *time.Time `json:"startedAt,omitempty"`
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+	// RestartCount is how many times Docker restarted it.
+	RestartCount int `json:"restartCount"`
+	// ExitCode is how it last exited, if it isn't running.
+	ExitCode *int `json:"exitCode,omitempty"`
+	// OOMKilled reports whether it was killed for using too much memory.
+	OOMKilled bool `json:"oomKilled,omitempty"`
+	// Error is Docker's error from starting it, if it had one.
+	Error         string `json:"error,omitempty"`
+	RestartPolicy string `json:"restartPolicy,omitempty"`
+	// Project and Service are its Docker Compose project and service, if
+	// it has them.
+	Project string          `json:"project,omitempty"`
+	Service string          `json:"service,omitempty"`
+	Ports   []ContainerPort `json:"ports"`
+	// Networks are the names of the networks it is on.
+	Networks []string `json:"networks"`
+	// Mounts is how many mounts it has.
+	Mounts int `json:"mounts"`
+	// MemLimitSet reports whether it has a memory limit of its own. If it
+	// hasn't, the limit in its Stats is the machine's memory.
+	MemLimitSet bool `json:"memLimitSet"`
+	// Stats is what it uses now, if it's running.
+	Stats *DockerStats `json:"stats" tstype:"DockerStats | null,required"`
+}
+
+// DockerContainerDetail is the response to GET
+// /api/devices/{id}/docker/containers/{id}: one container, inspected. What
+// can carry a secret is only for admins: environment variables, commands,
+// labels that look like credentials, and the output of health checks.
+type DockerContainerDetail struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	// Image is the image as it was named when the container was made, and
+	// ImageID its ID.
+	Image        string             `json:"image"`
+	ImageID      string             `json:"imageId"`
+	ImageDigest  string             `json:"imageDigest,omitempty"`
+	ImageCreated *time.Time         `json:"imageCreated,omitempty"`
+	ImageSize    *int64             `json:"imageSize,omitempty"`
+	Created      time.Time          `json:"created"`
+	Platform     string             `json:"platform,omitempty"`
+	Driver       string             `json:"driver,omitempty"`
+	State        DockerState        `json:"state"`
+	RestartCount int                `json:"restartCount"`
+	Health       *DockerHealth      `json:"health,omitempty"`
+	Healthcheck  *DockerHealthcheck `json:"healthcheck,omitempty"`
+	// Path and Args are what it runs, and Cmd and Entrypoint what it was
+	// told to. A command line can have credentials in it, so admins get
+	// them all.
+	Path       string   `json:"path" roost:"secret"`
+	Args       []string `json:"args,omitempty" roost:"secret"`
+	Cmd        []string `json:"cmd,omitempty" roost:"secret"`
+	Entrypoint []string `json:"entrypoint,omitempty" roost:"secret"`
+	WorkingDir string   `json:"workingDir,omitempty"`
+	User       string   `json:"user,omitempty"`
+	Hostname   string   `json:"hostname,omitempty"`
+	TTY        bool     `json:"tty"`
+	// Env are its environment variables. Only admins get them.
+	Env []DockerEnvVar `json:"env,omitempty" roost:"secret"`
+	// Labels are its labels, except those that look like credentials, which
+	// are in SecretLabels, for admins.
+	Labels       map[string]string `json:"labels"`
+	SecretLabels map[string]string `json:"secretLabels,omitempty" roost:"secret"`
+	// Project and Service are its Docker Compose project and service, and
+	// ComposeDir and ComposeFiles where the project's files are.
+	Project       string               `json:"project,omitempty"`
+	Service       string               `json:"service,omitempty"`
+	ComposeDir    string               `json:"composeDir,omitempty"`
+	ComposeFiles  string               `json:"composeFiles,omitempty"`
+	RestartPolicy *DockerRestartPolicy `json:"restartPolicy,omitempty"`
+	AutoRemove    bool                 `json:"autoRemove"`
+	Resources     DockerResources      `json:"resources"`
+	Security      DockerSecurity       `json:"security"`
+	LogDriver     string               `json:"logDriver,omitempty"`
+	NetworkMode   string               `json:"networkMode,omitempty"`
+	Ports         []ContainerPort      `json:"ports"`
+	// Exposed are the ports the image says it listens on, such as 80/tcp.
+	Exposed    []string                 `json:"exposed"`
+	Networks   []DockerContainerNetwork `json:"networks"`
+	Mounts     []DockerMount            `json:"mounts"`
+	DNS        []string                 `json:"dns"`
+	ExtraHosts []string                 `json:"extraHosts"`
+}
+
+// DockerState is what a container is doing, in detail.
+type DockerState struct {
+	// Status is "created", "running", "paused", "restarting", "removing",
+	// "exited" or "dead".
+	Status     string `json:"status"`
+	Running    bool   `json:"running"`
+	Paused     bool   `json:"paused"`
+	Restarting bool   `json:"restarting"`
+	OOMKilled  bool   `json:"oomKilled"`
+	Dead       bool   `json:"dead"`
+	// Pid is its main process's ID on the machine, if it runs.
+	Pid int `json:"pid,omitempty"`
+	// ExitCode is how it last exited, if it isn't running.
+	ExitCode   *int       `json:"exitCode,omitempty"`
+	Error      string     `json:"error,omitempty"`
+	StartedAt  *time.Time `json:"startedAt,omitempty"`
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+}
+
+// DockerHealth is the result of a container's health checks so far.
+type DockerHealth struct {
+	// Status is "healthy", "unhealthy" or "starting".
+	Status string `json:"status"`
+	// FailingStreak is how many checks in a row failed.
+	FailingStreak int `json:"failingStreak"`
+	// Log is the latest checks, oldest first.
+	Log []DockerHealthResult `json:"log"`
+}
+
+// DockerHealthResult is one run of a container's health check.
+type DockerHealthResult struct {
+	Start    time.Time `json:"start"`
+	End      time.Time `json:"end"`
+	ExitCode int       `json:"exitCode"`
+	// Output is what the check printed. Only admins get it.
+	Output string `json:"output" roost:"secret"`
+}
+
+// DockerHealthcheck is how Docker checks a container's health. The
+// intervals are in milliseconds.
+type DockerHealthcheck struct {
+	// Test is the command, such as ["CMD-SHELL", "curl -f localhost"]. Only
+	// admins get it.
+	Test        []string `json:"test,omitempty" roost:"secret"`
+	Interval    int64    `json:"interval,omitempty"`
+	Timeout     int64    `json:"timeout,omitempty"`
+	StartPeriod int64    `json:"startPeriod,omitempty"`
+	Retries     int      `json:"retries,omitempty"`
+}
+
+// DockerEnvVar is an environment variable of a container.
+type DockerEnvVar struct {
+	Key   string `json:"key"`
+	Value string `json:"value"`
+}
+
+// DockerRestartPolicy says when Docker restarts a container.
+type DockerRestartPolicy struct {
+	// Name is "no", "always", "unless-stopped" or "on-failure".
+	Name       string `json:"name"`
+	MaxRetries int    `json:"maxRetries,omitempty"`
+}
+
+// DockerResources are the limits on a container. A limit is missing if there
+// is none.
+type DockerResources struct {
+	// Memory, MemoryReservation and MemorySwap are in bytes. A MemorySwap of
+	// -1 means unlimited.
+	Memory            int64   `json:"memory,omitempty"`
+	MemoryReservation int64   `json:"memoryReservation,omitempty"`
+	MemorySwap        int64   `json:"memorySwap,omitempty"`
+	CPUs              float64 `json:"cpus,omitempty"`
+	CPUShares         int64   `json:"cpuShares,omitempty"`
+	Cpuset            string  `json:"cpuset,omitempty"`
+	PidsLimit         int64   `json:"pidsLimit,omitempty"`
+	ShmSize           int64   `json:"shmSize,omitempty"`
+}
+
+// DockerSecurity is how a container is confined.
+type DockerSecurity struct {
+	Privileged     bool     `json:"privileged"`
+	ReadonlyRootfs bool     `json:"readonlyRootfs"`
+	CapAdd         []string `json:"capAdd"`
+	CapDrop        []string `json:"capDrop"`
+	SecurityOpt    []string `json:"securityOpt"`
+}
+
+// DockerContainerNetwork is a container's place on a network.
+type DockerContainerNetwork struct {
+	Name        string   `json:"name"`
+	ID          string   `json:"id"`
+	IP          string   `json:"ip,omitempty"`
+	PrefixLen   int      `json:"prefixLen,omitempty"`
+	Gateway     string   `json:"gateway,omitempty"`
+	MAC         string   `json:"mac,omitempty"`
+	IPv6        string   `json:"ipv6,omitempty"`
+	IPv6Gateway string   `json:"ipv6Gateway,omitempty"`
+	Aliases     []string `json:"aliases"`
+	DNSNames    []string `json:"dnsNames"`
+}
+
+// DockerMount is something mounted into a container.
+type DockerMount struct {
+	// Type is "volume", "bind" or "tmpfs".
+	Type string `json:"type"`
+	// Name is a volume's name.
+	Name        string `json:"name,omitempty"`
+	Source      string `json:"source"`
+	Destination string `json:"destination"`
+	Mode        string `json:"mode"`
+	RW          bool   `json:"rw"`
+	Propagation string `json:"propagation,omitempty"`
+	Driver      string `json:"driver,omitempty"`
+	// Size is a volume's size in bytes, if the daemon has measured it.
+	Size *int64 `json:"size,omitempty"`
+}
+
+// DockerProcesses is the response to GET
+// /api/devices/{id}/docker/containers/{id}/top: a container's processes, as
+// ps writes them. Only admins get it.
+type DockerProcesses struct {
+	Titles    []string   `json:"titles"`
+	Processes [][]string `json:"processes"`
+}
+
+// DockerRef is a container that uses a volume, image or network.
+type DockerRef struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Running bool   `json:"running"`
+}
+
+// DockerVolume is a volume.
+type DockerVolume struct {
+	Name       string     `json:"name"`
+	Driver     string     `json:"driver"`
+	Mountpoint string     `json:"mountpoint"`
+	Created    *time.Time `json:"created,omitempty"`
+	Scope      string     `json:"scope"`
+	// Labels are its labels, except those that look like credentials, which
+	// are in SecretLabels, for admins.
+	Labels       map[string]string `json:"labels"`
+	SecretLabels map[string]string `json:"secretLabels,omitempty" roost:"secret"`
+	// Project is its Docker Compose project, if it has one.
+	Project string `json:"project,omitempty"`
+	// Size is in bytes, if the daemon has measured it.
+	Size   *int64      `json:"size,omitempty"`
+	UsedBy []DockerRef `json:"usedBy"`
+}
+
+// DockerImage is an image.
+type DockerImage struct {
+	ID      string    `json:"id"`
+	Tags    []string  `json:"tags"`
+	Digests []string  `json:"digests"`
+	Created time.Time `json:"created"`
+	Size    int64     `json:"size"`
+	// Dangling reports whether it has no tag.
+	Dangling bool        `json:"dangling"`
+	UsedBy   []DockerRef `json:"usedBy"`
+}
+
+// DockerNetwork is a network.
+type DockerNetwork struct {
+	ID         string         `json:"id"`
+	Name       string         `json:"name"`
+	Driver     string         `json:"driver"`
+	Scope      string         `json:"scope"`
+	Internal   bool           `json:"internal"`
+	Attachable bool           `json:"attachable"`
+	IPv6       bool           `json:"ipv6"`
+	Created    *time.Time     `json:"created,omitempty"`
+	Subnets    []DockerSubnet `json:"subnets"`
+	// Project is its Docker Compose project, if it has one.
+	Project    string                   `json:"project,omitempty"`
+	Containers []DockerNetworkContainer `json:"containers"`
+}
+
+// DockerSubnet is a range of addresses on a network.
+type DockerSubnet struct {
+	Subnet  string `json:"subnet"`
+	Gateway string `json:"gateway,omitempty"`
+}
+
+// DockerNetworkContainer is a container on a network, with its address there.
+type DockerNetworkContainer struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Running bool   `json:"running"`
+	IP      string `json:"ip,omitempty"`
+	MAC     string `json:"mac,omitempty"`
+}
+
+// DockerHistory is the response to GET
+// /api/devices/{id}/docker/containers/{id}/history?range=, where the range
+// is 1h, 6h, 24h or 7d: what the container used, averaged over each step.
+// Roost records it once a minute, by the container's name.
+type DockerHistory struct {
+	From time.Time `json:"from"`
+	To   time.Time `json:"to"`
+	// Step is the time each point sums up, in milliseconds.
+	Step int64 `json:"step"`
+	// CPU is in percent of one CPU, Mem in bytes, and the rest in bytes per
+	// second.
+	CPU      []Point `json:"cpu"`
+	Mem      []Point `json:"mem"`
+	NetRx    []Point `json:"netRx"`
+	NetTx    []Point `json:"netTx"`
+	BlkRead  []Point `json:"blkRead"`
+	BlkWrite []Point `json:"blkWrite"`
+}
+
+// DockerActionResult is the response to POST
+// /api/devices/{id}/docker/containers/{id}/{action}, where the action is
+// start, stop or restart.
+type DockerActionResult struct {
+	// Changed is false if the container already was as asked, such as a
+	// started one that was told to start.
+	Changed bool `json:"changed"`
+}
+
+// The events of GET /api/devices/{id}/docker/containers/{id}/logs, which is
+// a stream of server-sent events: one "start", then any number of "lines",
+// and then an "end" or a "failure".
+
+// DockerLogStart is the first event of a container's logs.
+type DockerLogStart struct {
+	// TTY reports whether the container has a terminal, which merges its
+	// standard output and error.
+	TTY     bool `json:"tty"`
+	Running bool `json:"running"`
+}
+
+// DockerLogLine is a line of a container's logs.
+type DockerLogLine struct {
+	// S is 1 for standard output and 2 for standard error.
+	S int `json:"s"`
+	// T is the RFC 3339 time Docker stamped the line with, if it did.
+	T string `json:"t,omitempty"`
+	M string `json:"m"`
+}
+
+// DockerStreamEnd is the last event of a stream that ended as it should.
+type DockerStreamEnd struct {
+	Reason string `json:"reason"`
+}
+
+// DockerStreamFailure is the last event of a stream that Docker or the
+// connection to it broke.
+type DockerStreamFailure struct {
+	Message string `json:"message"`
 }

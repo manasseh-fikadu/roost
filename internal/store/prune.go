@@ -25,6 +25,8 @@ var retention = []struct {
 	// for longer.
 	{"metrics", 7 * 24 * time.Hour, "DELETE FROM metrics WHERE ts < ?"},
 	{"usage_samples", 7 * 24 * time.Hour, "DELETE FROM usage_samples WHERE ts < ?"},
+	// So do the containers' metrics.
+	{"container_metrics", 7 * 24 * time.Hour, "DELETE FROM container_metrics WHERE ts < ?"},
 	// After a day, one minute in ten keeps the processes in detail. Every
 	// minute keeps its biggest groups, for history.
 	{"usage_samples", 24 * time.Hour,

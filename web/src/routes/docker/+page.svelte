@@ -1,147 +1,176 @@
 <script lang="ts">
 	import ContainerIcon from '@lucide/svelte/icons/container';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
-	import { containerStatus, groupContainers } from '#lib/alerts.js';
-	import type { Container } from '#lib/api/types.js';
-	import { ago, dateTime, plural } from '#lib/format.js';
+	import { page } from '$app/state';
+	import AdminOnly from '#lib/AdminOnly.svelte';
+	import type { Device } from '#lib/api/types.js';
+	import ActionDialog from '#lib/docker/ActionDialog.svelte';
+	import type { PendingAction } from '#lib/docker/actions.js';
+	import { getDockerContainers, getDockerOverview } from '#lib/docker/api.js';
+	import ContainerList from '#lib/docker/ContainerList.svelte';
+	import ImagesTab from '#lib/docker/ImagesTab.svelte';
+	import { pacedOverview, parseTab } from '#lib/docker/list.js';
+	import NetworksTab from '#lib/docker/NetworksTab.svelte';
+	import { Poll } from '#lib/docker/poll.svelte.js';
+	import Summary from '#lib/docker/Summary.svelte';
+	import VolumesTab from '#lib/docker/VolumesTab.svelte';
 	import { live } from '#lib/live.svelte.js';
-	import { statusMeta } from '#lib/status.js';
-	import Badge from '#lib/ui/Badge.svelte';
 	import Card from '#lib/ui/Card.svelte';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import PageHeader from '#lib/ui/PageHeader.svelte';
+	import Select from '#lib/ui/Select.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
-	import StatusDot from '#lib/ui/StatusDot.svelte';
+	import TabPanel from '#lib/ui/TabPanel.svelte';
+	import Tabs from '#lib/ui/Tabs.svelte';
 
-	const snapshot = $derived(live.snapshot);
-	const containers = $derived(snapshot?.containers ?? []);
-	const groups = $derived(groupContainers(containers));
-	const hub = $derived(snapshot?.devices.find((d) => d.self));
-	const collector = $derived(snapshot?.collectors.find((c) => c.name === 'Docker'));
-	const now = $derived(snapshot ? Date.parse(snapshot.generatedAt) : Date.now());
-	const running = $derived(containers.filter((c) => c.state === 'running').length);
+	/** The machines whose Docker Roost can read. */
+	const devices = $derived((live.snapshot?.devices ?? []).filter((d) => d.docker));
+	/** The device in ?device=, or else the first. */
+	const device = $derived.by((): Device | undefined => {
+		const wanted = page.url.searchParams.get('device');
+		return devices.find((d) => d.id === wanted) ?? devices[0];
+	});
+	// The live data replaces every device's object with each snapshot, and anything that read the
+	// object would start over: the polls would restart and the filter would be lost. The page uses
+	// only what stays equal from one snapshot to the next.
+	const deviceId = $derived(device?.id);
+	const deviceName = $derived(device?.name);
 
-	function checkName(id: string): string {
-		return snapshot?.checks.find((c) => c.id === id)?.name ?? id;
+	// The tab is in the URL, so links can point at it.
+	const tab = $derived(parseTab(page.url.searchParams.get('tab')));
+
+	/** Another machine's containers aren't this one's, so the tab and anything else is left behind. */
+	function setDevice(id: string) {
+		const url = new URL(page.url.href);
+		url.search = '';
+		url.searchParams.set('device', id);
+		void goto(url, { replace: true, reset: false });
 	}
 
-	function ports(c: Container): string {
-		return c.ports
-			.map(
-				(p) =>
-					(p.public ? `${p.public}→${p.private}` : `${p.private}`) +
-					(p.type === 'tcp' ? '' : `/${p.type}`)
-			)
-			.join(', ');
-	}
-
-	function since(c: Container): string {
-		if (c.state === 'running' && c.startedAt) {
-			return `up since ${dateTime(c.startedAt)}`;
+	function setTab(t: string) {
+		const url = new URL(page.url.href);
+		if (t === 'containers') {
+			url.searchParams.delete('tab');
+		} else {
+			url.searchParams.set('tab', t);
 		}
-		return c.finishedAt ? `stopped ${ago(c.finishedAt, now)}` : c.status;
+		void goto(url, { replace: true, reset: false });
 	}
+
+	// The containers feed the tiles as well as the first tab, so they load whichever tab is open.
+	// Each device gets polls of its own, which the effects start and the previous device's stop.
+	const containers = $derived.by(() => {
+		const id = deviceId;
+		return id ? new Poll(() => getDockerContainers(id), 5000) : null;
+	});
+	// The disk takes the daemon a while to measure: ask every few seconds until it has, then rarely.
+	const overview = $derived.by(() => {
+		const id = deviceId;
+		return id
+			? new Poll(
+					pacedOverview(() => getDockerOverview(id)),
+					4000
+				)
+			: null;
+	});
+	$effect(() => containers?.start());
+	$effect(() => overview?.start());
+
+	/** The container an admin is about to start, stop or restart. */
+	let pending = $state<PendingAction | null>(null);
+
+	const tabs = $derived([
+		{ value: 'containers', label: 'Containers', count: containers?.data?.containers.length },
+		{ value: 'volumes', label: 'Volumes', count: overview?.data?.disk?.volumes.count },
+		{ value: 'images', label: 'Images', count: overview?.data?.images },
+		{ value: 'networks', label: 'Networks' }
+	]);
 </script>
 
 <PageHeader
 	title="Docker"
-	description={snapshot && collector
-		? `Containers on ${hub?.name ?? 'the hub'}, by compose project: ${running} of ${plural(containers.length, 'container')} running.`
-		: 'Containers on the hub, by compose project.'}
-/>
+	description={deviceName
+		? `Containers, volumes, images and networks on ${deviceName}.`
+		: 'Containers, volumes, images and networks on your machines.'}
+>
+	{#snippet actions()}
+		{#if device && devices.length > 1}
+			<Select
+				value={device.id}
+				onchange={(e) => setDevice(e.currentTarget.value)}
+				class="h-8 w-52 text-[13px]"
+				aria-label="Device"
+			>
+				{#each devices as d (d.id)}
+					<option value={d.id}>{d.name}{d.online || d.ssh?.hub ? '' : ' (offline)'}</option>
+				{/each}
+			</Select>
+		{/if}
+	{/snippet}
+</PageHeader>
 
-{#if !snapshot}
-	<Card><Skeleton class="m-4 h-24" /></Card>
-{:else if !collector}
+{#if !live.snapshot}
+	<Skeleton class="h-96 rounded-xl" />
+{:else if !device}
 	<Card>
-		<EmptyState title="Docker isn't running here" icon={ContainerIcon}>
-			Roost finds no Docker socket on the machine it runs on. Other machines' containers come with
-			#29.
-		</EmptyState>
-	</Card>
-{:else if collector.state === 'failing' && containers.length === 0}
-	<Card>
-		<EmptyState title="Roost can't read Docker" icon={ContainerIcon}>
-			{collector.error || 'Only admins see why.'}
-		</EmptyState>
-	</Card>
-{:else if containers.length === 0}
-	<Card>
-		<EmptyState title="No containers" icon={ContainerIcon}>
-			Docker runs on {hub?.name ?? 'the hub'}, with no containers yet.
+		<EmptyState title="No machine has Docker yet" icon={ContainerIcon}>
+			Docker on the machine Roost runs on shows up here by itself. For another machine, an admin
+			sets up SSH access on its device page, and Roost checks it for Docker.
+			<a
+				href={resolve('/devices')}
+				class="mt-2 block text-fg-muted underline decoration-line-heavy underline-offset-4 hover:text-fg"
+				>See the devices</a
+			>
 		</EmptyState>
 	</Card>
 {:else}
-	<div class="space-y-4">
-		{#each groups as g (g.project ?? '')}
-			{@const up = g.containers.filter((c) => c.state === 'running').length}
-			<Card
-				title={g.project ?? 'Other containers'}
-				description={g.project ? 'Docker Compose project' : 'Not in a compose project'}
-			>
-				{#snippet actions()}
-					<span class="num text-[12px] text-fg-subtle">{up}/{g.containers.length} running</span>
-				{/snippet}
-				<ul class="divide-y divide-line">
-					{#each g.containers as c (c.id)}
-						{@const status = containerStatus(c)}
-						<li class="flex flex-wrap items-start gap-x-4 gap-y-1.5 px-4 py-3">
-							<div class="flex min-w-0 flex-1 basis-64 items-start gap-3">
-								<StatusDot {status} pulse={status === 'online'} class="mt-1.5" />
-								<div class="min-w-0">
-									<div class="flex flex-wrap items-center gap-2">
-										<span class="truncate text-[14px] font-medium text-fg">{c.name}</span>
-										{#if c.health}
-											<Badge
-												tone={c.health === 'healthy'
-													? 'green'
-													: c.health === 'unhealthy'
-														? 'red'
-														: 'gray'}
-											>
-												{c.health}
-											</Badge>
-										{/if}
-										{#if c.problem}
-											<Badge tone={status === 'offline' ? 'red' : 'amber'}>{c.problem}</Badge>
-										{/if}
-									</div>
-									<p class="truncate font-mono text-[11.5px] text-fg-subtle" title={c.image}>
-										{c.image}
-									</p>
-								</div>
-							</div>
-							<div class="grid min-w-48 grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-[12px]">
-								<span class="text-fg-faint">state</span>
-								<span class={statusMeta[status].text}>{c.state} · {since(c)}</span>
-								{#if c.ports.length}
-									<span class="text-fg-faint">ports</span>
-									<span class="font-mono text-fg-muted">{ports(c)}</span>
-								{/if}
-								{#if c.restartCount > 0}
-									<span class="text-fg-faint">restarts</span>
-									<span class="num text-fg-muted">{c.restartCount}</span>
-								{/if}
-								{#if c.checkIds.length}
-									<span class="text-fg-faint">checks</span>
-									<span class="flex flex-wrap gap-x-2">
-										{#each c.checkIds as id (id)}
-											<a
-												href="{resolve('/checks')}?check={encodeURIComponent(id)}"
-												class="text-fg-muted hover:text-fg hover:underline">{checkName(id)}</a
-											>
-										{/each}
-									</span>
-								{/if}
-							</div>
-						</li>
-					{/each}
-				</ul>
-			</Card>
-		{/each}
-		<p class="text-[12px] text-fg-faint">
-			A container that stops cleanly only gets an alert if its restart policy says it should run.
-			Logs, images and controls come with #29.
-		</p>
-	</div>
+	<!-- Another device starts over: the filter, the tab's data and any action waiting to be confirmed. -->
+	{#key deviceId}
+		{#if containers && overview}
+			<!-- The tiles say nothing when Docker can't be read; the list says why. -->
+			{#if containers.data || !containers.error}
+				<div class="mb-6">
+					<Summary containers={containers.data?.containers ?? null} overview={overview.data} />
+				</div>
+			{/if}
+
+			<Tabs bind:value={() => tab, setTab} {tabs}>
+				<TabPanel value="containers">
+					{#if tab === 'containers'}
+						<ContainerList
+							poll={containers}
+							deviceId={deviceId!}
+							deviceName={deviceName!}
+							onaction={(p) => (pending = p)}
+						/>
+					{/if}
+				</TabPanel>
+				<TabPanel value="volumes">
+					{#if tab === 'volumes'}
+						<VolumesTab deviceId={deviceId!} />
+					{/if}
+				</TabPanel>
+				<TabPanel value="images">
+					{#if tab === 'images'}
+						<ImagesTab deviceId={deviceId!} />
+					{/if}
+				</TabPanel>
+				<TabPanel value="networks">
+					{#if tab === 'networks'}
+						<NetworksTab deviceId={deviceId!} />
+					{/if}
+				</TabPanel>
+			</Tabs>
+
+			<AdminOnly>
+				<ActionDialog
+					deviceId={deviceId!}
+					deviceName={deviceName!}
+					bind:pending
+					ondone={() => containers.reload()}
+				/>
+			</AdminOnly>
+		{/if}
+	{/key}
 {/if}

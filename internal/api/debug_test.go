@@ -13,6 +13,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/checks"
+	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
@@ -50,6 +51,7 @@ func TestNew_debugTailnet(t *testing.T) {
 			Usage: usage.NewRecorder(st, nil), Checks: checks.NewRunner(st, checks.Options{Dial: tn.Dial}),
 			Alerts: alerts.NewEngine(st, nil),
 			SSH:    ssh.NewManager(ssh.Options{KeyDir: t.TempDir(), Store: st, Tailnet: poller.Snapshot, Dial: tn.Dial}),
+			Docker: docker.NewFleet(nil, nil),
 		})
 		rec := serve(h, newRequest(t, http.MethodGet, "/api/debug/tailnet", laptop))
 

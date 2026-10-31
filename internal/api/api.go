@@ -16,6 +16,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/agents"
 	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/checks"
+	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/files"
 	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
@@ -54,6 +55,8 @@ type Options struct {
 	Alerts *alerts.Engine
 	// SSH logs in to the tailnet's machines, for terminals. Required.
 	SSH *ssh.Manager
+	// Docker finds the Docker of each machine. Required.
+	Docker *docker.Fleet
 	// AppURL is where the app is on the tailnet, such as
 	// https://roost.example.ts.net, which the agent sends its heartbeats to.
 	// If it's empty, it's worked out from each request.
@@ -79,8 +82,8 @@ func New(opts Options) http.Handler {
 
 func newHandler(opts Options) *handler {
 	if opts.WhoIs == nil || opts.Snapshot == nil || opts.Feed == nil || opts.Store == nil || opts.Agents == nil ||
-		opts.Usage == nil || opts.Checks == nil || opts.Alerts == nil || opts.SSH == nil {
-		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents, Usage, Checks, Alerts and SSH are required")
+		opts.Usage == nil || opts.Checks == nil || opts.Alerts == nil || opts.SSH == nil || opts.Docker == nil {
+		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents, Usage, Checks, Alerts, SSH and Docker are required")
 	}
 	h := &handler{opts: opts, log: opts.Logger}
 	if h.log == nil {
@@ -138,6 +141,26 @@ func (h *handler) routes(rt *router) {
 	rt.write("POST /api/devices/{id}/files/move", h.transferFiles("Moved", (*files.Remote).Move))
 	rt.write("POST /api/devices/{id}/files/copy", h.transferFiles("Copied", (*files.Remote).Copy))
 	rt.write("POST /api/devices/{id}/files/delete", h.deleteFiles)
+
+	// Everyone who can view Roost sees Docker's overview. What can carry a
+	// secret is for admins: logs, processes and the whole inspection, and the
+	// fields of a container that hold environment variables and commands
+	// (see the types). Starting and stopping is for admins, and logged.
+	rt.read("GET /api/devices/{id}/docker/overview", viewers, h.dockerOverview)
+	rt.read("GET /api/devices/{id}/docker/containers", viewers, h.dockerContainers)
+	rt.read("GET /api/devices/{id}/docker/containers/{cid}", viewers, h.dockerContainer)
+	rt.read("GET /api/devices/{id}/docker/containers/{cid}/history", viewers, h.dockerHistory)
+	rt.read("GET /api/devices/{id}/docker/containers/{cid}/stats", viewers, h.dockerStats)
+	rt.read("GET /api/devices/{id}/docker/containers/{cid}/inspect", admins, h.dockerInspect)
+	rt.read("GET /api/devices/{id}/docker/containers/{cid}/top", admins, h.dockerTop)
+	rt.read("GET /api/devices/{id}/docker/containers/{cid}/logs", admins, h.dockerLogs)
+	rt.read("GET /api/devices/{id}/docker/containers/{cid}/logs/download", admins, h.dockerLogDownload)
+	rt.read("GET /api/devices/{id}/docker/volumes", viewers, h.dockerVolumes)
+	rt.read("GET /api/devices/{id}/docker/images", viewers, h.dockerImages)
+	rt.read("GET /api/devices/{id}/docker/networks", viewers, h.dockerNetworks)
+	rt.write("POST /api/devices/{id}/docker/containers/{cid}/start", h.dockerAction(docker.Start, "Started"))
+	rt.write("POST /api/devices/{id}/docker/containers/{cid}/stop", h.dockerAction(docker.Stop, "Stopped"))
+	rt.write("POST /api/devices/{id}/docker/containers/{cid}/restart", h.dockerAction(docker.Restart, "Restarted"))
 
 	rt.read("GET /api/checks/recent", viewers, h.recentResults)
 	rt.read("GET /api/checks/{id}/history", viewers, h.checkHistory)

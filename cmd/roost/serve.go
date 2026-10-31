@@ -213,11 +213,23 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 			sampler.Run(ctx, logger, func(s usage.Sample) { recorder.Record(ctx, store.HubID, s) })
 		})
 	}
+	var localDocker *docker.Client
 	if socket, ok := docker.Socket(); ok {
-		containers := docker.NewCollector(docker.NewClient(docker.SocketDialer(socket)), logger)
+		localDocker = docker.NewClient(docker.SocketDialer(socket))
+		containers := docker.NewCollector(localDocker, logger)
 		wg.Go(func() { containers.Run(ctx) })
 		feedOpts.Docker, feedOpts.DockerChanged = containers.Reading, containers.Changes()
 	}
+	// The Docker of the machine Roost runs on is on its socket, and the
+	// others' are on theirs, over SSH.
+	fleet := docker.NewFleet(localDocker, remote.DialDocker)
+	defer fleet.Close()
+	sampler := docker.NewSampler(docker.SamplerOptions{
+		Targets: func() []docker.Target { return dockerTargets(fleet, poller.Snapshot(), remote.Access()) },
+		Record:  st.AddContainerMetrics,
+		Logger:  logger,
+	})
+	wg.Go(func() { sampler.Run(ctx) })
 	if systemd.Available() {
 		units := systemd.NewCollector(systemd.Options{
 			UserScope: systemd.HasUserScope(),
@@ -251,6 +263,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		Checks:   runner,
 		Alerts:   engine,
 		SSH:      remote,
+		Docker:   fleet,
 		AppURL:   res.url,
 		Stopping: stopping,
 		Logger:   logger,
@@ -267,6 +280,31 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		logger.Info("shutting down")
 	}
 	return srvs.stop(ctx)
+}
+
+// dockerTargets returns the machines whose containers Roost records the use
+// of: the one it runs on, if it has Docker, and the online ones whose SSH
+// access found a Docker it can use.
+func dockerTargets(fleet *docker.Fleet, snap tailnet.Snapshot, access map[string]ssh.Access) []docker.Target {
+	var out []docker.Target
+	if h, err := fleet.Host(store.HubID); err == nil {
+		out = append(out, docker.Target{ID: store.HubID, Host: h})
+	}
+	if snap.Status == nil {
+		return out
+	}
+	for _, d := range snap.Status.Peers {
+		a := access[d.ID]
+		// In embedded mode, the machine Roost runs on is a peer too, which
+		// was added already.
+		if d.SameMachine || !d.Online || a.State != ssh.StateOK || a.Docker == nil || !*a.Docker {
+			continue
+		}
+		if h, err := fleet.Host(d.ID); err == nil {
+			out = append(out, docker.Target{ID: d.ID, Host: h})
+		}
+	}
+	return out
 }
 
 // watchedUnits returns a function that returns the systemd units the

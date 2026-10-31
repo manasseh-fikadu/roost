@@ -30,6 +30,7 @@ function device(id: string, ssh?: DeviceSSH, { online = true, self = false } = {
 		path: { kind: online ? 'direct' : 'offline' },
 		rxBytes: 0,
 		txBytes: 0,
+		docker: false,
 		settings: { displayName: '', alertOffline: true, notes: '' },
 		ssh
 	};

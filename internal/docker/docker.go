@@ -1,18 +1,18 @@
-// Package docker reads the containers on the machine Roost runs on, from the
-// Docker Engine API on its socket. Managing them comes with #29.
+// Package docker talks to the Docker Engine API: on the socket of the machine
+// Roost runs on, and on other machines' sockets over SSH (see Fleet). A Client
+// asks Docker; a Host caches what it says and shares live stats between
+// viewers; a Collector reads the containers of the machine Roost runs on for
+// alerts; and a Sampler records what they use, for history.
 package docker
 
 import (
 	"cmp"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"slices"
 	"strings"
@@ -99,9 +99,10 @@ type Client struct {
 // SocketDialer returns.
 func NewClient(dial func(ctx context.Context, network, addr string) (net.Conn, error)) *Client {
 	return &Client{http: &http.Client{Transport: &http.Transport{
-		DialContext:     dial,
-		MaxIdleConns:    maxInspecting,
-		IdleConnTimeout: 30 * time.Second,
+		DialContext:         dial,
+		MaxIdleConns:        maxInspecting,
+		MaxIdleConnsPerHost: maxInspecting,
+		IdleConnTimeout:     30 * time.Second,
 	}}}
 }
 
@@ -111,51 +112,23 @@ func SocketDialer(path string) func(ctx context.Context, network, addr string) (
 	var d net.Dialer
 	return func(ctx context.Context, _, _ string) (net.Conn, error) {
 		conn, err := d.DialContext(ctx, "unix", path)
-		if errors.Is(err, syscall.EACCES) || errors.Is(err, os.ErrPermission) {
-			return nil, fmt.Errorf("%w; add the user Roost runs as to the docker group, and restart Roost", err)
+		switch {
+		case err == nil:
+		case errors.Is(err, syscall.EACCES) || errors.Is(err, os.ErrPermission):
+			return nil, fmt.Errorf("%w: Roost can't use %s; add the user Roost runs as to the docker group, and restart Roost", ErrUnreachable, path)
+		case errors.Is(err, os.ErrNotExist):
+			return nil, fmt.Errorf("%w: there's no socket at %s", ErrUnreachable, path)
+		case errors.Is(err, syscall.ECONNREFUSED):
+			return nil, fmt.Errorf("%w: nothing listens on %s", ErrUnreachable, path)
 		}
 		return conn, err
 	}
 }
 
-type listed struct {
-	ID      string            `json:"Id"`
-	Names   []string          `json:"Names"`
-	Image   string            `json:"Image"`
-	State   string            `json:"State"`
-	Status  string            `json:"Status"`
-	Created int64             `json:"Created"`
-	Labels  map[string]string `json:"Labels"`
-	Ports   []struct {
-		IP          string `json:"IP"`
-		PrivatePort uint16 `json:"PrivatePort"`
-		PublicPort  uint16 `json:"PublicPort"`
-		Type        string `json:"Type"`
-	} `json:"Ports"`
-}
-
-type inspected struct {
-	RestartCount int `json:"RestartCount"`
-	State        struct {
-		ExitCode   int    `json:"ExitCode"`
-		OOMKilled  bool   `json:"OOMKilled"`
-		StartedAt  string `json:"StartedAt"`
-		FinishedAt string `json:"FinishedAt"`
-		Health     *struct {
-			Status string `json:"Status"`
-		} `json:"Health"`
-	} `json:"State"`
-	HostConfig struct {
-		RestartPolicy struct {
-			Name string `json:"Name"`
-		} `json:"RestartPolicy"`
-	} `json:"HostConfig"`
-}
-
 // Containers returns every container, running or not, by name.
 func (c *Client) Containers(ctx context.Context) ([]Container, error) {
-	var list []listed
-	if err := c.get(ctx, "/containers/json?all=1", &list); err != nil {
+	list, err := c.List(ctx)
+	if err != nil {
 		return nil, fmt.Errorf("list the containers: %w", err)
 	}
 	out := make([]Container, len(list))
@@ -168,9 +141,8 @@ func (c *Client) Containers(ctx context.Context) ([]Container, error) {
 		wg.Go(func() {
 			slots <- struct{}{}
 			defer func() { <-slots }()
-			var in inspected
 			// A container removed since the list just keeps what the list said.
-			if err := c.get(ctx, "/containers/"+url.PathEscape(l.ID)+"/json", &in); err == nil {
+			if in, err := c.Inspect(ctx, l.ID); err == nil {
 				addInspect(&out[i], in)
 			}
 		})
@@ -183,55 +155,59 @@ func (c *Client) Containers(ctx context.Context) ([]Container, error) {
 	return out, nil
 }
 
-func fromList(l listed) Container {
-	name := l.ID
-	if len(name) > 12 {
-		name = name[:12]
-	}
-	if len(l.Names) > 0 {
-		name = strings.TrimPrefix(l.Names[0], "/")
-	}
-	c := Container{
+func fromList(l RawContainer) Container {
+	return Container{
 		ID:      l.ID,
-		Name:    name,
+		Name:    l.Name(),
 		Image:   l.Image,
 		State:   l.State,
 		Status:  l.Status,
-		Health:  healthFromStatus(l.Status),
+		Health:  HealthFromStatus(l.Status),
 		Created: time.Unix(l.Created, 0),
 		Project: l.Labels["com.docker.compose.project"],
 		Service: l.Labels["com.docker.compose.service"],
+		Ports:   l.PortList(),
 	}
-	for _, p := range l.Ports {
-		port := Port{IP: p.IP, Private: p.PrivatePort, Public: p.PublicPort, Type: p.Type}
-		// Docker lists a port published on every address twice, for IPv4 and
-		// IPv6.
-		if !slices.ContainsFunc(c.Ports, func(q Port) bool {
-			return q.Private == port.Private && q.Public == port.Public && q.Type == port.Type && anyAddr(q.IP) && anyAddr(port.IP)
-		}) {
-			c.Ports = append(c.Ports, port)
-		}
-	}
-	return c
 }
 
-func anyAddr(ip string) bool { return ip == "0.0.0.0" || ip == "::" || ip == "" }
+// PortList returns the ports the container listens on, by the container's
+// port and then the host's. Docker lists a port that's published on every
+// address twice, for IPv4 and IPv6, and it's one port here.
+func (c RawContainer) PortList() []Port {
+	var out []Port
+	for _, p := range c.Ports {
+		port := Port{IP: p.IP, Private: p.PrivatePort, Public: p.PublicPort, Type: p.Type}
+		if !slices.ContainsFunc(out, func(q Port) bool {
+			return q.Private == port.Private && q.Public == port.Public && q.Type == port.Type && AnyAddr(q.IP) && AnyAddr(port.IP)
+		}) {
+			out = append(out, port)
+		}
+	}
+	slices.SortStableFunc(out, func(a, b Port) int {
+		return cmp.Or(cmp.Compare(a.Private, b.Private), cmp.Compare(a.Public, b.Public))
+	})
+	return out
+}
 
-func addInspect(c *Container, in inspected) {
+// AnyAddr reports whether a host address means every address.
+func AnyAddr(ip string) bool { return ip == "0.0.0.0" || ip == "::" || ip == "" }
+
+func addInspect(c *Container, in *RawInspect) {
 	c.RestartCount = in.RestartCount
 	c.ExitCode = in.State.ExitCode
 	c.OOMKilled = in.State.OOMKilled
 	c.RestartPolicy = cmp.Or(in.HostConfig.RestartPolicy.Name, "no")
-	c.StartedAt = dockerTime(in.State.StartedAt)
-	c.FinishedAt = dockerTime(in.State.FinishedAt)
+	c.StartedAt = ParseTime(in.State.StartedAt)
+	c.FinishedAt = ParseTime(in.State.FinishedAt)
 	if h := in.State.Health; h != nil && h.Status != "none" {
 		c.Health = h.Status
 	}
 }
 
-// dockerTime reads a time as Docker writes it, which is the zero year when
-// something hasn't happened.
-func dockerTime(s string) time.Time {
+// ParseTime reads a time as Docker writes it, which is the zero year when
+// something hasn't happened. It returns the zero time for that, and for a
+// time it can't read.
+func ParseTime(s string) time.Time {
 	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil || t.Year() < 2000 {
 		return time.Time{}
@@ -239,41 +215,15 @@ func dockerTime(s string) time.Time {
 	return t
 }
 
-// healthFromStatus reads the health from a status such as "Up 2 hours
+// HealthFromStatus reads the health from a status such as "Up 2 hours
 // (healthy)", for when inspecting the container fails.
-func healthFromStatus(status string) string {
+func HealthFromStatus(status string) string {
 	for _, h := range []string{"unhealthy", "healthy", "health: starting"} {
 		if strings.Contains(status, "("+h+")") {
 			return strings.TrimPrefix(h, "health: ")
 		}
 	}
 	return ""
-}
-
-func (c *Client) get(ctx context.Context, path string, v any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://docker"+path, nil)
-	if err != nil {
-		return err
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		if ue, ok := errors.AsType[*url.Error](err); ok {
-			err = ue.Err
-		}
-		return err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	if resp.StatusCode != http.StatusOK {
-		var e struct {
-			Message string `json:"message"`
-		}
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-		if json.Unmarshal(body, &e) == nil && e.Message != "" {
-			return fmt.Errorf("docker answered %d: %s", resp.StatusCode, e.Message)
-		}
-		return fmt.Errorf("docker answered %d", resp.StatusCode)
-	}
-	return json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(v)
 }
 
 // A Reading is what a Collector last learned.
