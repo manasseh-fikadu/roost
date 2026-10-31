@@ -69,7 +69,7 @@ func (m *Manager) OpenTerminal(ctx context.Context, deviceID string, opts Termin
 		return nil, ErrNotSetUp
 	}
 	client, err := m.connect(ctx, t, a)
-	m.record(t.id, gen, err)
+	m.record(t.id, gen, client, err)
 	if err != nil {
 		return nil, err
 	}

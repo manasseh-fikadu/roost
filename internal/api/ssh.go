@@ -12,8 +12,8 @@ import (
 )
 
 // newDeviceSSH returns how Roost logs in to d, from what the SSH manager
-// says of each machine. self marks Roost's own node.
-func newDeviceSSH(d tailnet.Device, self bool, access map[string]ssh.Access) *DeviceSSH {
+// says of each machine. self marks Roost's own node, which is roost.
+func newDeviceSSH(d tailnet.Device, self bool, roost tailnet.Device, access map[string]ssh.Access) *DeviceSSH {
 	id := ssh.AccessID(d, self)
 	out := &DeviceSSH{State: SSHStateNotSetUp, Hub: id == store.HubID}
 	a, ok := access[id]
@@ -23,6 +23,10 @@ func newDeviceSSH(d tailnet.Device, self bool, access map[string]ssh.Access) *De
 	out.State, out.User, out.Port, out.HostKey = SSHState(a.State), a.User, a.Port, a.HostKey
 	out.Error, out.OfferedKey, out.CheckedAt = a.Error, a.OfferedKey, timePtr(a.CheckedAt)
 	out.Tmux, out.Docker = a.Tmux, a.Docker
+	out.Method = SSHMethod(a.Method)
+	if a.Refusal != "" {
+		out.Policy = &SSHPolicy{Refusal: SSHRefusal(a.Refusal), Snippet: ssh.PolicySnippet(roost, d, a.User)}
+	}
 	return out
 }
 
@@ -32,8 +36,8 @@ func (h *handler) sshOf(id string) *DeviceSSH {
 	if !ok {
 		return &DeviceSSH{State: SSHStateNotSetUp}
 	}
-	self := h.opts.Snapshot().Status.Self.ID == d.ID
-	return newDeviceSSH(d, self, h.opts.SSH.Access())
+	roost := h.opts.Snapshot().Status.Self
+	return newDeviceSSH(d, roost.ID == d.ID, roost, h.opts.SSH.Access())
 }
 
 // sshError answers with the status and message for an error from the SSH

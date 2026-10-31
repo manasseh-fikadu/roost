@@ -516,6 +516,9 @@ type Device struct {
 	// SSH is how Roost logs in to the device, if it can: Linux, macOS and
 	// FreeBSD machines. Only admins get it.
 	SSH *DeviceSSH `json:"ssh,omitempty" roost:"secret"`
+	// TailscaleSSH reports whether the device runs Tailscale SSH, which Roost
+	// can log in to without a key, if the tailnet policy lets it.
+	TailscaleSSH bool `json:"tailscaleSsh,omitempty"`
 	// Docker reports whether Roost can read the Docker on the device: on the
 	// machine Roost runs on, if it has a Docker socket, and on another, if
 	// Roost has SSH access and found one there. Viewers get it too, since
@@ -776,6 +779,15 @@ type AgentCode struct {
 	// CreatedAt and ExpiresAt are by the hub's clock.
 	CreatedAt time.Time `json:"createdAt"`
 	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+// AgentRun is the response to POST /api/devices/{id}/agent/install and
+// POST /api/devices/{id}/agent/uninstall, which run the script over SSH on
+// the device. A script that fails is still a 200, with OK false.
+type AgentRun struct {
+	OK bool `json:"ok"`
+	// Output is the end of what the script printed, errors included.
+	Output string `json:"output"`
 }
 
 // AgentSecret is the response to POST /api/agent/enroll: the secret the
@@ -1395,6 +1407,13 @@ type DeviceSSH struct {
 	// Error says why Roost can't log in, while the State is
 	// SSHStateFailing or SSHStateHostKeyChanged.
 	Error string `json:"error,omitempty"`
+	// Method is how Roost logged in the last time it did, while the State is
+	// SSHStateOK.
+	Method SSHMethod `json:"method,omitempty"`
+	// Policy is the change to the tailnet policy that Tailscale SSH on the
+	// machine needs before it lets Roost in, while the State is
+	// SSHStateFailing and the policy is why.
+	Policy *SSHPolicy `json:"policy,omitempty"`
 	// CheckedAt is when Roost last checked the machine, if it has.
 	CheckedAt *time.Time `json:"checkedAt,omitempty"`
 	// Tmux says whether the machine has tmux, which keeps terminals running
@@ -1420,6 +1439,44 @@ const (
 	// than the one Roost pinned, so Roost won't log in until an admin
 	// resets it, such as after the machine was reinstalled.
 	SSHStateHostKeyChanged SSHState = "host-key-changed"
+)
+
+// SSHMethod says how Roost logged in to a device.
+type SSHMethod string
+
+// The ways Roost logs in.
+const (
+	// SSHMethodKey is a login with Roost's key, which an admin put in the
+	// machine's authorized_keys.
+	SSHMethodKey SSHMethod = "key"
+	// SSHMethodTailscale is a login to the machine's Tailscale SSH, which
+	// let Roost in without a key.
+	SSHMethodTailscale SSHMethod = "tailscale"
+)
+
+// SSHPolicy is what the tailnet policy needs before a device's Tailscale SSH
+// lets Roost in.
+type SSHPolicy struct {
+	// Refusal says what the policy does now.
+	Refusal SSHRefusal `json:"refusal"`
+	// Snippet is a rule for the "ssh" section of the policy that lets Roost
+	// log in as the user an admin set up, without a browser check.
+	Snippet string `json:"snippet"`
+}
+
+// SSHRefusal says why Tailscale SSH turned Roost away.
+type SSHRefusal string
+
+// The ways the tailnet policy can turn Roost away.
+const (
+	// SSHRefusalCheck means the rule that covers Roost has the action
+	// "check", which asks for a visit to a URL that Roost can't make.
+	SSHRefusalCheck SSHRefusal = "check"
+	// SSHRefusalNode means no rule lets Roost SSH to the machine.
+	SSHRefusalNode SSHRefusal = "node"
+	// SSHRefusalUser means a rule lets Roost in, but not as the user an
+	// admin set up.
+	SSHRefusalUser SSHRefusal = "user"
 )
 
 // SSHSetup is the response to GET /api/devices/{id}/ssh: how to let Roost

@@ -3,12 +3,15 @@ import type { Device, DeviceSSH } from './api/types.js';
 import {
 	Acker,
 	canOpen,
+	commonSSHUser,
 	exitMessage,
 	listedDeviceId,
 	loadTabs,
 	nextSessionName,
 	parsePort,
+	refusalText,
 	saveTabs,
+	sshStateLabel,
 	terminalDevices,
 	terminalURL,
 	type TerminalTab
@@ -286,5 +289,79 @@ describe('Acker', () => {
 		expect([a.wrote(40), a.wrote(40), a.wrote(40), a.wrote(10)]).toEqual([0, 0, 120, 0]);
 		expect(a.flush()).toBe(10);
 		expect(a.flush()).toBe(0);
+	});
+});
+
+describe('sshStateLabel', () => {
+	test.each<{ name: string; ssh: DeviceSSH; want: string }>([
+		{ name: 'a key', ssh: { ...ok, method: 'key' }, want: 'Connected' },
+		{ name: 'no method yet', ssh: ok, want: 'Connected' },
+		{
+			name: 'Tailscale SSH',
+			ssh: { ...ok, method: 'tailscale' },
+			want: 'Connected with Tailscale SSH'
+		},
+		{ name: 'failing', ssh: { state: 'failing' }, want: "Can't log in" },
+		// A method only says how Roost got in while it can.
+		{
+			name: 'failing after a login',
+			ssh: { state: 'failing', method: 'tailscale' },
+			want: "Can't log in"
+		}
+	])('$name', ({ ssh, want }) => {
+		expect(sshStateLabel(ssh)).toBe(want);
+	});
+});
+
+describe('commonSSHUser', () => {
+	test.each<{ name: string; devices: Device[]; want: string }>([
+		{ name: 'none set up', devices: [device('a'), device('b')], want: '' },
+		{
+			name: 'the most used',
+			devices: [
+				device('a', { state: 'ok', user: 'bob' }),
+				device('b', { state: 'ok', user: 'alice' }),
+				device('c', { state: 'failing', user: 'alice' })
+			],
+			want: 'alice'
+		},
+		{
+			name: 'a tie goes to the first',
+			devices: [
+				device('a', { state: 'ok', user: 'bob' }),
+				device('b', { state: 'ok', user: 'alice' })
+			],
+			want: 'bob'
+		},
+		{
+			name: "not the hub's, which is Roost's own user",
+			devices: [
+				device('a', { state: 'ok', user: 'roost', hub: true }),
+				device('b', { state: 'ok', user: 'deploy' })
+			],
+			want: 'deploy'
+		},
+		{ name: 'not set up', devices: [device('a', { state: 'not-set-up' })], want: '' }
+	])('$name', ({ devices, want }) => {
+		expect(commonSSHUser(devices)).toBe(want);
+	});
+});
+
+describe('refusalText', () => {
+	test('check', () => {
+		expect(refusalText('check', 'laptop', 'alice').title).toBe(
+			'Tailscale SSH wants a browser check'
+		);
+	});
+	test('node names the machine', () => {
+		const t = refusalText('node', 'laptop', 'alice');
+		expect(t.detail).toContain('Roost logging in to laptop');
+	});
+	test('user names the user', () => {
+		const t = refusalText('user', 'laptop', 'alice');
+		expect(t.title).toContain('as alice');
+		expect(t.detail).toContain(
+			'"users" don\'t include alice, or laptop has no account named alice'
+		);
 	});
 });

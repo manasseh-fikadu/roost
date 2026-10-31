@@ -2,12 +2,15 @@ package ssh
 
 import (
 	"bufio"
+	"cmp"
 	"context"
 	"errors"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	gossh "golang.org/x/crypto/ssh"
 
 	"github.com/manasseh-fikadu/roost/internal/store"
 )
@@ -104,21 +107,28 @@ func (m *Manager) pingDocker(ctx context.Context, t target, path string) bool {
 	return res.StatusCode == http.StatusOK
 }
 
-// record notes whether connecting to a machine worked, unless its access
-// changed since gen.
-func (m *Manager) record(id string, gen uint64, err error) {
+// record notes whether connecting to a machine worked, and how, unless its
+// access changed since gen. client is the connection, if it worked.
+func (m *Manager) record(id string, gen uint64, client *gossh.Client, err error) {
 	if errors.Is(err, context.Canceled) {
 		return
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	v := m.checks[id]
-	if m.gen[id] != gen || (err == nil && v.State == StateOK) {
+	if m.gen[id] != gen {
 		return
+	}
+	if err == nil {
+		method := methodOf(client)
+		if v.State == StateOK && v.Method == method {
+			return
+		}
+		v.Method = method
 	}
 	// A connection only says whether Roost can log in, so what the last
 	// check found stays.
-	v.State, v.Error = StateOK, ""
+	v.State, v.Error, v.Refusal = StateOK, "", ""
 	m.setCheckLocked(id, v, err)
 	if err == nil {
 		// A machine that wasn't OK, such as one whose key an admin just
@@ -141,6 +151,13 @@ func (m *Manager) setCheckLocked(id string, found Access, err error) {
 	if err != nil {
 		found.State, found.Error = StateFailing, err.Error()
 		found.Tmux, found.Docker, found.DockerSocket = prev.Tmux, prev.Docker, prev.DockerSocket
+		found.Method = ""
+		if ce, ok := errors.AsType[*ConnectError](err); ok {
+			found.Refusal = ce.Refusal
+		}
+	} else {
+		// A check runs commands over a connection that record has noted.
+		found.Method = cmp.Or(found.Method, prev.Method)
 	}
 	m.checks[id] = found
 	m.changed()
