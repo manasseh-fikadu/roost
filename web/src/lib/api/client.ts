@@ -1,5 +1,6 @@
 import { toast } from '#lib/toast.svelte.js';
 import type {
+	Access,
 	AgentCode,
 	AgentSetup,
 	Alert,
@@ -9,6 +10,7 @@ import type {
 	CheckHistory,
 	CheckInput,
 	CheckResult,
+	ChangeSettings,
 	DeviceHistory,
 	DeviceSettings,
 	DeviceSSH,
@@ -18,13 +20,17 @@ import type {
 	EventList,
 	Health,
 	HealthHistory,
+	InstalledServices,
 	Me,
 	RecentResults,
+	Role,
 	SetDeviceSettings,
+	SettingsView,
 	SetSSH,
 	SSHSetup,
 	TerminalSessions,
-	UsageHistory
+	UsageHistory,
+	WhoCanView
 } from './types.js';
 
 /**
@@ -317,4 +323,44 @@ export function getEvents(q: EventQuery = {}): Promise<EventList> {
 	if (q.limit) params.set('limit', String(q.limit));
 	const query = params.toString();
 	return request('GET', `events${query ? `?${query}` : ''}`);
+}
+
+/** Roost's settings, with the defaults and how Roost joined the tailnet. Admins only. */
+export function getSettings(): Promise<SettingsView> {
+	return request('GET', 'settings');
+}
+
+/**
+ * Replaces the parts of the settings that `change` has and leaves the rest,
+ * and says so in a toast. Roost uses the change at once. Admins only.
+ */
+export function changeSettings(change: ChangeSettings, success = 'Saved'): Promise<SettingsView> {
+	return mutate('PATCH', 'settings', change, { success });
+}
+
+/** The services on the machine Roost runs on, to pick the ones to watch from. Admins only. */
+export function getInstalledServices(): Promise<InstalledServices> {
+	return request('GET', 'settings/units');
+}
+
+/** Who has a role in Roost, and who else can view it. Admins only. */
+export function getAccess(): Promise<Access> {
+	return request('GET', 'access');
+}
+
+/** Gives a Tailscale login a role, or changes it. Admins only. */
+export function setRole(login: string, role: Role, success = 'Saved'): Promise<Access> {
+	return mutate('PUT', `access/users/${encodeURIComponent(login)}`, { role }, { success });
+}
+
+/** Takes a login's role away, and says so in a toast. Admins only. */
+export function removeUser(login: string): Promise<Access> {
+	return mutate('DELETE', `access/users/${encodeURIComponent(login)}`, undefined, {
+		success: 'Removed'
+	});
+}
+
+/** Changes who can view Roost, other than the users with a role. Admins only. */
+export function setWhoCanView(whoCanView: WhoCanView): Promise<Access> {
+	return mutate('PATCH', 'access', { whoCanView }, { success: 'Saved' });
 }

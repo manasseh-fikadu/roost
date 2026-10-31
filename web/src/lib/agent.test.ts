@@ -28,7 +28,7 @@ function device(
 		measuredBy: measuredBy ?? (agent?.lastSeen ? 'agent' : undefined),
 		agent,
 		docker: false,
-		settings: { displayName: '', alertOffline: true, notes: '' }
+		settings: { displayName: '', alertOffline: true, thresholds: {}, notes: '' }
 	};
 }
 

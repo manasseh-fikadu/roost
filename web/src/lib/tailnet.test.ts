@@ -18,7 +18,7 @@ function device(path: Path, online = true, ips = ['100.64.0.2', 'fd7a:115c:a1e0:
 		rxBytes: 0,
 		txBytes: 0,
 		docker: false,
-		settings: { displayName: '', alertOffline: true, notes: '' }
+		settings: { displayName: '', alertOffline: true, thresholds: {}, notes: '' }
 	};
 }
 
