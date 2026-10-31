@@ -328,19 +328,64 @@ export const TailscaleModeHost = "host";
  */
 export type TailscaleMode = typeof TailscaleModeEmbedded | typeof TailscaleModeHost;
 /**
- * ChangeSettings is the body of PATCH /api/settings. Each part it has
- * replaces that part of the settings, and the parts it leaves out stay as
- * they are, so two admins who change different parts don't undo each other.
+ * ChangeSettings is the body of PATCH /api/settings. Each setting it has
+ * changes, and the ones it leaves out stay as they are, so two admins who
+ * change different settings don't undo each other, and a request can say
+ * just what it means. The fields are those of Settings.
  */
 export interface ChangeSettings {
-  general?: GeneralSettings;
-  thresholds?: Thresholds;
-  rules?: AlertRules;
-  retention?: RetentionSettings;
+  general?: ChangeGeneral;
+  thresholds?: ChangeThresholds;
+  rules?: ChangeRules;
+  retention?: ChangeRetention;
   /**
-   * WatchedUnits replaces the list when it's there, even if it's empty.
+   * WatchedUnits replaces the whole list when it's there, even if it's
+   * empty.
    */
   watchedUnits?: string[];
+}
+/**
+ * ChangeGeneral changes GeneralSettings.
+ */
+export interface ChangeGeneral {
+  name?: string;
+  publicUrl?: string;
+}
+/**
+ * ChangeThresholds changes Thresholds.
+ */
+export interface ChangeThresholds {
+  diskWarn?: number /* float64 */;
+  diskCritical?: number /* float64 */;
+  memoryWarn?: number /* float64 */;
+  cpuWarn?: number /* float64 */;
+  cpuWindowMinutes?: number /* int */;
+  offlineMinutes?: number /* int */;
+  keyExpiryDays?: number /* int */;
+  checkFailures?: number /* int */;
+}
+/**
+ * ChangeRules turns AlertRules on or off.
+ */
+export interface ChangeRules {
+  offline?: boolean;
+  keyExpiry?: boolean;
+  agentStopped?: boolean;
+  disk?: boolean;
+  memory?: boolean;
+  cpu?: boolean;
+  checks?: boolean;
+  containers?: boolean;
+  units?: boolean;
+  collectors?: boolean;
+}
+/**
+ * ChangeRetention changes RetentionSettings.
+ */
+export interface ChangeRetention {
+  activityDays?: number /* int */;
+  historyDays?: number /* int */;
+  checksDays?: number /* int */;
 }
 /**
  * InstalledServices is the response to GET /api/settings/units: the services

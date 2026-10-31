@@ -519,7 +519,33 @@ func hasDocker(d tailnet.Device, self, hostNode bool, src sources) bool {
 // thresholdsFor returns the thresholds for the device with an ID: its own,
 // where an admin set them, and else the settings'.
 func (s sources) thresholdsFor(deviceID string) settings.Thresholds {
-	return s.global.Thresholds.For(s.settings[deviceID].Thresholds)
+	return s.global.Thresholds.For(s.overridesFor(deviceID))
+}
+
+// overridesFor returns the thresholds an admin set for the device with an ID.
+// The machine Roost runs on can be two nodes in embedded mode, Roost's own and
+// a peer, and Roost measures the machine once, so both nodes get the same
+// thresholds: those of Roost's own node, and for what it leaves out, the
+// peer's.
+func (s sources) overridesFor(deviceID string) store.ThresholdOverrides {
+	st := s.tailnet.Status
+	if st == nil {
+		return s.settings[deviceID].Thresholds
+	}
+	nodes := []string{st.Self.ID}
+	for _, p := range st.Peers {
+		if p.SameMachine {
+			nodes = append(nodes, p.ID)
+		}
+	}
+	if !slices.Contains(nodes, deviceID) {
+		return s.settings[deviceID].Thresholds
+	}
+	var out store.ThresholdOverrides
+	for _, id := range nodes {
+		out = out.Or(s.settings[id].Thresholds)
+	}
+	return out
 }
 
 // newDeviceThresholds returns the thresholds of a device as the API shows

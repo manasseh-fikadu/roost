@@ -33,6 +33,22 @@ type ThresholdOverrides struct {
 	OfflineMinutes *int
 }
 
+// Or returns o with the thresholds it leaves out taken from other.
+func (o ThresholdOverrides) Or(other ThresholdOverrides) ThresholdOverrides {
+	pick := func(a, b *float64) *float64 {
+		if a != nil {
+			return a
+		}
+		return b
+	}
+	o.DiskWarn, o.DiskCritical = pick(o.DiskWarn, other.DiskWarn), pick(o.DiskCritical, other.DiskCritical)
+	o.MemoryWarn, o.CPUWarn = pick(o.MemoryWarn, other.MemoryWarn), pick(o.CPUWarn, other.CPUWarn)
+	if o.OfflineMinutes == nil {
+		o.OfflineMinutes = other.OfflineMinutes
+	}
+	return o
+}
+
 // DeviceSettings returns the settings of every device that has any, by
 // device ID.
 func (s *Store) DeviceSettings(ctx context.Context) (map[string]DeviceSettings, error) {

@@ -57,6 +57,19 @@ func TestStore_DeviceSettings(t *testing.T) {
 	}
 }
 
+func TestThresholdOverrides_Or(t *testing.T) {
+	t.Parallel()
+	own := store.ThresholdOverrides{DiskWarn: new(97.0), OfflineMinutes: new(60)}
+	other := store.ThresholdOverrides{DiskWarn: new(50.0), DiskCritical: new(99.0), CPUWarn: new(100.0), OfflineMinutes: new(5)}
+	want := store.ThresholdOverrides{DiskWarn: new(97.0), DiskCritical: new(99.0), CPUWarn: new(100.0), OfflineMinutes: new(60)}
+	if got := own.Or(other); !reflect.DeepEqual(got, want) {
+		t.Errorf("Or() = %+v, want %+v", got, want)
+	}
+	if got := (store.ThresholdOverrides{}).Or(store.ThresholdOverrides{}); got != (store.ThresholdOverrides{}) {
+		t.Errorf("Or() of nothing = %+v", got)
+	}
+}
+
 func TestStore_RTTHistory(t *testing.T) {
 	t.Parallel()
 	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)

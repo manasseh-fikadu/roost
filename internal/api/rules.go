@@ -3,10 +3,12 @@ package api
 import (
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/manasseh-fikadu/roost/internal/alerts"
 	"github.com/manasseh-fikadu/roost/internal/docker"
+	"github.com/manasseh-fikadu/roost/internal/settings"
 )
 
 const (
@@ -184,7 +186,11 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 	if r := src.systemd; r != nil {
 		unitsFresh = fresh(r.At, r.Err, now)
 	}
-	isFresh := func(source, deviceID string) bool {
+	isFresh := func(key, source, deviceID string) bool {
+		// An alert of a rule that's turned off has nothing to wait for.
+		if !ruleOn(rules, key) {
+			return true
+		}
 		// A device that left the tailnet takes its alerts with it.
 		if _, ok := byID[deviceID]; deviceID != "" && !ok && tailnetFresh {
 			return true
@@ -208,6 +214,34 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 		return false
 	}
 	return out, isFresh
+}
+
+// ruleOn reports whether the rule that opens the alert with a key is on.
+func ruleOn(r settings.Rules, key string) bool {
+	kind, _, _ := strings.Cut(key, ":")
+	switch kind {
+	case "offline":
+		return r.Offline
+	case "key-expiry":
+		return r.KeyExpiry
+	case "agent":
+		return r.AgentStopped
+	case "disk":
+		return r.Disk
+	case "memory":
+		return r.Memory
+	case "cpu":
+		return r.CPU
+	case "check":
+		return r.Checks
+	case "container":
+		return r.Containers
+	case "unit":
+		return r.Units
+	case "collector":
+		return r.Collectors
+	}
+	return true
 }
 
 // findContainer returns the container of src's Docker reading with a name.

@@ -9,13 +9,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/netip"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
 	"unicode/utf8"
 
 	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/roost/internal/systemd"
 )
 
 // kvKey is the setting in the store's kv table that holds them, as JSON.
@@ -171,6 +175,10 @@ func Defaults() Settings {
 	}
 }
 
+// ErrCorrupt means the saved settings can't be read, as if they were edited
+// by hand.
+var ErrCorrupt = errors.New("can't read the saved settings")
+
 // Load returns the settings in st: what an admin saved, and the defaults
 // for anything they didn't.
 func Load(ctx context.Context, st *store.Store) (Settings, error) {
@@ -180,7 +188,7 @@ func Load(ctx context.Context, st *store.Store) (Settings, error) {
 		return s, err
 	}
 	if err := json.Unmarshal([]byte(raw), &s); err != nil {
-		return Defaults(), fmt.Errorf("read the settings: %w", err)
+		return Defaults(), fmt.Errorf("%w: %w", ErrCorrupt, err)
 	}
 	return s, nil
 }
@@ -257,10 +265,35 @@ func checkPublicURL(s string) error {
 		return errors.New("the public URL must be a web address, such as https://roost.example.ts.net")
 	case u.User != nil || u.Path != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.HasSuffix(s, "/"):
 		return errors.New("the public URL can only be a scheme, a host and a port, such as https://roost.example.ts.net:8443")
-	case strings.ContainsFunc(s, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }):
-		return errors.New("the public URL can't have spaces in it")
+	case !validHost(u.Hostname()) || !validPort(u):
+		return errors.New("the public URL's host must be a name or an IP address, and its port a number from 1 to 65535")
 	}
 	return nil
+}
+
+// hostName is a DNS name: labels of letters, digits and hyphens.
+var hostName = regexp.MustCompile(`^[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*$`)
+
+// validHost reports whether host, without brackets, is a DNS name or an IP
+// address without a zone.
+func validHost(host string) bool {
+	if addr, err := netip.ParseAddr(host); err == nil {
+		return addr.Zone() == ""
+	}
+	return len(host) <= 253 && hostName.MatchString(host)
+}
+
+// validPort reports whether u has no port, or a port from 1 to 65535.
+func validPort(u *url.URL) bool {
+	if strings.HasSuffix(u.Host, ":") {
+		return false
+	}
+	port := u.Port()
+	if port == "" {
+		return true
+	}
+	n, err := strconv.Atoi(port)
+	return err == nil && n >= 1 && n <= 65535
 }
 
 // Check returns an error that says what's wrong with t, if anything is.
@@ -276,7 +309,7 @@ func (t Thresholds) Check() error {
 	switch {
 	case t.DiskCritical < t.DiskWarn:
 		return errors.New("a disk can't be critical before it needs a warning")
-	case t.CPUWindowMinutes < 1 || t.CPUWindow() > MaxCPUWindow:
+	case t.CPUWindowMinutes < 1 || t.CPUWindowMinutes > int(MaxCPUWindow/time.Minute):
 		return errors.New("the time the CPU must stay busy must be from a minute to an hour")
 	case t.OfflineMinutes < 1 || t.OfflineMinutes > 7*24*60:
 		return errors.New("the time a device can be offline must be from a minute to a week")
@@ -290,8 +323,7 @@ func (t Thresholds) Check() error {
 
 func checkUnits(units []string) error {
 	for _, u := range units {
-		name := strings.TrimPrefix(u, "user:")
-		if name == "" || strings.ContainsAny(name, " \t\n/") || strings.HasPrefix(name, "-") {
+		if !systemd.ValidName(strings.TrimPrefix(u, "user:")) {
 			return fmt.Errorf("%q isn't the name of a systemd unit", u)
 		}
 	}

@@ -40,6 +40,25 @@ const (
 	User Scope = "user"
 )
 
+// ValidName reports whether name can be the name of a unit that Roost asks
+// systemd about, such as "ssh.service" or "getty@tty1.service": systemd's own
+// characters, and not a template such as "getty@.service". systemctl fails
+// for the whole list if one name isn't valid.
+func ValidName(name string) bool {
+	if name == "" || len(name) > 255 || name[0] == '-' || strings.Contains(name, "@.") {
+		return false
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case strings.ContainsRune(`:_.\@-`, r):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
 // userPrefix marks a watched unit as a user unit, as in "user:app.service".
 const userPrefix = "user:"
 
@@ -214,6 +233,12 @@ func (c *Collector) Changes() <-chan struct{} { return c.changes }
 func (c *Collector) collect(ctx context.Context) {
 	watched := map[Scope][]string{}
 	for _, w := range c.watched() {
+		// A name that isn't valid fails every name asked about with it, so one
+		// that got into the settings, such as by editing the database, is left
+		// out.
+		if !ValidName(strings.TrimPrefix(w, userPrefix)) {
+			continue
+		}
 		if name, ok := strings.CutPrefix(w, userPrefix); ok {
 			watched[User] = append(watched[User], name)
 		} else {

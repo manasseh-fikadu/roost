@@ -89,11 +89,17 @@ func TestCheck(t *testing.T) {
 		{"CPU for no time", func(s *settings.Settings) { s.Thresholds.CPUWindowMinutes = 0 }, true},
 		{"CPU for a day", func(s *settings.Settings) { s.Thresholds.CPUWindowMinutes = 24 * 60 }, true},
 		{"CPU for an hour", func(s *settings.Settings) { s.Thresholds.CPUWindowMinutes = 60 }, false},
+		{"CPU for longer than a duration holds", func(s *settings.Settings) { s.Thresholds.CPUWindowMinutes = 3_000_000_000_000_000 }, true},
 		{"offline for no time", func(s *settings.Settings) { s.Thresholds.OfflineMinutes = 0 }, true},
 		{"no key warning", func(s *settings.Settings) { s.Thresholds.KeyExpiryDays = 0 }, true},
 		{"no failures", func(s *settings.Settings) { s.Thresholds.CheckFailures = 0 }, true},
 		{"a user unit", func(s *settings.Settings) { s.WatchedUnits = []string{"user:app.service"} }, false},
 		{"a unit with a space", func(s *settings.Settings) { s.WatchedUnits = []string{"my app"} }, true},
+		{"a unit with a character systemd refuses", func(s *settings.Settings) { s.WatchedUnits = []string{"a!b.service"} }, true},
+		{"a unit template", func(s *settings.Settings) { s.WatchedUnits = []string{"getty@.service"} }, true},
+		{"a unit instance", func(s *settings.Settings) { s.WatchedUnits = []string{"getty@tty1.service"} }, false},
+		{"a unit with an escape", func(s *settings.Settings) { s.WatchedUnits = []string{`dev-disk-by\x2did.device`} }, false},
+		{"a long unit name", func(s *settings.Settings) { s.WatchedUnits = []string{strings.Repeat("a", 256) + ".service"} }, true},
 		{"a flag for a unit", func(s *settings.Settings) { s.WatchedUnits = []string{"--all"} }, true},
 		{"an empty user unit", func(s *settings.Settings) { s.WatchedUnits = []string{"user:"} }, true},
 		{"no units", func(s *settings.Settings) { s.WatchedUnits = nil }, false},
@@ -109,6 +115,15 @@ func TestCheck(t *testing.T) {
 		{"a public URL without a scheme", func(s *settings.Settings) { s.General.PublicURL = "roost.example.com" }, true},
 		{"a public URL with another scheme", func(s *settings.Settings) { s.General.PublicURL = "ftp://roost.example.com" }, true},
 		{"a public URL with a query", func(s *settings.Settings) { s.General.PublicURL = "https://example.com?a=b" }, true},
+		{"a public URL with an IPv6 address", func(s *settings.Settings) { s.General.PublicURL = "http://[fd7a:115c:a1e0::1]:4700" }, false},
+		{"a public URL with an IP address", func(s *settings.Settings) { s.General.PublicURL = "http://100.64.0.1" }, false},
+		{"a public URL with a shell word in it", func(s *settings.Settings) { s.General.PublicURL = "https://a$(id).example.com" }, true},
+		{"a public URL with a semicolon", func(s *settings.Settings) { s.General.PublicURL = "https://a;reboot" }, true},
+		{"a public URL with a quote", func(s *settings.Settings) { s.General.PublicURL = "https://a'b.example.com" }, true},
+		{"a public URL with an invisible character", func(s *settings.Settings) { s.General.PublicURL = "https://a\u200b.example.com" }, true},
+		{"a public URL with a port that is too big", func(s *settings.Settings) { s.General.PublicURL = "https://example.com:99999" }, true},
+		{"a public URL with an empty port", func(s *settings.Settings) { s.General.PublicURL = "https://example.com:" }, true},
+		{"a public URL with a zone", func(s *settings.Settings) { s.General.PublicURL = "http://[fe80::1%25eth0]" }, true},
 		{"no activity log", func(s *settings.Settings) { s.Retention.ActivityDays = 0 }, true},
 		{"a year of activity", func(s *settings.Settings) { s.Retention.ActivityDays = 365 }, false},
 		{"over a year of activity", func(s *settings.Settings) { s.Retention.ActivityDays = 366 }, true},
@@ -305,4 +320,24 @@ func TestCache(t *testing.T) {
 			t.Errorf("Get() with broken settings in the database = memory %v, want the last, 70", got)
 		}
 	})
+}
+
+func TestCache_Update_corruptSettings(t *testing.T) {
+	t.Parallel()
+	st := openStore(t)
+	c := settings.NewCache(st, nil)
+	if err := st.SetKV(t.Context(), "settings", `{"retention":{"activityDays":"x"}}`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := settings.Load(t.Context(), st); !errors.Is(err, settings.ErrCorrupt) {
+		t.Fatalf("Load() of settings that can't be read = %v, want ErrCorrupt", err)
+	}
+	// An admin can write over them, from the defaults.
+	_, after, err := c.Update(t.Context(), func(s *settings.Settings) error { s.General.Name = "Lab"; return nil })
+	if err != nil || after.General.Name != "Lab" || after.Retention != settings.Defaults().Retention {
+		t.Fatalf("Update() over broken settings = %+v, %v, want the defaults and the change", after, err)
+	}
+	if got, err := settings.Load(t.Context(), st); err != nil || got.General.Name != "Lab" {
+		t.Errorf("Load() after = %+v, %v", got, err)
+	}
 }

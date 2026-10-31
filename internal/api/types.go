@@ -229,16 +229,57 @@ const (
 	TailscaleModeHost TailscaleMode = "host"
 )
 
-// ChangeSettings is the body of PATCH /api/settings. Each part it has
-// replaces that part of the settings, and the parts it leaves out stay as
-// they are, so two admins who change different parts don't undo each other.
+// ChangeSettings is the body of PATCH /api/settings. Each setting it has
+// changes, and the ones it leaves out stay as they are, so two admins who
+// change different settings don't undo each other, and a request can say
+// just what it means. The fields are those of Settings.
 type ChangeSettings struct {
-	General    *GeneralSettings   `json:"general,omitempty"`
-	Thresholds *Thresholds        `json:"thresholds,omitempty"`
-	Rules      *AlertRules        `json:"rules,omitempty"`
-	Retention  *RetentionSettings `json:"retention,omitempty"`
-	// WatchedUnits replaces the list when it's there, even if it's empty.
+	General    *ChangeGeneral    `json:"general,omitempty"`
+	Thresholds *ChangeThresholds `json:"thresholds,omitempty"`
+	Rules      *ChangeRules      `json:"rules,omitempty"`
+	Retention  *ChangeRetention  `json:"retention,omitempty"`
+	// WatchedUnits replaces the whole list when it's there, even if it's
+	// empty.
 	WatchedUnits []string `json:"watchedUnits,omitempty"`
+}
+
+// ChangeGeneral changes GeneralSettings.
+type ChangeGeneral struct {
+	Name      *string `json:"name,omitempty"`
+	PublicURL *string `json:"publicUrl,omitempty"`
+}
+
+// ChangeThresholds changes Thresholds.
+type ChangeThresholds struct {
+	DiskWarn         *float64 `json:"diskWarn,omitempty"`
+	DiskCritical     *float64 `json:"diskCritical,omitempty"`
+	MemoryWarn       *float64 `json:"memoryWarn,omitempty"`
+	CPUWarn          *float64 `json:"cpuWarn,omitempty"`
+	CPUWindowMinutes *int     `json:"cpuWindowMinutes,omitempty"`
+	OfflineMinutes   *int     `json:"offlineMinutes,omitempty"`
+	KeyExpiryDays    *int     `json:"keyExpiryDays,omitempty"`
+	CheckFailures    *int     `json:"checkFailures,omitempty"`
+}
+
+// ChangeRules turns AlertRules on or off.
+type ChangeRules struct {
+	Offline      *bool `json:"offline,omitempty"`
+	KeyExpiry    *bool `json:"keyExpiry,omitempty"`
+	AgentStopped *bool `json:"agentStopped,omitempty"`
+	Disk         *bool `json:"disk,omitempty"`
+	Memory       *bool `json:"memory,omitempty"`
+	CPU          *bool `json:"cpu,omitempty"`
+	Checks       *bool `json:"checks,omitempty"`
+	Containers   *bool `json:"containers,omitempty"`
+	Units        *bool `json:"units,omitempty"`
+	Collectors   *bool `json:"collectors,omitempty"`
+}
+
+// ChangeRetention changes RetentionSettings.
+type ChangeRetention struct {
+	ActivityDays *int `json:"activityDays,omitempty"`
+	HistoryDays  *int `json:"historyDays,omitempty"`
+	ChecksDays   *int `json:"checksDays,omitempty"`
 }
 
 // InstalledServices is the response to GET /api/settings/units: the services

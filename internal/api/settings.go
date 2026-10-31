@@ -45,28 +45,60 @@ func (h *handler) changeSettings(w http.ResponseWriter, r *http.Request) {
 	h.writeSettings(w, r, after)
 }
 
-// apply replaces the parts of s that b has.
+// apply changes the settings of s that b has.
 func (b ChangeSettings) apply(s *settings.Settings) error {
 	if g := b.General; g != nil {
-		url, err := settings.CleanPublicURL(g.PublicURL)
-		if err != nil {
-			return &settings.InvalidError{Err: err}
+		if g.Name != nil {
+			s.General.Name = strings.TrimSpace(*g.Name)
 		}
-		s.General = settings.General{Name: strings.TrimSpace(g.Name), PublicURL: url}
+		if g.PublicURL != nil {
+			url, err := settings.CleanPublicURL(*g.PublicURL)
+			if err != nil {
+				return &settings.InvalidError{Err: err}
+			}
+			s.General.PublicURL = url
+		}
 	}
 	if t := b.Thresholds; t != nil {
-		s.Thresholds = settings.Thresholds(*t)
+		th := &s.Thresholds
+		set(&th.DiskWarn, t.DiskWarn)
+		set(&th.DiskCritical, t.DiskCritical)
+		set(&th.MemoryWarn, t.MemoryWarn)
+		set(&th.CPUWarn, t.CPUWarn)
+		set(&th.CPUWindowMinutes, t.CPUWindowMinutes)
+		set(&th.OfflineMinutes, t.OfflineMinutes)
+		set(&th.KeyExpiryDays, t.KeyExpiryDays)
+		set(&th.CheckFailures, t.CheckFailures)
 	}
 	if r := b.Rules; r != nil {
-		s.Rules = settings.Rules(*r)
+		ru := &s.Rules
+		set(&ru.Offline, r.Offline)
+		set(&ru.KeyExpiry, r.KeyExpiry)
+		set(&ru.AgentStopped, r.AgentStopped)
+		set(&ru.Disk, r.Disk)
+		set(&ru.Memory, r.Memory)
+		set(&ru.CPU, r.CPU)
+		set(&ru.Checks, r.Checks)
+		set(&ru.Containers, r.Containers)
+		set(&ru.Units, r.Units)
+		set(&ru.Collectors, r.Collectors)
+	}
+	if r := b.Retention; r != nil {
+		set(&s.Retention.ActivityDays, r.ActivityDays)
+		set(&s.Retention.HistoryDays, r.HistoryDays)
+		set(&s.Retention.ChecksDays, r.ChecksDays)
 	}
 	if b.WatchedUnits != nil {
 		s.WatchedUnits = cleanUnits(b.WatchedUnits)
 	}
-	if r := b.Retention; r != nil {
-		s.Retention = settings.Retention(*r)
-	}
 	return nil
+}
+
+// set sets *dst to *src, unless src is nil.
+func set[T any](dst, src *T) {
+	if src != nil {
+		*dst = *src
+	}
 }
 
 // cleanUnits trims the names of watched units, and drops the empty ones and

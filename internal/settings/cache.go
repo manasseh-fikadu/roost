@@ -2,6 +2,7 @@ package settings
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"sync"
 	"time"
@@ -71,11 +72,17 @@ func (c *Cache) read(ctx context.Context) {
 // Update changes the settings: it reads the stored ones, calls change on
 // them, saves what it left if that passes Check, and returns the settings
 // from before and after. Updates don't overlap, so none loses another's
-// change. If change, Check or the store fails, nothing is saved.
+// change. If change, Check or the store fails, nothing is saved. Saved
+// settings that can't be read, as if they were edited by hand, count as the
+// defaults, so that an admin can write them over.
 func (c *Cache) Update(ctx context.Context, change func(*Settings) error) (before, after Settings, err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	before, err = Load(ctx, c.st)
+	if errors.Is(err, ErrCorrupt) {
+		c.log.Warn("writing over settings that can't be read", "error", err)
+		err = nil
+	}
 	if err != nil {
 		return Settings{}, Settings{}, err
 	}

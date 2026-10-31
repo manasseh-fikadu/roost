@@ -317,11 +317,62 @@ func TestCollector_Refresh(t *testing.T) {
 		mu.Lock()
 		watched = append(watched, "cron.service")
 		mu.Unlock()
+		asked := time.Now()
 		c.Refresh()
 		c.Refresh() // One is enough.
 		<-c.Changes()
 		if got := summary(c.Reading().Units); !slices.Contains(got, "cron.service inactive/dead *") {
-			t.Errorf("units after Refresh() = %q, want cron watched, without waiting for the interval", got)
+			t.Errorf("units after Refresh() = %q, want cron watched", got)
+		}
+		if waited := time.Since(asked); waited >= systemd.Interval {
+			t.Errorf("Refresh() took %v to take effect, want it right away, not at the next of every %v", waited, systemd.Interval)
+		}
+	})
+}
+
+func TestValidName(t *testing.T) {
+	t.Parallel()
+	for name, want := range map[string]bool{
+		"ssh.service":              true,
+		"getty@tty1.service":       true,
+		`dev-disk-by\x2did.device`: true,
+		"sshd":                     true,
+		"":                         false,
+		"-ssh.service":             false,
+		"getty@.service":           false,
+		"a!b.service":              false,
+		"my app.service":           false,
+		"a/b.service":              false,
+		"évil.service":             false,
+		strings.Repeat("a", 256):   false,
+		strings.Repeat("a", 255):   true,
+		"a\nb.service":             false,
+		"$(id).service":            false,
+	} {
+		if got := systemd.ValidName(name); got != want {
+			t.Errorf("ValidName(%q) = %v, want %v", name, got, want)
+		}
+	}
+}
+
+// A name that isn't valid is left out, or systemctl would fail for all of them.
+func TestCollector_skipsInvalidNames(t *testing.T) {
+	t.Parallel()
+	f := newFake()
+	c := systemd.NewCollector(systemd.Options{Run: f.run, Watched: func() []string {
+		return []string{"ssh.service", "a!b.service", "user:a!b.service", "getty@.service"}
+	}})
+	synctest.Test(t, func(t *testing.T) {
+		go c.Run(t.Context())
+		<-c.Changes()
+		r := c.Reading()
+		if r.Err != nil || !slices.Contains(summary(r.Units), "ssh.service active/running *") {
+			t.Errorf("reading = %+v, want ssh watched and no error", r)
+		}
+		for _, run := range f.runs {
+			if strings.Contains(run, "a!b") || strings.Contains(run, "@.") {
+				t.Errorf("systemctl was asked %q, want invalid names left out", run)
+			}
 		}
 	})
 }
