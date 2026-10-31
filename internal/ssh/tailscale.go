@@ -3,6 +3,7 @@ package ssh
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	gossh "golang.org/x/crypto/ssh"
@@ -65,7 +66,7 @@ func tailscaleRefusal(name, user string, banners []string) (refusal Refusal, msg
 	case strings.Contains(text, "does not permit you to SSH as user"):
 		return RefusedUser, fmt.Sprintf("the tailnet policy doesn't let Roost log in to %s as %s with Tailscale SSH", name, user)
 	case strings.Contains(text, "does not permit you to SSH to this node"):
-		return RefusedNode, fmt.Sprintf("the tailnet policy doesn't let Roost use Tailscale SSH to log in to %s", name)
+		return RefusedNode, "the tailnet policy doesn't let Roost use Tailscale SSH to log in to " + name
 	case strings.Contains(text, "Tailscale SSH requires an additional check"):
 		return RefusedCheck, fmt.Sprintf("Tailscale SSH on %s wants a browser check before it lets Roost in, and Roost can't make one", name)
 	}
@@ -122,7 +123,11 @@ func policyDst(src, dst tailnet.Device) (string, bool) {
 }
 
 func jsonString(s string) string {
-	b, _ := json.Marshal(s)
+	b, err := json.Marshal(s)
+	if err != nil {
+		// A string always marshals; this keeps the rule well formed anyway.
+		return strconv.Quote(s)
+	}
 	return string(b)
 }
 
