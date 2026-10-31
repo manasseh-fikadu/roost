@@ -11,6 +11,7 @@
 	import AccessSettings from '#lib/settings/AccessSettings.svelte';
 	import AlertSettings from '#lib/settings/AlertSettings.svelte';
 	import GeneralSettings from '#lib/settings/GeneralSettings.svelte';
+	import NotificationSettings from '#lib/settings/NotificationSettings.svelte';
 	import RetentionSettings from '#lib/settings/RetentionSettings.svelte';
 	import UnitSettings from '#lib/settings/UnitSettings.svelte';
 	import Button from '#lib/ui/Button.svelte';
@@ -24,6 +25,7 @@
 	const tabs = [
 		{ value: 'general', label: 'General' },
 		{ value: 'alerts', label: 'Alerts' },
+		{ value: 'notifications', label: 'Notifications' },
 		{ value: 'units', label: 'Watched units' },
 		{ value: 'retention', label: 'Retention' },
 		{ value: 'access', label: 'Access' }
@@ -71,6 +73,9 @@
 	<Tabs bind:value={() => tab, setTab} {tabs}>
 		<TabPanel value="general"><GeneralSettings {view} onsaved={saved} /></TabPanel>
 		<TabPanel value="alerts"><AlertSettings {view} onsaved={saved} /></TabPanel>
+		<TabPanel value="notifications">
+			<NotificationSettings {view} onsaved={saved} active={tab === 'notifications'} />
+		</TabPanel>
 		<TabPanel value="units"><UnitSettings {view} onsaved={saved} /></TabPanel>
 		<TabPanel value="retention"><RetentionSettings {view} onsaved={saved} /></TabPanel>
 		<TabPanel value="access"><AccessSettings {view} /></TabPanel>
