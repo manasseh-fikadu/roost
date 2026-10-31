@@ -125,6 +125,8 @@ func (h *handler) routes(rt *router) {
 	rt.read("GET /api/devices/{id}/usage/history", viewers, h.usageHistory)
 	rt.write("PUT /api/devices/{id}/settings", h.setDeviceSettings)
 	rt.write("DELETE /api/devices/{id}/agent", h.revokeAgent)
+	rt.write("POST /api/devices/{id}/agent/install", h.installAgent)
+	rt.write("POST /api/devices/{id}/agent/uninstall", h.uninstallAgent)
 
 	rt.read("GET /api/devices/{id}/ssh", admins, h.sshSetup)
 	rt.write("PUT /api/devices/{id}/ssh", h.setSSH)

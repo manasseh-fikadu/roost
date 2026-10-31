@@ -194,3 +194,63 @@ func TestInstallScripts(t *testing.T) {
 		t.Errorf("installing with an unknown code made %s: %v", confDir, err)
 	}
 }
+
+// TestRunRemote runs the script that Roost sends over SSH to install or remove
+// the agent, with sh as sshd would, against a server that serves a script.
+func TestRunRemote(t *testing.T) {
+	if _, err := exec.LookPath("curl"); err != nil {
+		t.Skip("no curl to download with")
+	}
+	t.Parallel()
+	if strings.ContainsAny(api.RunRemote, "'\\") {
+		t.Error("the script has a single quote or a backslash, which fish would read in its own way")
+	}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/ok", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("#!/bin/bash\necho out; echo err >&2; echo \"user=$USER\"\n"))
+	})
+	mux.HandleFunc("/fails", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte("#!/bin/bash\necho nope >&2\nexit 3\n"))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	for _, tt := range []struct {
+		name, path string
+		code       int
+		want       []string
+	}{
+		{"works", "/ok", 0, []string{"out", "err", "user="}},
+		{"the script fails", "/fails", 3, []string{"nope"}},
+		{"the download fails", "/missing", 1, []string{"could not download the script from " + srv.URL}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			//nolint:gosec // G204: the script is Roost's own, and the URL is the test server's.
+			cmd := exec.CommandContext(t.Context(), "sh", "-c", api.RunRemote, "sh", srv.URL+tt.path, srv.URL)
+			// Unset, as in a session without a login.
+			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}
+			var stdout, stderr strings.Builder
+			cmd.Stdout, cmd.Stderr = &stdout, &stderr
+			err := cmd.Run()
+			code := 0
+			if ee, ok := err.(*exec.ExitError); ok { //nolint:errorlint // exec returns it as is.
+				code = ee.ExitCode()
+			} else if err != nil {
+				t.Fatal(err)
+			}
+			if code != tt.code {
+				t.Errorf("exit status %d, want %d; output %q", code, tt.code, stdout.String())
+			}
+			// Errors come out with the rest, in order, so the admin sees them.
+			if stderr.Len() > 0 {
+				t.Errorf("stderr = %q, want everything on stdout", stderr.String())
+			}
+			for _, w := range tt.want {
+				if !strings.Contains(stdout.String(), w) {
+					t.Errorf("output %q lacks %q", stdout.String(), w)
+				}
+			}
+		})
+	}
+}

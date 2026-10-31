@@ -4,13 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/manasseh-fikadu/roost/agent"
 	"github.com/manasseh-fikadu/roost/internal/agents"
+	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/usage"
@@ -90,6 +93,108 @@ func (h *handler) newEnrollmentCode(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:      now,
 		ExpiresAt:      expires,
 	})
+}
+
+// remoteTimeout is how long an install or uninstall over SSH can take.
+const remoteTimeout = 2 * time.Minute
+
+// maxRunOutput is how much of a script's output Roost sends back.
+const maxRunOutput = 16 << 10
+
+// runRemote is the sh script that Roost runs on a device over SSH to install
+// or remove the agent. It does what the one-line commands do, which pipe curl
+// into bash, but it fails if the download does, and it sets up what a
+// session without a login lacks: a user manager to talk to and a $USER.
+// $1 is where to download the script from, and $2 is Roost's address. It has
+// no single quote or backslash, which a command can't carry (see ssh.Quote).
+const runRemote = `{
+if [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -d "/run/user/$(id -u)" ]; then XDG_RUNTIME_DIR="/run/user/$(id -u)"; export XDG_RUNTIME_DIR; fi
+USER="${USER:-$(id -un)}"; export USER
+command -v curl >/dev/null 2>&1 || { echo "curl is not installed on this machine" >&2; exit 1; }
+command -v bash >/dev/null 2>&1 || { echo "bash is not installed on this machine" >&2; exit 1; }
+tmp=$(mktemp) || exit 1
+if ! curl -fsSL -o "$tmp" "$1"; then rm -f "$tmp"; echo "This machine could not download the script from $2" >&2; exit 1; fi
+bash "$tmp"; code=$?
+rm -f "$tmp"
+exit "$code"
+} 2>&1`
+
+// installAgent answers POST /api/devices/{id}/agent/install, which installs
+// the agent on the device over SSH with a new enrollment code, as the user
+// Roost logs in as. The device enrolls from its own node like any other, so
+// it has to reach Roost on the tailnet.
+func (h *handler) installAgent(w http.ResponseWriter, r *http.Request) {
+	d, historyID, ok := h.device(r)
+	if !ok {
+		h.notFound(w, r)
+		return
+	}
+	if historyID == store.HubID && h.opts.Feed.measuresHub() {
+		h.writeJSON(w, r, http.StatusConflict, ErrorBody{Error: measuresItself})
+		return
+	}
+	if h.sshOf(d.ID).State == SSHStateNotSetUp {
+		// Before it makes a code that nothing would use.
+		h.sshError(w, r, ssh.ErrNotSetUp)
+		return
+	}
+	code, _, err := h.opts.Store.NewEnrollmentCode(r.Context(), callerOf(r).who.LoginName, time.Now())
+	if err != nil {
+		h.fail(w, r, "make an enrollment code", err)
+		return
+	}
+	h.runOnDevice(w, r, d, "install", "/api/agent/install/"+code)
+}
+
+// uninstallAgent answers POST /api/devices/{id}/agent/uninstall, which
+// removes the agent from the device over SSH, for the user Roost logs in as.
+func (h *handler) uninstallAgent(w http.ResponseWriter, r *http.Request) {
+	d, _, ok := h.device(r)
+	if !ok {
+		h.notFound(w, r)
+		return
+	}
+	h.runOnDevice(w, r, d, "uninstall", "/api/agent/uninstall.sh")
+}
+
+// runOnDevice downloads the script at path from Roost on d, and runs it,
+// over SSH. what is "install" or "uninstall".
+func (h *handler) runOnDevice(w http.ResponseWriter, r *http.Request, d tailnet.Device, what, path string) {
+	base := h.appURL(r)
+	ctx, cancel := context.WithTimeout(r.Context(), remoteTimeout)
+	defer cancel()
+	res, err := h.opts.SSH.Exec(ctx, d.ID, runRemote, base+path, base)
+	if errors.Is(err, context.DeadlineExceeded) && r.Context().Err() == nil {
+		err = fmt.Errorf("the %s didn't finish in %v: %w", what, remoteTimeout, err)
+	}
+	if h.sshError(w, r, err) {
+		return
+	}
+	name := h.deviceName(r, d.ID)
+	out := AgentRun{OK: res.Code == 0, Output: tail(strings.TrimSpace(string(res.Stdout)), maxRunOutput)}
+	switch {
+	case out.OK:
+		h.logAction(r, EventKindAgent, d.ID, "Ran the agent "+what+" on "+name+" over SSH")
+		h.opts.Feed.Poke()
+	default:
+		h.logEvent(r, store.Event{
+			Level: string(EventLevelError), Kind: string(EventKindAgent), DeviceID: d.ID, Actor: callerOf(r).who.LoginName,
+			Message: "The agent " + what + " on " + name + " over SSH failed",
+		})
+	}
+	h.writeJSON(w, r, http.StatusOK, out)
+}
+
+// tail returns the last limit bytes of s, from the start of a character.
+func tail(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	s = s[len(s)-limit:]
+	for !utf8.RuneStart(s[0]) {
+		s = s[1:]
+	}
+	return "…" + s
 }
 
 // installScript answers GET /api/agent/install/{code} with the script that

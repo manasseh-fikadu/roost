@@ -133,7 +133,7 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 		}
 		device, m := newDevice(s, dev, now)
 		if src.ssh != nil && ssh.Supported(d, dev.self) {
-			device.SSH = newDeviceSSH(d, dev.self, src.ssh)
+			device.SSH = newDeviceSSH(d, dev.self, st.Self, src.ssh)
 		}
 		device.Docker = hasDocker(d, dev.self, hostNode, src)
 		out.Devices = append(out.Devices, device)
@@ -227,21 +227,22 @@ func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) (Device, machi
 		ips[i] = ip.String()
 	}
 	out := Device{
-		ID:        d.ID,
-		Name:      cmp.Or(in.settings.DisplayName, d.HostName, firstLabel(d.DNSName)),
-		HostName:  d.HostName,
-		DNSName:   d.DNSName,
-		OS:        d.OS,
-		IPs:       ips,
-		Online:    d.Online,
-		LastSeen:  timePtr(d.LastSeen),
-		Self:      in.self,
-		Path:      newPath(s.PathTo(d, now), d),
-		RxBytes:   d.RxBytes,
-		TxBytes:   d.TxBytes,
-		KeyExpiry: timePtr(d.KeyExpiry),
-		Created:   timePtr(d.Created),
-		ExitNode:  d.ExitNode,
+		ID:           d.ID,
+		Name:         cmp.Or(in.settings.DisplayName, d.HostName, firstLabel(d.DNSName)),
+		HostName:     d.HostName,
+		DNSName:      d.DNSName,
+		OS:           d.OS,
+		IPs:          ips,
+		Online:       d.Online,
+		LastSeen:     timePtr(d.LastSeen),
+		Self:         in.self,
+		Path:         newPath(s.PathTo(d, now), d),
+		RxBytes:      d.RxBytes,
+		TxBytes:      d.TxBytes,
+		KeyExpiry:    timePtr(d.KeyExpiry),
+		Created:      timePtr(d.Created),
+		ExitNode:     d.ExitNode,
+		TailscaleSSH: d.TailscaleSSH,
 	}
 	var m machine
 	switch {

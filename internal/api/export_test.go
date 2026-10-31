@@ -55,3 +55,6 @@ const (
 	FeedHeartbeat     = feedHeartbeat
 	RoleCheckInterval = roleCheckInterval
 )
+
+// RunRemote is the script that runs the install or uninstall script over SSH.
+const RunRemote = runRemote

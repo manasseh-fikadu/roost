@@ -749,6 +749,11 @@ export interface Device {
    */
   ssh?: DeviceSSH;
   /**
+   * TailscaleSSH reports whether the device runs Tailscale SSH, which Roost
+   * can log in to without a key, if the tailnet policy lets it.
+   */
+  tailscaleSsh?: boolean;
+  /**
    * Docker reports whether Roost can read the Docker on the device: on the
    * machine Roost runs on, if it has a Docker socket, and on another, if
    * Roost has SSH access and found one there. Viewers get it too, since
@@ -1129,6 +1134,18 @@ export interface AgentCode {
    */
   createdAt: string /* RFC 3339 */;
   expiresAt: string /* RFC 3339 */;
+}
+/**
+ * AgentRun is the response to POST /api/devices/{id}/agent/install and
+ * POST /api/devices/{id}/agent/uninstall, which run the script over SSH on
+ * the device. A script that fails is still a 200, with OK false.
+ */
+export interface AgentRun {
+  ok: boolean;
+  /**
+   * Output is the end of what the script printed, errors included.
+   */
+  output: string;
 }
 /**
  * AgentSecret is the response to POST /api/agent/enroll: the secret the
@@ -2036,6 +2053,17 @@ export interface DeviceSSH {
    */
   error?: string;
   /**
+   * Method is how Roost logged in the last time it did, while the State is
+   * SSHStateOK.
+   */
+  method?: SSHMethod;
+  /**
+   * Policy is the change to the tailnet policy that Tailscale SSH on the
+   * machine needs before it lets Roost in, while the State is
+   * SSHStateFailing and the policy is why.
+   */
+  policy?: SSHPolicy;
+  /**
    * CheckedAt is when Roost last checked the machine, if it has.
    */
   checkedAt?: string /* RFC 3339 */;
@@ -2071,6 +2099,59 @@ export const SSHStateHostKeyChanged = "host-key-changed";
  * The states of a DeviceSSH.
  */
 export type SSHState = typeof SSHStateNotSetUp | typeof SSHStateUnchecked | typeof SSHStateOK | typeof SSHStateFailing | typeof SSHStateHostKeyChanged;
+/**
+ * SSHMethod says how Roost logged in to a device.
+ */
+/**
+ * SSHMethodKey is a login with Roost's key, which an admin put in the
+ * machine's authorized_keys.
+ */
+export const SSHMethodKey = "key";
+/**
+ * SSHMethodTailscale is a login to the machine's Tailscale SSH, which
+ * let Roost in without a key.
+ */
+export const SSHMethodTailscale = "tailscale";
+/**
+ * The ways Roost logs in.
+ */
+export type SSHMethod = typeof SSHMethodKey | typeof SSHMethodTailscale;
+/**
+ * SSHPolicy is what the tailnet policy needs before a device's Tailscale SSH
+ * lets Roost in.
+ */
+export interface SSHPolicy {
+  /**
+   * Refusal says what the policy does now.
+   */
+  refusal: SSHRefusal;
+  /**
+   * Snippet is a rule for the "ssh" section of the policy that lets Roost
+   * log in as the user an admin set up, without a browser check.
+   */
+  snippet: string;
+}
+/**
+ * SSHRefusal says why Tailscale SSH turned Roost away.
+ */
+/**
+ * SSHRefusalCheck means the rule that covers Roost has the action
+ * "check", which asks for a visit to a URL that Roost can't make.
+ */
+export const SSHRefusalCheck = "check";
+/**
+ * SSHRefusalNode means no rule lets Roost SSH to the machine.
+ */
+export const SSHRefusalNode = "node";
+/**
+ * SSHRefusalUser means a rule lets Roost in, but not as the user an
+ * admin set up.
+ */
+export const SSHRefusalUser = "user";
+/**
+ * The ways the tailnet policy can turn Roost away.
+ */
+export type SSHRefusal = typeof SSHRefusalCheck | typeof SSHRefusalNode | typeof SSHRefusalUser;
 /**
  * SSHSetup is the response to GET /api/devices/{id}/ssh: how to let Roost
  * log in to a device. Only admins can see it.
