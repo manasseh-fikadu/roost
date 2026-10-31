@@ -25,6 +25,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/config"
 	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
+	"github.com/manasseh-fikadu/roost/internal/notify"
 	"github.com/manasseh-fikadu/roost/internal/settings"
 	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
@@ -248,6 +249,17 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		feedOpts.Systemd, feedOpts.SystemdChanged = units.Reading, units.Changes()
 	}
 	feed := api.NewFeed(feedOpts)
+	// Notifications go out through the node too, so a channel can send to a
+	// server on the tailnet as well as to one on the internet.
+	notifier := notify.NewDispatcher(notify.Options{
+		Store:    st,
+		Open:     engine.Open,
+		Settings: prefs,
+		AppURL:   res.url,
+		Env:      notify.NewEnv(node.Dial),
+		Changed:  feed.Poke,
+		Logger:   logger,
+	})
 	// The app checks requests against Roost's own names, from the first status.
 	select {
 	case <-poller.Polled():
@@ -256,6 +268,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		return errors.Join(res.ln.Close(), srvs.stop(ctx))
 	}
 	wg.Go(func() { feed.Run(ctx) })
+	wg.Go(func() { notifier.Run(ctx) })
 	wg.Go(func() { remote.Run(ctx) })
 	stopping := make(chan struct{})
 	app := srvs.start(api.New(api.Options{
@@ -273,6 +286,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		SSH:      remote,
 		Docker:   fleet,
 		Settings: prefs,
+		Notify:   notifier,
 		Systemd:  units,
 		// config.Parse has checked it.
 		Tailscale: api.TailscaleMode(cfg.Tailscale),

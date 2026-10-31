@@ -178,6 +178,7 @@ export interface Settings {
    */
   watchedUnits: string[];
   retention: RetentionSettings;
+  notifications: NotificationSettings;
 }
 /**
  * GeneralSettings are how Roost presents itself.
@@ -295,6 +296,45 @@ export interface RetentionSettings {
   checksDays: number /* int */;
 }
 /**
+ * NotificationSettings are when Roost sends notifications. Which alerts each
+ * channel hears about is up to the channel.
+ */
+export interface NotificationSettings {
+  /**
+   * RemindHours is how many hours after the last notification about an
+   * alert Roost sends another, while the alert is open and nobody has
+   * acknowledged or snoozed it. 0 sends none.
+   */
+  remindHours: number /* int */;
+  /**
+   * Quiet holds notifications back at night.
+   */
+  quiet: QuietHours;
+}
+/**
+ * QuietHours are the hours when Roost holds notifications back. Those that
+ * are still due when the hours end are sent then.
+ */
+export interface QuietHours {
+  enabled: boolean;
+  /**
+   * Start and End are times of the day, such as "22:00" and "07:00". The
+   * hours run from Start until End, through midnight if End is earlier.
+   */
+  start: string;
+  end: string;
+  /**
+   * Timezone is the name of the time zone the times are in, such as
+   * "Europe/Berlin". It's empty for the one Roost's machine is in.
+   */
+  timezone: string;
+  /**
+   * AllowCritical sends notifications about critical alerts during the
+   * quiet hours too.
+   */
+  allowCritical: boolean;
+}
+/**
  * SettingsView is the response to GET /api/settings and to the request that
  * changes them. Only admins can see or change them.
  */
@@ -338,6 +378,11 @@ export interface ChangeSettings {
   thresholds?: ChangeThresholds;
   rules?: ChangeRules;
   retention?: ChangeRetention;
+  /**
+   * Notifications changes when notifications are sent. The channels they
+   * go to are changed by their own requests.
+   */
+  notifications?: ChangeNotifications;
   /**
    * WatchedUnits replaces the whole list when it's there, even if it's
    * empty.
@@ -386,6 +431,23 @@ export interface ChangeRetention {
   activityDays?: number /* int */;
   historyDays?: number /* int */;
   checksDays?: number /* int */;
+}
+/**
+ * ChangeNotifications changes NotificationSettings.
+ */
+export interface ChangeNotifications {
+  remindHours?: number /* int */;
+  quiet?: ChangeQuiet;
+}
+/**
+ * ChangeQuiet changes QuietHours.
+ */
+export interface ChangeQuiet {
+  enabled?: boolean;
+  start?: string;
+  end?: string;
+  timezone?: string;
+  allowCritical?: boolean;
 }
 /**
  * InstalledServices is the response to GET /api/settings/units: the services
@@ -1785,9 +1847,14 @@ export const EventKindTerminal = "terminal";
  */
 export const EventKindFiles = "files";
 /**
+ * EventKindNotification is a notification Roost sent to a channel, or
+ * couldn't, and a channel an admin added, changed or deleted.
+ */
+export const EventKindNotification = "notification";
+/**
  * The kinds of Event.
  */
-export type EventKind = typeof EventKindDevice | typeof EventKindAgent | typeof EventKindAlert | typeof EventKindCheck | typeof EventKindContainer | typeof EventKindAccess | typeof EventKindSettings | typeof EventKindSSH | typeof EventKindTerminal | typeof EventKindFiles;
+export type EventKind = typeof EventKindDevice | typeof EventKindAgent | typeof EventKindAlert | typeof EventKindCheck | typeof EventKindContainer | typeof EventKindAccess | typeof EventKindSettings | typeof EventKindSSH | typeof EventKindTerminal | typeof EventKindFiles | typeof EventKindNotification;
 /**
  * EventList is the response to GET /api/events?before=&after=&limit=&kind=&device=:
  * events, newest first. Before and After are event IDs.
@@ -2971,4 +3038,167 @@ export interface DockerStreamEnd {
  */
 export interface DockerStreamFailure {
   message: string;
+}
+/**
+ * ChannelKind is a sort of place that Roost sends notifications to.
+ */
+/**
+ * ChannelKindNtfy publishes to a topic on ntfy.sh or on an ntfy server
+ * of one's own.
+ */
+export const ChannelKindNtfy = "ntfy";
+/**
+ * ChannelKindDiscord posts to a Discord channel through a webhook.
+ */
+export const ChannelKindDiscord = "discord";
+/**
+ * ChannelKindSlack posts to a Slack channel through an incoming webhook.
+ */
+export const ChannelKindSlack = "slack";
+/**
+ * ChannelKindTelegram sends a message from a Telegram bot.
+ */
+export const ChannelKindTelegram = "telegram";
+/**
+ * ChannelKindEmail sends mail through an SMTP server.
+ */
+export const ChannelKindEmail = "email";
+/**
+ * ChannelKindWebhook posts JSON to any web address.
+ */
+export const ChannelKindWebhook = "webhook";
+/**
+ * The kinds of NotificationChannel.
+ */
+export type ChannelKind = typeof ChannelKindNtfy | typeof ChannelKindDiscord | typeof ChannelKindSlack | typeof ChannelKindTelegram | typeof ChannelKindEmail | typeof ChannelKindWebhook;
+/**
+ * NotificationChannels is the response to GET /api/notifications/channels.
+ * Only admins can see them.
+ */
+export interface NotificationChannels {
+  channels: NotificationChannel[];
+}
+/**
+ * NotificationChannel is a place where Roost sends notifications. It leaves
+ * out its secrets, such as a webhook's address or a password, and says which
+ * of them are saved.
+ */
+export interface NotificationChannel {
+  id: number /* int64 */;
+  name: string;
+  kind: ChannelKind;
+  enabled: boolean;
+  /**
+   * MinSeverity is the least severe alert it hears about.
+   */
+  minSeverity: AlertSeverity;
+  /**
+   * OnResolve is whether it also hears when an alert resolves.
+   */
+  onResolve: boolean;
+  config: ChannelConfig;
+  /**
+   * Secrets are the secret fields that have a value: "url", "token" or
+   * "password". Roost never sends their values.
+   */
+  secrets: string[];
+  /**
+   * Summary says where the channel sends, without a secret, such as
+   * "ntfy.sh/roost-alerts".
+   */
+  summary: string;
+  /**
+   * Last is the latest time Roost sent to it since Roost started.
+   */
+  last?: ChannelDelivery;
+}
+/**
+ * ChannelConfig is what a channel needs to send, except its secrets. Each
+ * kind uses some of the fields.
+ */
+export interface ChannelConfig {
+  /**
+   * Server is the address of an ntfy server. It's empty for ntfy.sh.
+   */
+  server?: string;
+  /**
+   * Topic is the ntfy topic.
+   */
+  topic?: string;
+  /**
+   * ChatID is the Telegram chat to send to.
+   */
+  chatId?: string;
+  /**
+   * Host, Port and Security say how to reach the mail server. A Port of 0
+   * is the one Security uses, and Security is starttls, tls or none.
+   */
+  host?: string;
+  port?: number /* int */;
+  security?: string;
+  /**
+   * Username signs in to the mail server or the ntfy server.
+   */
+  username?: string;
+  /**
+   * From and To are the addresses mail comes from and goes to.
+   */
+  from?: string;
+  to?: string[];
+}
+/**
+ * ChannelDelivery is what happened when Roost last sent to a channel.
+ */
+export interface ChannelDelivery {
+  at: string /* RFC 3339 */;
+  /**
+   * Event is why it sent: opened, escalated, reminder, resolved or test.
+   */
+  event: string;
+  ok: boolean;
+  /**
+   * Error says what went wrong, if something did.
+   */
+  error?: string;
+}
+/**
+ * ChannelInput is the body of POST /api/notifications/channels, which adds a
+ * channel, and of PUT /api/notifications/channels/{id}, which replaces one. A
+ * channel's kind can't change. Both answer with the NotificationChannel.
+ */
+export interface ChannelInput {
+  name: string;
+  kind: ChannelKind;
+  /**
+   * Enabled is whether Roost sends to it.
+   */
+  enabled: boolean;
+  /**
+   * MinSeverity is the least severe alert it hears about: info, warning or
+   * critical.
+   */
+  minSeverity: AlertSeverity;
+  onResolve: boolean;
+  config: ChannelConfigInput;
+}
+/**
+ * ChannelConfigInput is the ChannelConfig of a request, with the secrets. A
+ * secret that's left out stays as it is, which is how a channel is changed
+ * without sending its secrets back, and an empty one takes it away.
+ */
+export interface ChannelConfigInput {
+  ChannelConfig: ChannelConfig;
+  /**
+   * URL is the webhook's address, for Discord, Slack and generic webhooks.
+   */
+  url?: string;
+  /**
+   * Token is an ntfy access token, a Telegram bot's token, or the bearer
+   * token that a generic webhook is sent.
+   */
+  token?: string;
+  /**
+   * Password signs in to the mail server or the ntfy server.
+   */
+  password?: string;
 }

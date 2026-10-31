@@ -18,6 +18,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/files"
+	"github.com/manasseh-fikadu/roost/internal/notify"
 	"github.com/manasseh-fikadu/roost/internal/settings"
 	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
@@ -61,6 +62,8 @@ type Options struct {
 	Docker *docker.Fleet
 	// Settings holds what admins changed in the settings. Required.
 	Settings *settings.Cache
+	// Notify sends the notifications. Required.
+	Notify *notify.Dispatcher
 	// Systemd watches the units on Roost's machine. It's nil if Roost can't
 	// ask systemd there.
 	Systemd *systemd.Collector
@@ -92,8 +95,8 @@ func New(opts Options) http.Handler {
 func newHandler(opts Options) *handler {
 	if opts.WhoIs == nil || opts.Snapshot == nil || opts.Feed == nil || opts.Store == nil || opts.Agents == nil ||
 		opts.Usage == nil || opts.Checks == nil || opts.Alerts == nil || opts.SSH == nil || opts.Docker == nil ||
-		opts.Settings == nil {
-		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents, Usage, Checks, Alerts, SSH, Docker and Settings are required")
+		opts.Settings == nil || opts.Notify == nil {
+		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents, Usage, Checks, Alerts, SSH, Docker, Settings and Notify are required")
 	}
 	h := &handler{opts: opts, log: opts.Logger}
 	if h.log == nil {
@@ -181,6 +184,7 @@ func (h *handler) routes(rt *router) {
 	rt.read("GET /api/health/history", viewers, h.healthHistory)
 
 	rt.read("GET /api/alerts", viewers, h.listAlerts)
+	rt.read("GET /api/alerts/{id}", viewers, h.getAlert)
 	rt.write("PUT /api/alerts/{id}/ack", h.ackAlert)
 	rt.write("DELETE /api/alerts/{id}/ack", h.ackAlert)
 	rt.write("PUT /api/alerts/{id}/snooze", h.snoozeAlert)
@@ -201,6 +205,12 @@ func (h *handler) routes(rt *router) {
 	rt.read("GET /api/settings", admins, h.settings)
 	rt.write("PATCH /api/settings", h.changeSettings)
 	rt.read("GET /api/settings/units", admins, h.installedServices)
+
+	rt.read("GET /api/notifications/channels", admins, h.listChannels)
+	rt.write("POST /api/notifications/channels", h.addChannel)
+	rt.write("PUT /api/notifications/channels/{id}", h.changeChannel)
+	rt.write("DELETE /api/notifications/channels/{id}", h.deleteChannel)
+	rt.write("POST /api/notifications/channels/{id}/test", h.testChannel)
 
 	rt.read("GET /api/access", admins, h.access)
 	rt.write("PATCH /api/access", h.changeAccess)

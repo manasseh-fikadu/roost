@@ -53,6 +53,7 @@ func TestNew_debugTailnet(t *testing.T) {
 			Alerts: alerts.NewEngine(st, nil),
 			SSH:    ssh.NewManager(ssh.Options{KeyDir: t.TempDir(), Store: st, Tailnet: poller.Snapshot, Dial: tn.Dial}),
 			Docker: docker.NewFleet(nil, nil), Settings: settings.NewCache(st, nil),
+			Notify: newNotifier(st, alerts.NewEngine(st, nil), settings.NewCache(st, nil), nil),
 		})
 		rec := serve(h, newRequest(t, http.MethodGet, "/api/debug/tailnet", laptop))
 

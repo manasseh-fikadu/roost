@@ -61,6 +61,7 @@ func TestStream(t *testing.T) {
 					Checks: checks.NewRunner(st, checks.Options{Dial: tn.Dial}), Alerts: alerts.NewEngine(st, nil),
 					SSH:    ssh.NewManager(ssh.Options{KeyDir: t.TempDir(), Store: st, Tailnet: snapshot, Dial: tn.Dial}),
 					Docker: docker.NewFleet(nil, nil), Settings: settings.NewCache(st, nil),
+					Notify: newNotifier(st, alerts.NewEngine(st, nil), settings.NewCache(st, nil), nil),
 				})
 				events := openStream(t, tn, h, tt.from, tt.gzip)
 

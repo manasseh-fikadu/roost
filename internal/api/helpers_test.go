@@ -15,6 +15,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/docker"
+	"github.com/manasseh-fikadu/roost/internal/notify"
 	"github.com/manasseh-fikadu/roost/internal/settings"
 	"github.com/manasseh-fikadu/roost/internal/ssh"
 	"github.com/manasseh-fikadu/roost/internal/store"
@@ -116,12 +117,21 @@ func withStore(t *testing.T, tn *tailnettest.Tailnet, st *store.Store, opts api.
 	if opts.Settings == nil {
 		opts.Settings = settings.NewCache(st, nil)
 	}
+	if opts.Notify == nil {
+		opts.Notify = newNotifier(st, opts.Alerts, opts.Settings, nil)
+	}
 	if opts.Feed == nil {
 		opts.Feed = api.NewFeed(api.FeedOptions{
 			Tailnet: opts.Snapshot, Agents: opts.Agents, Checks: opts.Checks, Alerts: opts.Alerts, Store: st, Settings: opts.Settings,
 		})
 	}
 	return opts
+}
+
+// newNotifier returns a Dispatcher of the alerts and settings, whose channels
+// send with newSender, or really, if it's nil. It isn't running.
+func newNotifier(st *store.Store, a *alerts.Engine, prefs *settings.Cache, newSender func(notify.Channel) (notify.Sender, error)) *notify.Dispatcher {
+	return notify.NewDispatcher(notify.Options{Store: st, Open: a.Open, Settings: prefs, NewSender: newSender})
 }
 
 // newRequest returns a request for target on Roost, from the device at ip.
