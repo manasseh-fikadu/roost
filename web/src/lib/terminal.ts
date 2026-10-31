@@ -2,7 +2,7 @@
 // open terminals on, and how much output to ack. The terminal itself is
 // TerminalView.svelte.
 
-import type { Device, DeviceSSH, SSHState } from './api/types.js';
+import type { Device, DeviceSSH, SSHRefusal, SSHState } from './api/types.js';
 
 /** A tab on the Terminal page. */
 export interface TerminalTab {
@@ -228,5 +228,58 @@ const stateLabels: Record<SSHState, string> = {
 
 /** What SSH access's state means, in a few words. */
 export function sshStateLabel(s: DeviceSSH): string {
+	if (s.state === 'ok' && s.method === 'tailscale') {
+		return 'Connected with Tailscale SSH';
+	}
 	return stateLabels[s.state];
+}
+
+/**
+ * The user most devices' SSH access logs in as, to suggest for the next one,
+ * or '' if none is set up. The first of a tie wins.
+ */
+export function commonSSHUser(devices: readonly Device[]): string {
+	const counts = new Map<string, number>();
+	for (const d of devices) {
+		const user = d.ssh?.user;
+		if (user && !d.ssh?.hub) {
+			counts.set(user, (counts.get(user) ?? 0) + 1);
+		}
+	}
+	let best = '';
+	let most = 0;
+	for (const [user, n] of counts) {
+		if (n > most) {
+			best = user;
+			most = n;
+		}
+	}
+	return best;
+}
+
+/** What a Tailscale SSH refusal means, and so what to change. */
+export function refusalText(
+	refusal: SSHRefusal,
+	deviceName: string,
+	user: string
+): { title: string; detail: string } {
+	switch (refusal) {
+		case 'check':
+			return {
+				title: 'Tailscale SSH wants a browser check',
+				detail:
+					'The rule that covers Roost has the action "check", which asks for a visit to a link ' +
+					'each time, and Roost can\'t make one. Roost needs a rule with the action "accept".'
+			};
+		case 'node':
+			return {
+				title: "The tailnet policy doesn't let Roost SSH here",
+				detail: `No rule in the "ssh" section of your policy covers Roost logging in to ${deviceName}.`
+			};
+		case 'user':
+			return {
+				title: `The tailnet policy doesn't let Roost log in as ${user}`,
+				detail: `A rule lets Roost SSH to ${deviceName}, but its "users" don't include ${user}.`
+			};
+	}
 }

@@ -10,6 +10,7 @@
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import ShieldAlert from '@lucide/svelte/icons/shield-alert';
 	import SquareTerminal from '@lucide/svelte/icons/square-terminal';
+	import Waypoints from '@lucide/svelte/icons/waypoints';
 	import { resolve } from '$app/paths';
 	import {
 		authorizeSSH,
@@ -22,14 +23,16 @@
 	} from '#lib/api/client.js';
 	import type { Device, DeviceSSH, SSHSetup } from '#lib/api/types.js';
 	import { ago } from '#lib/format.js';
+	import { live } from '#lib/live.svelte.js';
 	import type { Status } from '#lib/status.js';
 	import { tailnetIP } from '#lib/tailnet.js';
-	import { canOpen, parsePort, sshStateLabel } from '#lib/terminal.js';
+	import { canOpen, commonSSHUser, parsePort, refusalText, sshStateLabel } from '#lib/terminal.js';
 	import Badge from '#lib/ui/Badge.svelte';
 	import Button from '#lib/ui/Button.svelte';
 	import { buttonClass } from '#lib/ui/button.js';
 	import Card from '#lib/ui/Card.svelte';
 	import CodeLine from '#lib/ui/CodeLine.svelte';
+	import CopyButton from '#lib/ui/CopyButton.svelte';
 	import DataRow from '#lib/ui/DataRow.svelte';
 	import Dialog from '#lib/ui/Dialog.svelte';
 	import Field from '#lib/ui/Field.svelte';
@@ -57,7 +60,11 @@
 	let editing = $state(false);
 	let setup = $state<SSHSetup | null>(null);
 	let setupError = $state<string | null>(null);
-	let user = $state('');
+	/** What the admin typed in the User field, or null until they do. */
+	let typedUser = $state<string | null>(null);
+	// Until then, the user most machines use is likely the one for this one.
+	const suggestedUser = $derived(commonSSHUser(live.snapshot?.devices ?? []));
+	const user = $derived(typedUser ?? (setUp ? '' : suggestedUser));
 	let port = $state('22');
 	let portError = $state<string | null>(null);
 	let busy = $state<string | null>(null);
@@ -116,7 +123,7 @@
 	}
 
 	function startEditing() {
-		user = ssh.user ?? '';
+		typedUser = ssh.user ?? '';
 		port = String(ssh.port ?? 22);
 		portError = null;
 		editing = true;
@@ -158,11 +165,11 @@
 	const mac = $derived(device.os === 'macOS');
 </script>
 
-{#snippet setupForm(submit: string)}
+{#snippet setupForm(submit: string, showPort = true)}
 	<form class="flex flex-wrap items-end gap-2" onsubmit={save} novalidate>
 		<Field label="User">
 			<Input
-				bind:value={user}
+				bind:value={() => user, (v) => (typedUser = v)}
 				placeholder="alice"
 				class="w-40"
 				autocomplete="off"
@@ -171,16 +178,18 @@
 				required
 			/>
 		</Field>
-		<Field label="Port">
-			<Input
-				bind:value={port}
-				class="w-20"
-				inputmode="numeric"
-				placeholder="22"
-				aria-invalid={portError ? true : undefined}
-				oninput={() => (portError = null)}
-			/>
-		</Field>
+		{#if showPort}
+			<Field label="Port">
+				<Input
+					bind:value={port}
+					class="w-20"
+					inputmode="numeric"
+					placeholder="22"
+					aria-invalid={portError ? true : undefined}
+					oninput={() => (portError = null)}
+				/>
+			</Field>
+		{/if}
 		<Button type="submit" variant="primary" size="md" class="h-9" loading={busy === 'save'}
 			>{submit}</Button
 		>
@@ -246,10 +255,33 @@
 	{/if}
 {/snippet}
 
+{#snippet tailscaleSetup()}
+	<div class="space-y-4 text-[13px] text-fg-muted">
+		<p class="flex items-start gap-2.5">
+			<Waypoints class="mt-0.5 size-4 shrink-0 text-fg-faint" />
+			<span>
+				{device.name} runs Tailscale SSH, so Roost needs no key there. If your tailnet policy lets Roost
+				in, tell it which user to log in as.
+			</span>
+		</p>
+		{@render setupForm('Connect with Tailscale SSH', false)}
+		<details class="border-t border-line pt-3">
+			<summary class="cursor-pointer text-fg-subtle hover:text-fg">Use Roost's key instead</summary>
+			<div class="mt-3 space-y-3">
+				<p class="text-[12px] text-fg-subtle">
+					Tailscale SSH answers on port 22 of the tailnet address, so a key only works with an sshd
+					on another port. Set that port below.
+				</p>
+				{@render steps()}
+			</div>
+		</details>
+	</div>
+{/snippet}
+
 <div id="ssh" class="scroll-mt-24">
 	<Card
 		title="SSH access"
-		description="Terminals, files and Docker on this machine go over SSH, with Roost's own key."
+		description="Terminals, files and Docker on this machine go over SSH, with Tailscale SSH or Roost's own key."
 	>
 		{#snippet actions()}
 			{#if setUp && !editing}
@@ -270,7 +302,13 @@
 		{/snippet}
 
 		{#if !setUp || editing}
-			<div class="p-4">{@render steps()}</div>
+			<div class="p-4">
+				{#if device.tailscaleSsh && !setUp}
+					{@render tailscaleSetup()}
+				{:else}
+					{@render steps()}
+				{/if}
+			</div>
 		{:else}
 			{#if ssh.state === 'host-key-changed'}
 				<div class="space-y-2 border-b border-red/30 bg-red/5 px-4 py-3 text-[13px]">
@@ -294,6 +332,27 @@
 					<Button size="xs" disabled={!ssh.offeredKey} onclick={() => ask('trust')}
 						>Trust the new key</Button
 					>
+				</div>
+			{/if}
+			{#if ssh.state === 'failing' && ssh.policy}
+				{@const text = refusalText(ssh.policy.refusal, device.name, ssh.user ?? '')}
+				<div class="space-y-2 border-b border-amber/25 bg-amber/5 px-4 py-3 text-[13px]">
+					<p class="flex items-center gap-2 font-medium text-amber-fg">
+						<ShieldAlert class="size-4" />
+						{text.title}
+					</p>
+					<p class="text-fg-muted">{text.detail}</p>
+					<div
+						class="flex items-start gap-2 rounded-lg border border-line bg-canvas py-1.5 pr-1.5 pl-3"
+					>
+						<pre class="min-w-0 flex-1 overflow-x-auto font-mono text-[12px] text-fg">{ssh.policy
+								.snippet}</pre>
+						<CopyButton value={ssh.policy.snippet} label="Copy rule" />
+					</div>
+					<p class="text-[12px] text-fg-subtle">
+						Add it to the "ssh" section of your tailnet policy, above any broader rule, under Access
+						controls in the Tailscale admin console. Then press Check.
+					</p>
 				</div>
 			{/if}
 			<dl>
