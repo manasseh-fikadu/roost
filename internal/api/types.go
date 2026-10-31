@@ -2256,7 +2256,7 @@ type ChannelInput struct {
 // secret that's left out stays as it is, which is how a channel is changed
 // without sending its secrets back, and an empty one takes it away.
 type ChannelConfigInput struct {
-	ChannelConfig
+	ChannelConfig `tstype:",extends"`
 	// URL is the webhook's address, for Discord, Slack and generic webhooks.
 	URL *string `json:"url,omitempty"`
 	// Token is an ntfy access token, a Telegram bot's token, or the bearer

@@ -3186,8 +3186,7 @@ export interface ChannelInput {
  * secret that's left out stays as it is, which is how a channel is changed
  * without sending its secrets back, and an empty one takes it away.
  */
-export interface ChannelConfigInput {
-  ChannelConfig: ChannelConfig;
+export interface ChannelConfigInput extends ChannelConfig {
   /**
    * URL is the webhook's address, for Discord, Slack and generic webhooks.
    */
