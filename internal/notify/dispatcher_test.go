@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -14,6 +15,28 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/settings"
 	"github.com/manasseh-fikadu/roost/internal/store"
 )
+
+// A flakyStore can't record what channels were told while fail is set.
+type flakyStore struct {
+	*store.Store
+	fail atomic.Bool
+}
+
+var errFlaky = errors.New("the database is locked")
+
+func (f *flakyStore) SetNotified(ctx context.Context, n store.Notified) error {
+	if f.fail.Load() {
+		return errFlaky
+	}
+	return f.Store.SetNotified(ctx, n)
+}
+
+func (f *flakyStore) ClearNotified(ctx context.Context, alertID, channelID int64) error {
+	if f.fail.Load() {
+		return errFlaky
+	}
+	return f.Store.ClearNotified(ctx, alertID, channelID)
+}
 
 type sentMessage struct {
 	channel string
@@ -25,6 +48,7 @@ type sentMessage struct {
 type rig struct {
 	t     *testing.T
 	st    *store.Store
+	flaky *flakyStore
 	cache *settings.Cache
 	d     *Dispatcher
 
@@ -48,9 +72,9 @@ func newRig(t *testing.T, appURL string) *rig {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = st.Close() })
-	r := &rig{t: t, st: st, cache: settings.NewCache(st, nil), fail: map[string]error{}, block: map[string]bool{}}
+	r := &rig{t: t, st: st, flaky: &flakyStore{Store: st}, cache: settings.NewCache(st, nil), fail: map[string]error{}, block: map[string]bool{}}
 	r.d = NewDispatcher(Options{
-		Store: st, Settings: r.cache, AppURL: appURL,
+		Store: r.flaky, Settings: r.cache, AppURL: appURL,
 		Open: func() []store.Alert {
 			r.mu.Lock()
 			defer r.mu.Unlock()
@@ -514,6 +538,93 @@ func TestDispatcher_oneChannelDoesNotHoldUpAnother(t *testing.T) {
 		r.d.wg.Wait()
 		if dl, ok := r.d.Last(2); !ok || dl.OK || Reason(errors.New(dl.Error)) == "" {
 			t.Errorf("Last() of the slow channel = %+v, %v, want a failure", dl, ok)
+		}
+	})
+}
+
+// A message that was sent but couldn't be recorded isn't sent again while the
+// store fails, and is recorded once it can.
+func TestDispatcher_storeFails(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(t, "")
+		r.channel("Phone", "info", true)
+		r.channel("Quiet", "info", false)
+		a := r.alert("disk", "warning", "Disk")
+		r.flaky.fail.Store(true)
+		r.pass()
+		wantLines(t, "first", r.take(), "Phone opened Disk", "Quiet opened Disk")
+		for range 3 {
+			time.Sleep(time.Minute)
+			r.pass()
+		}
+		wantLines(t, "while the store fails", r.take())
+		if n := r.told(); n != 0 {
+			t.Fatalf("%d rows are recorded while the store fails, want none", n)
+		}
+
+		// A resolved alert is said once too, and a channel that needn't hear
+		// it forgets it.
+		r.resolve(a)
+		r.pass()
+		wantLines(t, "resolved while the store fails", r.take(), "Phone resolved Disk")
+		time.Sleep(time.Minute)
+		r.pass()
+		wantLines(t, "resolved again", r.take())
+
+		r.flaky.fail.Store(false)
+		r.pass()
+		wantLines(t, "once the store works", r.take())
+		if n := r.told(); n != 0 {
+			t.Errorf("%d rows are recorded after the alert resolved, want none", n)
+		}
+		r.d.mu.Lock()
+		n := len(r.d.unsaved)
+		r.d.mu.Unlock()
+		if n != 0 {
+			t.Errorf("%d notices are still unsaved, want none", n)
+		}
+	})
+}
+
+func TestDispatcher_storeRecoversAfterOpening(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(t, "")
+		r.channel("Phone", "info", true)
+		r.alert("disk", "warning", "Disk")
+		r.flaky.fail.Store(true)
+		r.pass()
+		wantLines(t, "opened", r.take(), "Phone opened Disk")
+		r.flaky.fail.Store(false)
+		r.pass()
+		wantLines(t, "once the store works", r.take())
+		if n := r.told(); n != 1 {
+			t.Errorf("%d rows are recorded once the store works, want 1", n)
+		}
+	})
+}
+
+func TestDispatcher_Test_oneAtATime(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		r := newRig(t, "")
+		ch := r.channel("Slow", "info", true)
+		r.block["Slow"] = true
+		first := make(chan Delivery, 1)
+		go func() { first <- r.d.Test(t.Context(), ch, "alice") }()
+		synctest.Wait()
+		second := r.d.Test(t.Context(), ch, "alice")
+		if second.OK || !strings.Contains(second.Error, "already being sent") {
+			t.Errorf("a second Test() = %+v, want a refusal while the first waits", second)
+		}
+		time.Sleep(SendTimeout + time.Second)
+		if dl := <-first; dl.OK {
+			t.Errorf("the first Test() = %+v, want a failure: the channel never answered", dl)
+		}
+		r.block["Slow"] = false
+		if dl := r.d.Test(t.Context(), ch, "alice"); !dl.OK {
+			t.Errorf("Test() after the first ended = %+v, want a success", dl)
 		}
 	})
 }

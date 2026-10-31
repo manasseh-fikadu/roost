@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -41,10 +42,21 @@ type Delivery struct {
 	Error string
 }
 
+// A Store holds the channels, what they were told, and the alerts. A
+// *store.Store is one.
+type Store interface {
+	Channels(ctx context.Context) ([]store.Channel, error)
+	Notified(ctx context.Context) ([]store.Notified, error)
+	SetNotified(ctx context.Context, n store.Notified) error
+	ClearNotified(ctx context.Context, alertID, channelID int64) error
+	AlertByID(ctx context.Context, id int64) (store.Alert, error)
+	AddEvents(ctx context.Context, events ...store.Event) error
+}
+
 // Options configure a Dispatcher.
 type Options struct {
 	// Store holds the channels and what they were told. Required.
-	Store *store.Store
+	Store Store
 	// Open returns the open alerts. Required.
 	Open func() []store.Alert
 	// Settings says when to remind and what Roost is called. Required.
@@ -77,10 +89,22 @@ type Dispatcher struct {
 	retries map[jobKey]*retry
 	// last is what each channel did last.
 	last map[int64]Delivery
+	// unsaved holds what channels were told that the store couldn't record,
+	// until it can, so that a message isn't sent again meanwhile.
+	unsaved map[[2]int64]unsaved
+	// testing holds the channels that a test is being sent to.
+	testing map[int64]bool
 	// warned holds the channels whose config was reported as bad, so it's
 	// reported once.
 	warned map[int64]bool
 	wg     sync.WaitGroup
+}
+
+// unsaved is what a channel was told, or told resolved if clear is set, that
+// the store hasn't recorded yet.
+type unsaved struct {
+	n     store.Notified
+	clear bool
 }
 
 type jobKey struct {
@@ -123,7 +147,7 @@ func NewDispatcher(opts Options) *Dispatcher {
 	}
 	return &Dispatcher{
 		opts: opts, log: log, busy: map[int64]bool{}, retries: map[jobKey]*retry{},
-		last: map[int64]Delivery{}, warned: map[int64]bool{},
+		last: map[int64]Delivery{}, warned: map[int64]bool{}, unsaved: map[[2]int64]unsaved{}, testing: map[int64]bool{},
 	}
 }
 
@@ -157,6 +181,7 @@ func (d *Dispatcher) Forget(channelID int64) {
 	defer d.mu.Unlock()
 	delete(d.last, channelID)
 	delete(d.warned, channelID)
+	maps.DeleteFunc(d.unsaved, func(k [2]int64, _ unsaved) bool { return k[0] == channelID })
 	for k := range d.retries {
 		if k.channel == channelID {
 			delete(d.retries, k)
@@ -167,6 +192,19 @@ func (d *Dispatcher) Forget(channelID int64) {
 // Test sends a test message to c, for the admin with login by, and says what
 // happened. It doesn't change what the channel has been told.
 func (d *Dispatcher) Test(ctx context.Context, c Channel, by string) Delivery {
+	d.mu.Lock()
+	if d.testing[c.ID] {
+		d.mu.Unlock()
+		return Delivery{At: time.Now(), Event: Test, Error: "a test is already being sent to this channel"}
+	}
+	d.testing[c.ID] = true
+	d.mu.Unlock()
+	defer func() {
+		d.mu.Lock()
+		delete(d.testing, c.ID)
+		d.mu.Unlock()
+	}()
+
 	now := time.Now()
 	s := d.opts.Settings.Get(ctx)
 	m := Message{Event: Test, Severity: "info", Title: "Test", At: now, Instance: s.General.Name}
@@ -207,6 +245,7 @@ func (d *Dispatcher) pass(ctx context.Context, now time.Time) {
 		}
 		channels = append(channels, c)
 	}
+	d.flush(ctx)
 	notified, err := d.opts.Store.Notified(ctx)
 	if err != nil {
 		if ctx.Err() == nil {
@@ -214,6 +253,7 @@ func (d *Dispatcher) pass(ctx context.Context, now time.Time) {
 		}
 		return
 	}
+	notified = d.withUnsaved(notified)
 	open := d.opts.Open()
 	openIDs := make(map[int64]bool, len(open))
 	for _, a := range open {
@@ -236,6 +276,51 @@ func (d *Dispatcher) pass(ctx context.Context, now time.Time) {
 	s := d.opts.Settings.Get(ctx)
 	jobs := due(now, s.Notifications, channels, open, notified, gone)
 	d.dispatch(ctx, s, jobs)
+}
+
+// flush tries again to record what the store couldn't earlier.
+func (d *Dispatcher) flush(ctx context.Context) {
+	d.mu.Lock()
+	pending := maps.Clone(d.unsaved)
+	d.mu.Unlock()
+	for k, u := range pending {
+		var err error
+		if u.clear {
+			err = d.opts.Store.ClearNotified(ctx, u.n.AlertID, u.n.ChannelID)
+		} else {
+			err = d.opts.Store.SetNotified(ctx, u.n)
+		}
+		if err != nil {
+			continue
+		}
+		d.mu.Lock()
+		// A newer change to the same pair stays.
+		if d.unsaved[k] == u {
+			delete(d.unsaved, k)
+		}
+		d.mu.Unlock()
+	}
+}
+
+// withUnsaved returns notified with what the store hasn't recorded yet.
+func (d *Dispatcher) withUnsaved(notified []store.Notified) []store.Notified {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if len(d.unsaved) == 0 {
+		return notified
+	}
+	out := make([]store.Notified, 0, len(notified)+len(d.unsaved))
+	for _, n := range notified {
+		if _, ok := d.unsaved[[2]int64{n.ChannelID, n.AlertID}]; !ok {
+			out = append(out, n)
+		}
+	}
+	for _, u := range d.unsaved {
+		if !u.clear {
+			out = append(out, u.n)
+		}
+	}
+	return out
 }
 
 // warnOnce logs an error about a channel the first time.
@@ -438,21 +523,22 @@ func (d *Dispatcher) deliver(ctx context.Context, s settings.Settings, j job) {
 // settle records that a channel has been dealt with for an alert: told about
 // it, or told it resolved, or no longer needs to be.
 func (d *Dispatcher) settle(ctx context.Context, j job, now time.Time) {
+	u := unsaved{n: store.Notified{AlertID: j.alert.ID, ChannelID: j.ch.ID, Severity: j.alert.Severity, At: now}}
 	var err error
 	if j.forget || j.event == Resolved {
+		u.clear = true
 		err = d.opts.Store.ClearNotified(ctx, j.alert.ID, j.ch.ID)
 	} else {
-		err = d.opts.Store.SetNotified(ctx, store.Notified{
-			AlertID: j.alert.ID, ChannelID: j.ch.ID, Severity: j.alert.Severity, At: now,
-		})
+		err = d.opts.Store.SetNotified(ctx, u.n)
 	}
 	if err == nil || ctx.Err() != nil {
 		return
 	}
 	d.log.Warn("record a notification", "channel", j.ch.Name, "alert", j.alert.ID, "error", err)
-	// Without a record, it would be sent again at the next pass.
+	// Without a record, the message would be sent again at the next pass.
+	// The Dispatcher remembers it until the store takes it.
 	d.mu.Lock()
-	d.retries[j.key()] = &retry{tries: 1, next: now.Add(time.Minute)}
+	d.unsaved[[2]int64{j.ch.ID, j.alert.ID}] = u
 	d.mu.Unlock()
 }
 

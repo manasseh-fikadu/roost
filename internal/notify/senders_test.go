@@ -181,6 +181,28 @@ func TestSlack(t *testing.T) {
 	}
 }
 
+func TestSlack_escapes(t *testing.T) {
+	t.Parallel()
+	h := newHook(t)
+	m := opened()
+	m.Title = "<!channel> down & <@U123>"
+	m.URL = "https://roost.example.com/alerts?alert=1&x=a|b>c"
+	if err := (slack{Config{URL: h.srv.URL + "/services/T/B/X"}, NewEnv(nil)}).Send(t.Context(), m); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+	got := h.json(t)
+	// Nothing in the text that a notification shows can ping anyone.
+	if text, _ := got["text"].(string); strings.Contains(text, "<") || !strings.Contains(text, "&lt;!channel&gt; down &amp; &lt;@U123&gt;") {
+		t.Errorf("text = %q, want the markup escaped", text)
+	}
+	atts, _ := got["attachments"].([]any)
+	a, _ := atts[0].(map[string]any)
+	body, _ := a["text"].(string)
+	if !strings.Contains(body, "<https://roost.example.com/alerts?alert=1&amp;x=a%7Cb%3Ec|Open in Home lab>") {
+		t.Errorf("attachment text = %q, want the link's | and > kept from ending it", body)
+	}
+}
+
 func TestTelegram(t *testing.T) {
 	t.Parallel()
 	h := newHook(t)

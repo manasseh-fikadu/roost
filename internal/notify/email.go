@@ -117,7 +117,10 @@ func (e email) Send(ctx context.Context, m Message) error {
 	if err := w.Close(); err != nil {
 		return err
 	}
-	return c.Quit()
+	// The server has accepted the mail. A QUIT that goes wrong now doesn't
+	// undo that, and saying it failed would send the mail again.
+	_ = c.Quit()
+	return nil
 }
 
 // build returns the mail for m, from an address to the addresses in the To header.

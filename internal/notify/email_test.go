@@ -65,6 +65,8 @@ type fakeSMTP struct {
 	implicit, offerTLS bool
 	// login is the "user:password" it accepts, if it asks for one.
 	login string
+	// badQuit makes it refuse to say goodbye, after it took the mail.
+	badQuit bool
 
 	mu   sync.Mutex
 	mail []smtpMail
@@ -169,6 +171,10 @@ func (s *fakeSMTP) serve(conn net.Conn) {
 			cur = smtpMail{user: cur.user}
 			say("250 queued")
 		case "QUIT":
+			if s.badQuit {
+				say("421 go away")
+				return
+			}
 			say("221 bye")
 			return
 		default:
@@ -272,6 +278,21 @@ func TestEmail(t *testing.T) {
 		}
 		if got := srv.got(); len(got) != 0 {
 			t.Errorf("the server got %+v, want nothing", got)
+		}
+	})
+
+	t.Run("a server that is rude after taking the mail", func(t *testing.T) {
+		t.Parallel()
+		srv := newFakeSMTP(t, cert, false, true, "")
+		srv.badQuit = true
+		cfg := base
+		cfg.Port = srv.port()
+		// The mail is delivered, so it didn't fail, and isn't sent again.
+		if err := (email{cfg, env}).Send(t.Context(), opened()); err != nil {
+			t.Errorf("Send() error = %v, want none: the server took the mail", err)
+		}
+		if got := srv.got(); len(got) != 1 {
+			t.Errorf("the server got %d mails, want 1", len(got))
 		}
 	})
 
