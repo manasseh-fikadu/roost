@@ -74,7 +74,7 @@ func TestManager_tailscaleSSHRefusals(t *testing.T) {
 			name:    "no rule for the user",
 			policy:  sshtest.PolicyDenyUser,
 			refusal: ssh.RefusedUser,
-			want:    "the tailnet policy doesn't let Roost log in to laptop as alice with Tailscale SSH",
+			want:    "Tailscale SSH on laptop won't let Roost log in as alice: the tailnet policy doesn't allow that user, or the machine has no account for it",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {

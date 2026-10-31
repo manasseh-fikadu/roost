@@ -64,7 +64,8 @@ func tailscaleRefusal(name, user string, banners []string) (refusal Refusal, msg
 	text := strings.Join(banners, "")
 	switch {
 	case strings.Contains(text, "does not permit you to SSH as user"):
-		return RefusedUser, fmt.Sprintf("the tailnet policy doesn't let Roost log in to %s as %s with Tailscale SSH", name, user)
+		// Tailscale says the same when the machine has no such account.
+		return RefusedUser, fmt.Sprintf("Tailscale SSH on %s won't let Roost log in as %s: the tailnet policy doesn't allow that user, or the machine has no account for it", name, user)
 	case strings.Contains(text, "does not permit you to SSH to this node"):
 		return RefusedNode, "the tailnet policy doesn't let Roost use Tailscale SSH to log in to " + name
 	case strings.Contains(text, "Tailscale SSH requires an additional check"):

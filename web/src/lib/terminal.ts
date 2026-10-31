@@ -279,7 +279,7 @@ export function refusalText(
 		case 'user':
 			return {
 				title: `The tailnet policy doesn't let Roost log in as ${user}`,
-				detail: `A rule lets Roost SSH to ${deviceName}, but its "users" don't include ${user}.`
+				detail: `A rule lets Roost SSH to ${deviceName}, but its "users" don't include ${user}, or ${deviceName} has no account named ${user}.`
 			};
 	}
 }

@@ -360,6 +360,8 @@ describe('refusalText', () => {
 	test('user names the user', () => {
 		const t = refusalText('user', 'laptop', 'alice');
 		expect(t.title).toContain('as alice');
-		expect(t.detail).toContain('"users" don\'t include alice');
+		expect(t.detail).toContain(
+			'"users" don\'t include alice, or laptop has no account named alice'
+		);
 	});
 });
