@@ -91,7 +91,7 @@
 	title="Device settings"
 	description="{device.hostName || device.name} · {device.dnsName}"
 >
-	<form id="{id}-form" class="space-y-4" onsubmit={save}>
+	<form id="{id}-form" class="space-y-4" onsubmit={save} novalidate>
 		<Field label="Display name" hint="Leave it empty to use the name the machine reports.">
 			<Input bind:value={name} placeholder={device.hostName} maxlength={64} />
 		</Field>
@@ -128,8 +128,9 @@
 					<NumberInput
 						bind:value={diskWarn}
 						unit="%"
-						min={1}
+						min={0.1}
 						max={100}
+						step={0.1}
 						placeholder={global ? String(global.diskWarn) : ''}
 					/>
 				</Field>
@@ -137,8 +138,9 @@
 					<NumberInput
 						bind:value={diskCritical}
 						unit="%"
-						min={1}
+						min={0.1}
 						max={100}
+						step={0.1}
 						placeholder={global ? String(global.diskCritical) : ''}
 					/>
 				</Field>
@@ -146,8 +148,9 @@
 					<NumberInput
 						bind:value={memoryWarn}
 						unit="%"
-						min={1}
+						min={0.1}
 						max={100}
+						step={0.1}
 						placeholder={global ? String(global.memoryWarn) : ''}
 					/>
 				</Field>
@@ -155,8 +158,9 @@
 					<NumberInput
 						bind:value={cpuWarn}
 						unit="%"
-						min={1}
+						min={0.1}
 						max={100}
+						step={0.1}
 						placeholder={global ? String(global.cpuWarn) : ''}
 					/>
 				</Field>
