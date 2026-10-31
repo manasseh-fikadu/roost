@@ -112,6 +112,10 @@ type Device struct {
 	// SameMachine marks the peer that is the machine Roost runs on. Only an
 	// Embedded node sets it, since Roost is a separate node there.
 	SameMachine bool
+	// TailscaleSSH reports whether the node runs Tailscale SSH, which
+	// answers SSH connections to its tailnet address on port 22 itself, and
+	// lets in whoever the tailnet policy says.
+	TailscaleSSH bool
 }
 
 // PingResult is the reply to one Ping.

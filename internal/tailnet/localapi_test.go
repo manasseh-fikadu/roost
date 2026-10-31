@@ -39,6 +39,7 @@ func TestConvertStatus(t *testing.T) {
 				ID: "web", DNSName: "web.example.ts.net.", OS: "linux", UserID: 1, Tags: &tags,
 				TailscaleIPs: []netip.Addr{ip("100.64.0.3")}, Online: true, LastSeen: lastSeen,
 				CurAddr: "203.0.113.7:41641", Relay: "fra", Created: created,
+				SSH_HostKeys: []string{"ssh-ed25519 AAAA"},
 			},
 			key.NewNode().Public(): {
 				ID: "laptop", HostName: "Alice's laptop", DNSName: "laptop.example.ts.net.", OS: "macOS",
@@ -66,10 +67,11 @@ func TestConvertStatus(t *testing.T) {
 			},
 			{
 				// Tagged, so no owner; online, so no last-seen time; no host
-				// name, so it comes from the DNS name.
+				// name, so it comes from the DNS name; it advertises SSH host
+				// keys, so it runs Tailscale SSH.
 				ID: "web", HostName: "web", DNSName: "web.example.ts.net", OS: "linux",
 				IPs: []netip.Addr{ip("100.64.0.3")}, Tags: []string{"tag:server"}, Online: true,
-				CurAddr: "203.0.113.7:41641", Relay: "fra", Created: created,
+				CurAddr: "203.0.113.7:41641", Relay: "fra", Created: created, TailscaleSSH: true,
 			},
 		},
 	}

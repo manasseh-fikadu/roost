@@ -176,6 +176,8 @@ func convertPeer(p *ipnstate.PeerStatus, users map[tailcfg.UserID]tailcfg.UserPr
 		TxBytes:   p.TxBytes,
 		Created:   p.Created,
 		ExitNode:  p.ExitNode,
+		// A node advertises its SSH host keys only while it runs Tailscale SSH.
+		TailscaleSSH: len(p.SSH_HostKeys) > 0,
 	}
 	if d.HostName == "" {
 		d.HostName, _, _ = strings.Cut(d.DNSName, ".")
