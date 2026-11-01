@@ -28,7 +28,7 @@
 	bind:value={() => value, (v) => (value = v as T)}
 	orientation="horizontal"
 	aria-label={label}
-	class="inline-flex h-8 items-center rounded-md border border-line-strong bg-canvas p-0.5"
+	class="inline-flex h-8 items-center rounded-md border border-line-strong bg-canvas p-0.5 pointer-coarse:h-10"
 >
 	{#each options as o (o.value)}
 		<RadioGroup.Item

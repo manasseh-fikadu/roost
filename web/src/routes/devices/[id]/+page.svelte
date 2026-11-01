@@ -106,7 +106,7 @@
 	{@const info = device.info}
 	<a
 		href={resolve('/devices')}
-		class="mb-4 inline-flex items-center gap-1.5 text-[13px] text-fg-subtle transition-colors hover:text-fg"
+		class="mb-4 inline-flex items-center gap-1.5 text-[13px] text-fg-subtle transition-colors hover:text-fg pointer-coarse:-mt-2 pointer-coarse:mb-2 pointer-coarse:py-2"
 	>
 		<ArrowLeft class="size-3.5" /> Devices
 	</a>

@@ -50,7 +50,7 @@
 		{/if}
 		<a
 			href={resolve('/alerts')}
-			class="ml-auto flex items-center gap-1 text-[12px] text-fg-subtle transition-colors hover:text-fg"
+			class="ml-auto flex items-center gap-1 text-[12px] text-fg-subtle transition-colors hover:text-fg pointer-coarse:-my-2.5 pointer-coarse:py-2.5"
 		>
 			All alerts <ArrowRight class="size-3" />
 		</a>

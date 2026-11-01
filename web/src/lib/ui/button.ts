@@ -15,9 +15,9 @@ const variants: Record<ButtonVariant, string> = {
 };
 
 const sizes: Record<ButtonSize, string> = {
-	xs: 'h-6 gap-1 rounded-md px-2 text-[12px]',
-	sm: 'h-8 gap-1.5 rounded-md px-3 text-[13px]',
-	md: 'h-10 gap-2 rounded-lg px-4 text-[14px]'
+	xs: 'h-6 gap-1 rounded-md px-2 text-[12px] pointer-coarse:h-8',
+	sm: 'h-8 gap-1.5 rounded-md px-3 text-[13px] pointer-coarse:h-10',
+	md: 'h-10 gap-2 rounded-lg px-4 text-[14px] pointer-coarse:h-11'
 };
 
 /** The classes of a button. */
@@ -27,7 +27,11 @@ export function buttonClass(variant: ButtonVariant = 'secondary', size: ButtonSi
 
 export type IconButtonSize = 'sm' | 'md';
 
-const iconSizes: Record<IconButtonSize, string> = { sm: 'size-7', md: 'size-8' };
+// Fingers need more room than a mouse: on a touch screen a button grows.
+const iconSizes: Record<IconButtonSize, string> = {
+	sm: 'size-7 pointer-coarse:size-9',
+	md: 'size-8 pointer-coarse:size-10'
+};
 
 /** The classes of a square button that holds only an icon. */
 export function iconButtonClass(size: IconButtonSize = 'md'): string {

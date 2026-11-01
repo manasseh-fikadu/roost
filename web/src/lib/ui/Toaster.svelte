@@ -10,7 +10,7 @@
 </script>
 
 <div
-	class="pointer-events-none fixed right-4 bottom-4 z-[60] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+	class="pointer-events-none fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[60] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
 	aria-live="polite"
 >
 	{#each toasts as t (t.id)}
