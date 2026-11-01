@@ -90,3 +90,19 @@ export function nearest(sorted: number[], target: number): number {
 	}
 	return lo > 0 && target - sorted[lo - 1] < sorted[lo] - target ? lo - 1 : lo;
 }
+
+/**
+ * How to write the times on a chart's axis, for a chart that spans `span`
+ * milliseconds: the time of day for a day or two, the weekday and hour for up
+ * to two weeks, and the date past that, when there are several of each weekday.
+ */
+export function timeTickFormat(span: number): Intl.DateTimeFormatOptions {
+	const day = 86_400_000;
+	if (span > 14 * day) {
+		return { month: 'short', day: 'numeric' };
+	}
+	if (span > 2 * day) {
+		return { weekday: 'short', hour: 'numeric' };
+	}
+	return { hour: 'numeric', minute: '2-digit' };
+}
