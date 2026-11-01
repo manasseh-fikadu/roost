@@ -35,7 +35,7 @@ Turn on MagicDNS and HTTPS certificates in the [DNS settings](https://login.tail
 
 ### Tailnet policy
 
-If you log Roost in as yourself, its node has your access, and nothing more is needed. For a node that belongs to no one, give it a tag. Use an auth key that applies the tag, set `ROOST_ADMINS` (see [Admins](#admins)), and allow the tag in your [tailnet policy file](https://login.tailscale.com/admin/acls):
+If you log Roost in as yourself, its node has your access, and nothing more is needed. For a node that belongs to no one, give it a tag. Use an auth key that applies the tag, set `ROOST_ADMINS` (see [Admins and viewers](#admins-and-viewers)), and allow the tag in your [tailnet policy file](https://login.tailscale.com/admin/acls):
 
 ```jsonc
 {
@@ -113,7 +113,7 @@ roost admin remove bob@example.com      # take bob's role away
 roost admin who-can-view tailnet        # let anyone on the tailnet view; "listed" (the default) undoes it
 ```
 
-Admins can make the same changes through `GET` and `PATCH /api/access` and `PUT` and `DELETE /api/access/users/<login>`, which the Settings page will use.
+Admins can make the same changes in the Access tab of [Settings](settings.md#access), which uses `GET` and `PATCH /api/access` and `PUT` and `DELETE /api/access/users/<login>`.
 
 Only admins can see `GET /api/debug/tailnet`, and during development, the web UI that Roost proxies from Vite.
 

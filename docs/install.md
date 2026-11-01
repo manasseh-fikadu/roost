@@ -50,7 +50,7 @@ curl -fsSL https://raw.githubusercontent.com/manasseh-fikadu/roost/main/install.
 | `ROOST_ADMINS` | Logins to make Roost's first admins, separated by commas. |
 | `TS_AUTHKEY` | A Tailscale [auth key](https://tailscale.com/kb/1085/auth-keys), or a Headscale pre-auth key, so Roost joins the tailnet without a login. |
 
-The script saves these in `/etc/roost/roost.env` the first time only. After that, edit the file, and run `sudo systemctl restart roost`. [Roost and Tailscale](tailscale.md) says what each one means. `TS_AUTHKEY` is only used while Roost has no node yet, so you can delete it from the file once Roost is on the tailnet.
+The script saves these in `/etc/roost/roost.env` the first time only. After that, edit the file, and run `sudo systemctl restart roost`. [Roost and Tailscale](tailscale.md) says what each one means, and the [configuration reference](configuration.md) lists every other variable. `TS_AUTHKEY` is only used while Roost has no node yet, so you can delete it from the file once Roost is on the tailnet.
 
 ### Running it
 
@@ -91,6 +91,8 @@ sudo systemctl restart roost
 Membership in the `docker` group is the same as root on the machine, since anyone who can use the Docker API can start a container that owns it, and Roost's admins can use it. Only do this on a machine where that is acceptable.
 
 ### Removing it
+
+[Uninstalling Roost](uninstalling.md) covers every way of running it, and what Roost leaves on your tailnet and your other machines. For the install script:
 
 ```sh
 sudo systemctl disable --now roost
