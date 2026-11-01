@@ -1,21 +1,21 @@
 # Settings
 
-**Settings** is for admins. It has six tabs, and `/settings?tab=alerts` (or `notifications`, `units`, `retention`, `access`) links to one. Each tab saves on its own, Roost uses a change at once, and every change is a line in the [activity log](pages.md#activity). Viewers don't see the page. If two admins edit at the same time, each save only writes the fields its admin changed.
+**Settings** is for admins. It has six tabs, and `/settings?tab=alerts` (or `notifications`, `units`, `retention`, `access`) links to one. Each tab saves on its own, Bield uses a change at once, and every change is a line in the [activity log](pages.md#activity). Viewers don't see the page. If two admins edit at the same time, each save only writes the fields its admin changed.
 
-Environment variables and flags are a separate thing. They set up how Roost starts, and they're in the [configuration reference](configuration.md).
+Environment variables and flags are a separate thing. They set up how Bield starts, and they're in the [configuration reference](configuration.md).
 
 ## General
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| Name | `Roost` | What this Roost is called. It's in the sidebar and in the title of every page, and notification messages say it. Up to 40 characters on one line, with no space at either end. |
-| Public URL | empty | The address that people and agents reach Roost at, if it differs from Roost's own address on the tailnet, such as a name from a proxy. Roost writes it into the agent's install command and into the links in notifications. Empty means Roost's own address on the tailnet. It takes a scheme, a host and maybe a port, such as `https://roost.example.ts.net`, and no path. |
+| Name | `Bield` | What this Bield is called. It's in the sidebar and in the title of every page, and notification messages say it. Up to 40 characters on one line, with no space at either end. |
+| Public URL | empty | The address that people and agents reach Bield at, if it differs from Bield's own address on the tailnet, such as a name from a proxy. Bield writes it into the agent's install command and into the links in notifications. Empty means Bield's own address on the tailnet. It takes a scheme, a host and maybe a port, such as `https://bield.example.ts.net`, and no path. |
 
 The **First-run setup** card on this tab reopens [the setup](pages.md#first-run-setup).
 
 ## Alerts
 
-Roost raises an alert when a rule's condition is true, and resolves it after the condition has been gone for a minute. Turning a rule off resolves its open alerts and hides the matching warning from the dashboard. The thresholds apply to every device unless [a device overrides them](#per-device-thresholds).
+Bield raises an alert when a rule's condition is true, and resolves it after the condition has been gone for a minute. Turning a rule off resolves its open alerts and hides the matching warning from the dashboard. The thresholds apply to every device unless [a device overrides them](#per-device-thresholds).
 
 | Rule | Alert | Setting | Default | Severity |
 | --- | --- | --- | --- | --- |
@@ -26,16 +26,16 @@ Roost raises an alert when a rule's condition is true, and resolves it after the
 | Memory | A device uses most of its memory. | Threshold (percent) | 92 | Warning |
 | CPU | A device has been busy for a while. | Threshold (percent), over minutes (1 to 60) | 90, 5 | Warning |
 | Checks | A [check](pages.md#checks) keeps failing. | Failures in a row before an alert (1 to 100) | 2 | Critical, and warning for a device that doesn't answer pings |
-| Containers | A Docker container on Roost's machine stopped unexpectedly. | | | Critical or warning, see below |
-| Systemd units | A unit on Roost's machine failed, or a watched one isn't running. | | | Warning |
-| Roost's own jobs | Something Roost gathers, such as the Tailscale status or Docker, keeps failing. | | | Warning |
+| Containers | A Docker container on Bield's machine stopped unexpectedly. | | | Critical or warning, see below |
+| Systemd units | A unit on Bield's machine failed, or a watched one isn't running. | | | Warning |
+| Bield's own jobs | Something Bield gathers, such as the Tailscale status or Docker, keeps failing. | | | Warning |
 
 All ten rules are on by default. A few details:
 
 - A device only alerts when it's offline if it has been seen before and its **Alert when offline** switch is on. That switch is on for everything except phones and tablets.
-- Disk, memory and CPU alerts need measurements. Roost measures the machine it runs on if that's Linux, and every other machine needs [the agent](agent.md). The CPU figure is the average over the window you set.
-- Container alerts are about the containers on the machine Roost runs on. A container that is unhealthy or restarting alerts as a warning. One that is dead, was killed for using too much memory, or exited with an error alerts as critical. One that exited cleanly (exit code 0, 130, 137 or 143) alerts as a warning only if its restart policy is `always` or `unless-stopped`, so a one-shot job that finishes doesn't alert.
-- A unit alerts as failed whether Roost watches it or not. A [watched unit](#watched-units) that is inactive also alerts.
+- Disk, memory and CPU alerts need measurements. Bield measures the machine it runs on if that's Linux, and every other machine needs [the agent](agent.md). The CPU figure is the average over the window you set.
+- Container alerts are about the containers on the machine Bield runs on. A container that is unhealthy or restarting alerts as a warning. One that is dead, was killed for using too much memory, or exited with an error alerts as critical. One that exited cleanly (exit code 0, 130, 137 or 143) alerts as a warning only if its restart policy is `always` or `unless-stopped`, so a one-shot job that finishes doesn't alert.
+- A unit alerts as failed whether Bield watches it or not. A [watched unit](#watched-units) that is inactive also alerts.
 - **Restore defaults**, on the Alerts and Retention tabs, puts that tab's values back. It doesn't save until you press **Save changes**.
 
 ### Per-device thresholds
@@ -50,20 +50,20 @@ Channels, reminders and quiet hours. See [Notifications](notifications.md).
 | --- | --- | --- |
 | Remind every N hours | 0 (off) | Sends another message about an alert that is still open and not acknowledged. From 1 to 168. |
 | Quiet hours | off | Holds messages back from a start time to an end time. Defaults to 22:00 until 07:00 when you turn it on. |
-| Time zone | your browser's | The zone the quiet hours are in, such as `Europe/Berlin`. If you empty the field, it's the zone Roost's machine is in. |
+| Time zone | your browser's | The zone the quiet hours are in, such as `Europe/Berlin`. If you empty the field, it's the zone Bield's machine is in. |
 | Still send critical alerts | on | Lets critical messages through the quiet hours. |
 
 ## Watched units
 
-Roost lists the systemd units of the machine it runs on on the hub's page, and alerts when a watched one isn't running. Failed units always show, watched or not. The tab lists the services the machine has, with a search box, so you can pick from them. A unit is either a system unit, such as `ssh.service`, or one of the user Roost runs as, which Roost writes as `user:app.service` in the settings.
+Bield lists the systemd units of the machine it runs on on the hub's page, and alerts when a watched one isn't running. Failed units always show, watched or not. The tab lists the services the machine has, with a search box, so you can pick from them. A unit is either a system unit, such as `ssh.service`, or one of the user Bield runs as, which Bield writes as `user:app.service` in the settings.
 
-The default list is `ssh.service`, `sshd.service`, `docker.service`, `tailscaled.service` and `cron.service`. Roost leaves out the ones the machine doesn't have, since `ssh` is `sshd` on some systems.
+The default list is `ssh.service`, `sshd.service`, `docker.service`, `tailscaled.service` and `cron.service`. Bield leaves out the ones the machine doesn't have, since `ssh` is `sshd` on some systems.
 
-This needs systemd, and for user units a running user session. On a machine without systemd, such as macOS or a container, the tab says Roost can't read systemd and the rule has nothing to do.
+This needs systemd, and for user units a running user session. On a machine without systemd, such as macOS or a container, the tab says Bield can't read systemd and the rule has nothing to do.
 
 ## Retention
 
-Roost deletes history older than these limits within the hour. Shortening one asks you to confirm, because the deletion can't be undone.
+Bield deletes history older than these limits within the hour. Shortening one asks you to confirm, because the deletion can't be undone.
 
 | History | Default | Most | What it covers |
 | --- | --- | --- | --- |
@@ -75,8 +75,8 @@ Device history keeps the last 48 hours as measured and averages of 5 minutes and
 
 ## Access
 
-Who can use Roost: the people with a role, and **Who can view**. It's the same as `roost admin` on the command line, and it's explained in [Admins and viewers](tailscale.md#admins-and-viewers). You can add a login as an admin or a viewer, change someone's role, or remove it. Roost always keeps one admin, and asks you to confirm before you demote yourself.
+Who can use Bield: the people with a role, and **Who can view**. It's the same as `bield admin` on the command line, and it's explained in [Admins and viewers](tailscale.md#admins-and-viewers). You can add a login as an admin or a viewer, change someone's role, or remove it. Bield always keeps one admin, and asks you to confirm before you demote yourself.
 
 **Who can view** is `listed` by default, which means only people with a role. `tailnet` makes anyone who signs in from the tailnet a viewer.
 
-The **Tailscale** card shows the mode Roost joined the tailnet in. It's read only, since it's set when Roost starts.
+The **Tailscale** card shows the mode Bield joined the tailnet in. It's read only, since it's set when Bield starts.

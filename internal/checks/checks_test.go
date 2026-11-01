@@ -17,16 +17,16 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/checks"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/checks"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // newStore opens a new store without its default checks. Call it in a
 // synctest bubble.
 func newStore(t *testing.T) *store.Store {
 	t.Helper()
-	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "roost.db"), store.Options{})
+	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "bield.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -580,7 +580,7 @@ func TestRunner_ObservePings(t *testing.T) {
 			// The same ping again doesn't count twice.
 			"laptop": reply(0, tailnet.PingResult{Latency: 4 * time.Millisecond}),
 			"phone":  {At: now.Add(time.Minute), Err: tailnet.ErrNoReply, Misses: 3},
-			// A ping that failed on Roost's side says nothing of the peer.
+			// A ping that failed on Bield's side says nothing of the peer.
 			"server": {At: now.Add(time.Minute), Err: errors.New("the node isn't running")},
 		}})
 		want := map[string]struct {
@@ -605,7 +605,7 @@ func TestRunner_ObservePings(t *testing.T) {
 			t.Errorf("the laptop's ping = %+v, want a 4 ms reply", l)
 		}
 
-		// Right after Roost starts, the status can have no peers yet, which
+		// Right after Bield starts, the status can have no peers yet, which
 		// doesn't mean they left. A device whose latest ping is over a day
 		// old is forgotten.
 		r.ObservePings(tailnet.Snapshot{Status: &tailnet.Status{}})
@@ -699,13 +699,13 @@ func TestClean(t *testing.T) {
 		{name: "a private address", in: with(func(c *store.Check) { c.Kind, c.Target = checks.KindTCP, "10.0.0.5:22" }),
 			want: with(func(c *store.Check) { c.Kind, c.Target = checks.KindTCP, "10.0.0.5:22" })},
 		{name: "a cloud's metadata service", in: with(func(c *store.Check) { c.Target = "http://169.254.169.254/latest/meta-data/" }),
-			wantErr: "the target is a link-local or cloud metadata address, which Roost doesn't connect to"},
+			wantErr: "the target is a link-local or cloud metadata address, which Bield doesn't connect to"},
 		{name: "a link-local IPv6 address", in: with(func(c *store.Check) { c.Target = "http://[fe80::1]:8080/" }),
-			wantErr: "the target is a link-local or cloud metadata address, which Roost doesn't connect to"},
+			wantErr: "the target is a link-local or cloud metadata address, which Bield doesn't connect to"},
 		{name: "a metadata host name", in: with(func(c *store.Check) { c.Target = "http://metadata.google.internal/computeMetadata/v1/" }),
-			wantErr: "the target is a link-local or cloud metadata address, which Roost doesn't connect to"},
+			wantErr: "the target is a link-local or cloud metadata address, which Bield doesn't connect to"},
 		{name: "a link-local TCP target", in: with(func(c *store.Check) { c.Kind, c.Target = checks.KindTCP, "169.254.169.254:80" }),
-			wantErr: "the target is a link-local or cloud metadata address, which Roost doesn't connect to"},
+			wantErr: "the target is a link-local or cloud metadata address, which Bield doesn't connect to"},
 		{name: "no name", in: with(func(c *store.Check) { c.Name = "  " }), wantErr: "the check needs a name"},
 		{name: "a long name", in: with(func(c *store.Check) { c.Name = strings.Repeat("x", 81) }), wantErr: "the name is too long"},
 		{name: "a name of two lines", in: with(func(c *store.Check) { c.Name = "a\nb" }), wantErr: "the name can only be one line"},
@@ -796,7 +796,7 @@ func TestRunner_refusesLinkLocal(t *testing.T) {
 			}
 		}
 		if d := n.dialsTo("169.254.169.254:80"); d != 0 {
-			t.Errorf("Roost dialed the metadata address %d times", d)
+			t.Errorf("Bield dialed the metadata address %d times", d)
 		}
 	})
 }

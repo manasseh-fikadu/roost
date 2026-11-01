@@ -18,7 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 const (
@@ -176,7 +176,7 @@ func (e *Engine) Apply(ctx context.Context, conds []Condition, fresh FreshFunc, 
 		}
 		a := &o.alert
 		if !fresh(key, a.Source, a.DeviceID) {
-			// Without fresh data, Roost can't say it's gone.
+			// Without fresh data, Bield can't say it's gone.
 			o.missingSince = time.Time{}
 			continue
 		}

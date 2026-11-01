@@ -178,7 +178,7 @@ func minTime(a, b time.Time) time.Time {
 	return a
 }
 
-// A MetricsRollup is a device's metrics over one bucket, which Roost makes by
+// A MetricsRollup is a device's metrics over one bucket, which Bield makes by
 // folding raw samples, or a demo makes up. A value is nil if no sample had it.
 type MetricsRollup struct {
 	// DeviceID is as in MetricsRow.
@@ -195,7 +195,7 @@ type MetricsRollup struct {
 
 // AddMetricsRollups records buckets of metrics, replacing the ones for the same
 // device, step and time. It is for starting a new database with history. It
-// moves no watermark, so Roost folds the raw samples that came later.
+// moves no watermark, so Bield folds the raw samples that came later.
 func (s *Store) AddMetricsRollups(ctx context.Context, rows []MetricsRollup) error {
 	if len(rows) == 0 {
 		return nil

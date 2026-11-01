@@ -31,17 +31,17 @@ export const rules: RuleInfo[] = [
 	{
 		key: 'containers',
 		label: 'Containers',
-		description: "A Docker container on Roost's machine stopped unexpectedly."
+		description: "A Docker container on Bield's machine stopped unexpectedly."
 	},
 	{
 		key: 'units',
 		label: 'Systemd units',
-		description: "A unit on Roost's machine failed, or a watched one isn't running."
+		description: "A unit on Bield's machine failed, or a watched one isn't running."
 	},
 	{
 		key: 'collectors',
-		label: "Roost's own jobs",
-		description: 'Something Roost gathers keeps failing.'
+		label: "Bield's own jobs",
+		description: 'Something Bield gathers keeps failing.'
 	}
 ];
 
@@ -228,7 +228,7 @@ export function publicUrlProblem(url: string): string {
 	if (s === '') {
 		return '';
 	}
-	const webAddress = 'The public URL must be a web address, such as https://roost.example.ts.net.';
+	const webAddress = 'The public URL must be a web address, such as https://bield.example.ts.net.';
 	const authority = /^https?:\/\/([\s\S]+)$/i.exec(s)?.[1];
 	if (authority === undefined) {
 		return webAddress;
@@ -237,7 +237,7 @@ export function publicUrlProblem(url: string): string {
 		return "The public URL can't have spaces in it.";
 	}
 	if (/[/\\?#@]/.test(authority)) {
-		return 'The public URL can only be a scheme, a host and a port, such as https://roost.example.ts.net:8443.';
+		return 'The public URL can only be a scheme, a host and a port, such as https://bield.example.ts.net:8443.';
 	}
 	// A host in brackets, such as [fd7a::1], ends at the bracket. Any other host
 	// ends at the last colon, which starts the port.

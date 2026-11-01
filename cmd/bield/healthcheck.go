@@ -11,31 +11,31 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/config"
+	"github.com/manasseh-fikadu/bield/internal/config"
 )
 
 // healthTimeout is how long healthcheck waits for the setup page.
 const healthTimeout = 5 * time.Second
 
-const healthcheckUsage = `Usage: roost healthcheck [--setup-listen address]
+const healthcheckUsage = `Usage: bield healthcheck [--setup-listen address]
 
-Checks that Roost is running, for Docker's HEALTHCHECK. It asks the setup page
-that "roost serve" listens on in embedded mode, and exits 0 if the page answers.
-Roost counts as healthy while it waits to be logged in to Tailscale, since a
+Checks that Bield is running, for Docker's HEALTHCHECK. It asks the setup page
+that "bield serve" listens on in embedded mode, and exits 0 if the page answers.
+Bield counts as healthy while it waits to be logged in to Tailscale, since a
 restart wouldn't help. Host mode serves no setup page, so there's nothing to
 check.
 `
 
-// healthcheck runs "roost healthcheck".
+// healthcheck runs "bield healthcheck".
 func healthcheck(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("roost healthcheck", flag.ContinueOnError)
+	fs := flag.NewFlagSet("bield healthcheck", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() { fmt.Fprint(stderr, healthcheckUsage) }
 	listen := config.DefaultSetupListen
-	if v := os.Getenv("ROOST_SETUP_LISTEN"); v != "" {
+	if v := os.Getenv("BIELD_SETUP_LISTEN"); v != "" {
 		listen = v
 	}
-	fs.StringVar(&listen, "setup-listen", listen, "`address` of the setup page, as roost serve was given it (env ROOST_SETUP_LISTEN)")
+	fs.StringVar(&listen, "setup-listen", listen, "`address` of the setup page, as bield serve was given it (env BIELD_SETUP_LISTEN)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -62,13 +62,13 @@ func healthcheck(ctx context.Context, args []string, stdout, stderr io.Writer) e
 	}
 	res, err := client.Do(req) //nolint:gosec // G704: see above.
 	if err != nil {
-		return fmt.Errorf("no answer from Roost on %s: %w", listen, err)
+		return fmt.Errorf("no answer from Bield on %s: %w", listen, err)
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		return fmt.Errorf("the setup page on %s answered %s", listen, res.Status)
 	}
-	fmt.Fprintln(stdout, "Roost is running")
+	fmt.Fprintln(stdout, "Bield is running")
 	return nil
 }
 

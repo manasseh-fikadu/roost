@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/alerts"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/alerts"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 const (
@@ -244,7 +244,7 @@ func (h *handler) logEvent(r *http.Request, e store.Event) {
 	h.addEvent(r.Context(), e)
 }
 
-// eventTimeout is the longest Roost waits to write a line of the activity log.
+// eventTimeout is the longest Bield waits to write a line of the activity log.
 const eventTimeout = 10 * time.Second
 
 // addEvent is logEvent for code that has no request.

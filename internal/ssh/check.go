@@ -12,7 +12,7 @@ import (
 
 	gossh "golang.org/x/crypto/ssh"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // checkScript says whether the machine has tmux, and which Docker socket it
@@ -126,13 +126,13 @@ func (m *Manager) record(id string, gen uint64, client *gossh.Client, err error)
 		}
 		v.Method = method
 	}
-	// A connection only says whether Roost can log in, so what the last
+	// A connection only says whether Bield can log in, so what the last
 	// check found stays.
 	v.State, v.Error, v.Refusal = StateOK, "", ""
 	m.setCheckLocked(id, v, err)
 	if err == nil {
 		// A machine that wasn't OK, such as one whose key an admin just
-		// added, may offer more than Roost last found, so check it now.
+		// added, may offer more than Bield last found, so check it now.
 		select {
 		case m.wake <- struct{}{}:
 		default:
@@ -140,7 +140,7 @@ func (m *Manager) record(id string, gen uint64, client *gossh.Client, err error)
 	}
 }
 
-// setCheckLocked records what Roost found of a machine, or err if it
+// setCheckLocked records what Bield found of a machine, or err if it
 // couldn't log in. checkHostKey records a host key that changed.
 func (m *Manager) setCheckLocked(id string, found Access, err error) {
 	if _, ok := m.access[id]; !ok || errors.Is(err, ErrHostKeyChange) {

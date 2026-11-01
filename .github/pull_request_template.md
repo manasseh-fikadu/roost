@@ -10,4 +10,4 @@ Closes #
 
 - [ ] `make test` and `make lint` pass
 - [ ] New behavior has tests
-- [ ] Every commit is signed off (`git commit -s`), as [CONTRIBUTING.md](https://github.com/manasseh-fikadu/roost/blob/main/CONTRIBUTING.md#sign-your-work) explains
+- [ ] Every commit is signed off (`git commit -s`), as [CONTRIBUTING.md](https://github.com/manasseh-fikadu/bield/blob/main/CONTRIBUTING.md#sign-your-work) explains

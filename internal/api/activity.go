@@ -6,10 +6,10 @@ import (
 	"slices"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
-// warmUp is how long after the tailnet's first status Roost waits before it
+// warmUp is how long after the tailnet's first status Bield waits before it
 // logs devices coming and going. Right after it starts, it can see peers
 // offline, or not at all.
 const warmUp = time.Minute
@@ -22,7 +22,7 @@ type activity struct {
 	// since is when the tailnet's first status came, or zero.
 	since time.Time
 	// devices and containers are as the last snapshot had them, or nil
-	// before Roost knows them.
+	// before Bield knows them.
 	devices    map[string]seenDevice
 	containers map[string]seenContainer
 }

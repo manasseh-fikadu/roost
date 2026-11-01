@@ -2,7 +2,7 @@
 	A Word document, drawn by docx-preview on dark paper. The page is drawn in
 	an iframe that can't run script or load anything from the network, since
 	a document is someone else's markup: it can carry links with javascript:
-	URLs and CSS that would otherwise land on Roost's own origin, and Roost's
+	URLs and CSS that would otherwise land on Bield's own origin, and Bield's
 	origin can open shells on every machine. It fills its parent, and the
 	document scrolls inside the frame.
 -->
@@ -21,7 +21,7 @@
 	// allows images and fonts only as data: URLs (which is how docx-preview is asked to write
 	// them), so nothing runs and nothing is fetched. It comes first, before any content.
 	// allow-same-origin is only so this page can reach into the frame to draw and fit the
-	// document; with no script in the frame, that lets nothing through. The colors are Roost's
+	// document; with no script in the frame, that lets nothing through. The colors are Bield's
 	// raised surface and strong line, which the frame can't inherit.
 	const SHELL = `<!doctype html><html><head><meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; font-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">

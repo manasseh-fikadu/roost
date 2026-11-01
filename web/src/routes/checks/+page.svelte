@@ -136,7 +136,7 @@
 	<Card>
 		{#if checks.length === 0}
 			<EmptyState title="No checks yet" icon={HeartPulse}>
-				Add a check of a website, a port or a host name, and Roost runs it from the hub and alerts
+				Add a check of a website, a port or a host name, and Bield runs it from the hub and alerts
 				you when it fails.
 				<AdminOnly>
 					<div class="mt-3">

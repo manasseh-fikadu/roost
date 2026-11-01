@@ -8,7 +8,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // users returns each user as "login role".
@@ -37,7 +37,7 @@ func setRole(t *testing.T, s *store.Store, login string, role store.Role) {
 
 func TestStore_SetRole(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 
 	steps := []struct {
@@ -76,7 +76,7 @@ func TestStore_SetRole(t *testing.T) {
 
 func TestStore_RemoveUser(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 	setRole(t, s, "alice@example.com", store.Admin)
 	setRole(t, s, "bob@example.com", store.Viewer)
@@ -92,10 +92,10 @@ func TestStore_RemoveUser(t *testing.T) {
 	}
 }
 
-// Roost always keeps an admin once it has one, so it's never locked.
+// Bield always keeps an admin once it has one, so it's never locked.
 func TestStore_lastAdmin(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 	setRole(t, s, "alice@example.com", store.Admin)
 	setRole(t, s, "bob@example.com", store.Viewer)
@@ -123,7 +123,7 @@ func TestStore_lastAdmin(t *testing.T) {
 
 func TestStore_Role(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 	setRole(t, s, "alice@example.com", store.Admin)
 	setRole(t, s, "bob@example.com", store.Viewer)
@@ -151,7 +151,7 @@ func TestStore_Role(t *testing.T) {
 		}
 	}
 
-	// Roost starts closed.
+	// Bield starts closed.
 	if who, err := s.WhoCanView(ctx); err != nil || who != store.Listed {
 		t.Errorf("WhoCanView() on a new database = %q, %v; want %q", who, err, store.Listed)
 	}
@@ -174,7 +174,7 @@ func TestStore_Role(t *testing.T) {
 		t.Error("SetWhoCanView(everyone) succeeded")
 	}
 
-	// A value Roost doesn't know, even an empty one, lets no one else in,
+	// A value Bield doesn't know, even an empty one, lets no one else in,
 	// and WhoCanView says so.
 	for _, bad := range []string{"Tailnet", ""} {
 		if _, err := s.DB().ExecContext(ctx, "UPDATE kv SET value = ? WHERE key = 'who_can_view'", bad); err != nil {
@@ -189,7 +189,7 @@ func TestStore_Role(t *testing.T) {
 
 func TestStore_Access(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 	setRole(t, s, "bob@example.com", store.Viewer)
 	setRole(t, s, "alice@example.com", store.Admin)
@@ -212,7 +212,7 @@ func TestStore_Access(t *testing.T) {
 
 func TestStore_AddFirstAdmins(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 
 	if added, err := s.AddFirstAdmins(ctx, nil); err != nil || added {
@@ -241,7 +241,7 @@ func TestStore_AddFirstAdmins(t *testing.T) {
 // Version 3 turned the admins table into roles.
 func TestOpen_adminsBecomeRoles(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "roost.db")
+	path := filepath.Join(t.TempDir(), "bield.db")
 	v2 := fstest.MapFS{}
 	for _, name := range []string{"0001_kv_and_events.sql", "0002_admins.sql"} {
 		data, err := fs.ReadFile(store.Migrations(), name)
@@ -281,7 +281,7 @@ func TestOpen_adminsBecomeRoles(t *testing.T) {
 // a login doesn't always have an @.
 func TestStore_loginsWithoutAnAtSign(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 
 	if added, err := s.AddFirstAdmins(ctx, []string{"alice", "bob@example.com"}); err != nil || !added {

@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-// An Event is a line in the activity log: something Roost saw happen, or
+// An Event is a line in the activity log: something Bield saw happen, or
 // something someone did.
 type Event struct {
 	ID int64
@@ -21,7 +21,7 @@ type Event struct {
 	Message string
 	// DeviceID is the device it's about, if any.
 	DeviceID string
-	// Actor is the login of who did it, or "" if Roost saw it happen.
+	// Actor is the login of who did it, or "" if Bield saw it happen.
 	Actor string
 }
 

@@ -44,10 +44,10 @@ type Message struct {
 	ResolvedAt time.Time
 	// At is when the message is sent.
 	At time.Time
-	// URL is where the alert is in Roost, or "" if Roost doesn't know its
+	// URL is where the alert is in Bield, or "" if Bield doesn't know its
 	// own address.
 	URL string
-	// Instance is what Roost is called.
+	// Instance is what Bield is called.
 	Instance string
 }
 

@@ -8,13 +8,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // benchDevices is how many devices the benchmarks' database has history of.
 const benchDevices = 200
 
-// The benchmarks' database holds what Roost has after running for 90 days with
+// The benchmarks' database holds what Bield has after running for 90 days with
 // 200 devices: 48 hours of samples every 30 seconds, buckets of 5 minutes for
 // 14 days and of an hour for 90. They share it, and every benchmark that
 // writes leaves it as it was or newer.
@@ -34,7 +34,7 @@ func benchDB(b *testing.B) *store.Store {
 			return
 		}
 		benchNow = time.Now().Truncate(time.Hour)
-		benchStore, errBench = store.OpenWith(b.Context(), filepath.Join(dir, "roost.db"), store.Options{NoPrune: true}, store.Migrations())
+		benchStore, errBench = store.OpenWith(b.Context(), filepath.Join(dir, "bield.db"), store.Options{NoPrune: true}, store.Migrations())
 		if errBench != nil {
 			return
 		}

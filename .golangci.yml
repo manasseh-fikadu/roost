@@ -68,4 +68,4 @@ formatters:
       simplify: true
     goimports:
       local-prefixes:
-        - github.com/manasseh-fikadu/roost
+        - github.com/manasseh-fikadu/bield

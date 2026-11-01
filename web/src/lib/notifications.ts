@@ -127,7 +127,7 @@ export function newDraft(kind: ChannelKind): ChannelDraft {
 	};
 }
 
-/** A form for changing a channel. Its secrets are empty: Roost never sends them. */
+/** A form for changing a channel. Its secrets are empty: Bield never sends them. */
 export function draftOf(c: NotificationChannel): ChannelDraft {
 	return {
 		...newDraft(c.kind),

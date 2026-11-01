@@ -39,13 +39,13 @@ import type {
 } from './types.js';
 
 /**
- * Roost refuses requests that change things unless they carry this header,
+ * Bield refuses requests that change things unless they carry this header,
  * which a page on another site can't add. It matches CSRFHeader in
  * internal/api/auth.go.
  */
-export const csrfHeaders = { 'x-roost': '1' };
+export const csrfHeaders = { 'x-bield': '1' };
 
-/** An error response from the Roost API. */
+/** An error response from the Bield API. */
 export class ApiError extends Error {
 	readonly status: number;
 
@@ -115,7 +115,7 @@ export function getHealth(): Promise<Health> {
 }
 
 /**
- * Who Roost thinks you are, from the device you're on. From a `load`
+ * Who Bield thinks you are, from the device you're on. From a `load`
  * function, pass the `fetch` it's given.
  */
 export function getMe(fetcher?: Fetch): Promise<Me> {
@@ -158,7 +158,7 @@ export function newAgentCode(): Promise<AgentCode> {
 }
 
 /**
- * Revokes a device's agent, so Roost refuses its heartbeats and forgets what
+ * Revokes a device's agent, so Bield refuses its heartbeats and forgets what
  * it reported, and says so in a toast. Admins only.
  */
 export function revokeAgent(id: string): Promise<void> {
@@ -168,7 +168,7 @@ export function revokeAgent(id: string): Promise<void> {
 }
 
 /**
- * Installs the agent on a device over SSH, as the user Roost logs in as,
+ * Installs the agent on a device over SSH, as the user Bield logs in as,
  * with a new enrollment code. A script that fails is an answer with `ok`
  * false, not an error. Admins only.
  */
@@ -177,7 +177,7 @@ export function installAgentOverSSH(id: string): Promise<AgentRun> {
 }
 
 /**
- * Removes the agent from a device over SSH, for the user Roost logs in as.
+ * Removes the agent from a device over SSH, for the user Bield logs in as.
  * Admins only.
  */
 export function uninstallAgentOverSSH(id: string): Promise<AgentRun> {
@@ -198,22 +198,22 @@ function sshPath(id: string, rest = ''): string {
 	return `devices/${encodeURIComponent(id)}/ssh${rest}`;
 }
 
-/** How to let Roost log in to a device over SSH. Admins only. */
+/** How to let Bield log in to a device over SSH. Admins only. */
 export function getSSHSetup(id: string): Promise<SSHSetup> {
 	return request('GET', sshPath(id));
 }
 
-/** Sets up how Roost logs in to a device, and says so in a toast. Admins only. */
+/** Sets up how Bield logs in to a device, and says so in a toast. Admins only. */
 export function putSSH(id: string, body: SetSSH): Promise<DeviceSSH> {
 	return mutate('PUT', sshPath(id), body, { success: 'Saved' });
 }
 
 /**
- * Adds Roost's key for the user it runs as, on the machine it runs on, and
+ * Adds Bield's key for the user it runs as, on the machine it runs on, and
  * sets up access with it. Admins only.
  */
 export function authorizeSSH(id: string): Promise<DeviceSSH> {
-	return mutate('POST', sshPath(id, '/authorize'), undefined, { success: 'Roost can log in here' });
+	return mutate('POST', sshPath(id, '/authorize'), undefined, { success: 'Bield can log in here' });
 }
 
 /** Logs in to a device afresh and finds out what it offers. Admins only. */
@@ -222,7 +222,7 @@ export function checkSSH(id: string): Promise<DeviceSSH> {
 }
 
 /**
- * Pins the host key a device offered in place of the one Roost pinned, and
+ * Pins the host key a device offered in place of the one Bield pinned, and
  * says so in a toast. `fingerprint` is the offered key's, as the admin saw
  * it: if the device offers another by now, the hub refuses. Admins only.
  */
@@ -231,7 +231,7 @@ export function trustHostKey(id: string, fingerprint: string): Promise<DeviceSSH
 }
 
 /**
- * Forgets a device's pinned host key, so Roost pins whichever key it offers
+ * Forgets a device's pinned host key, so Bield pins whichever key it offers
  * next, and says so in a toast. Admins only.
  */
 export function resetHostKey(id: string): Promise<DeviceSSH> {
@@ -240,7 +240,7 @@ export function resetHostKey(id: string): Promise<DeviceSSH> {
 	});
 }
 
-/** Removes Roost's SSH access to a device, and says so in a toast. Admins only. */
+/** Removes Bield's SSH access to a device, and says so in a toast. Admins only. */
 export function removeSSH(id: string): Promise<void> {
 	return mutate('DELETE', sshPath(id), undefined, { success: 'SSH access removed' });
 }
@@ -353,25 +353,25 @@ export function getEvents(q: EventQuery = {}): Promise<EventList> {
 	return request('GET', `events${query ? `?${query}` : ''}`);
 }
 
-/** Roost's settings, with the defaults and how Roost joined the tailnet. Admins only. */
+/** Bield's settings, with the defaults and how Bield joined the tailnet. Admins only. */
 export function getSettings(): Promise<SettingsView> {
 	return request('GET', 'settings');
 }
 
 /**
  * Replaces the parts of the settings that `change` has and leaves the rest,
- * and says so in a toast. Roost uses the change at once. Admins only.
+ * and says so in a toast. Bield uses the change at once. Admins only.
  */
 export function changeSettings(change: ChangeSettings, success = 'Saved'): Promise<SettingsView> {
 	return mutate('PATCH', 'settings', change, { success });
 }
 
-/** The services on the machine Roost runs on, to pick the ones to watch from. Admins only. */
+/** The services on the machine Bield runs on, to pick the ones to watch from. Admins only. */
 export function getInstalledServices(): Promise<InstalledServices> {
 	return request('GET', 'settings/units');
 }
 
-/** Who has a role in Roost, and who else can view it. Admins only. */
+/** Who has a role in Bield, and who else can view it. Admins only. */
 export function getAccess(): Promise<Access> {
 	return request('GET', 'access');
 }
@@ -392,7 +392,7 @@ export function removeUser(login: string, undo?: ToastAction): Promise<Access> {
 	});
 }
 
-/** Changes who can view Roost, other than the users with a role. Admins only. */
+/** Changes who can view Bield, other than the users with a role. Admins only. */
 export function setWhoCanView(whoCanView: WhoCanView): Promise<Access> {
 	return mutate('PATCH', 'access', { whoCanView }, { success: 'Saved' });
 }

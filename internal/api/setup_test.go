@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
 )
 
 const loginURL = "https://login.tailscale.com/a/0123456789"
@@ -28,7 +28,7 @@ func TestSetup(t *testing.T) {
 		{
 			name:        "needs login",
 			status:      tailnet.Status{State: tailnet.StateNeedsLogin, LoginURL: loginURL},
-			want:        []string{"Add Roost to your tailnet", `href="` + loginURL + `"`, "<svg", "TS_AUTHKEY"},
+			want:        []string{"Add Bield to your tailnet", `href="` + loginURL + `"`, "<svg", "TS_AUTHKEY"},
 			wantRefresh: true,
 		},
 		{
@@ -40,7 +40,7 @@ func TestSetup(t *testing.T) {
 				LoginURL: "https://hs.example.com:8443/register/abc",
 			},
 			want: []string{
-				"Add Roost to your tailnet", "<code>hs.example.com:8443</code>", `href="https://hs.example.com:8443/register/abc"`,
+				"Add Bield to your tailnet", "<code>hs.example.com:8443</code>", `href="https://hs.example.com:8443/register/abc"`,
 				"headscale preauthkeys create",
 			},
 			wantNot:     []string{"Log in to Tailscale"},
@@ -62,14 +62,14 @@ func TestSetup(t *testing.T) {
 		{
 			name:    "running",
 			status:  tailnet.Status{State: tailnet.StateRunning},
-			appURL:  "https://roost.example.ts.net",
-			want:    []string{"Roost is on your tailnet", `href="https://roost.example.ts.net"`},
+			appURL:  "https://bield.example.ts.net",
+			want:    []string{"Bield is on your tailnet", `href="https://bield.example.ts.net"`},
 			wantNot: []string{"login.tailscale.com"},
 		},
 		{
 			name:        "Tailscale fails",
 			statusErr:   errors.New("tsnet: <closed>"),
-			want:        []string{"Roost can't reach Tailscale", "tsnet: &lt;closed&gt;"},
+			want:        []string{"Bield can't reach Tailscale", "tsnet: &lt;closed&gt;"},
 			wantRefresh: true,
 		},
 	}
@@ -124,7 +124,7 @@ func TestSetup_requests(t *testing.T) {
 		{"IPv4", http.MethodGet, "127.0.0.1:4700", "/", http.StatusOK},
 		{"IPv6", http.MethodGet, "[::1]:4700", "/", http.StatusOK},
 		{"localhost", http.MethodGet, "localhost:4700", "/", http.StatusOK},
-		{"name under localhost", http.MethodGet, "roost.localhost:4700", "/", http.StatusOK},
+		{"name under localhost", http.MethodGet, "bield.localhost:4700", "/", http.StatusOK},
 		{"LAN address", http.MethodGet, "192.168.1.20:4700", "/", http.StatusOK},
 		{"HEAD", http.MethodHead, "localhost:4700", "/", http.StatusOK},
 		// A page whose domain resolves to 127.0.0.1 sends its own name.

@@ -1,4 +1,4 @@
-// Package tailnet is Roost's connection to the tailnet. Roost either joins the
+// Package tailnet is Bield's connection to the tailnet. Bield either joins the
 // tailnet as its own node with tsnet (Embedded), or uses the tailscaled that
 // already runs on the machine (Host). Both answer the same questions through
 // the Tailnet interface, and package tailnettest fakes it for tests.
@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-// Tailnet answers Roost's questions about the tailnet. Embedded, Host and
+// Tailnet answers Bield's questions about the tailnet. Embedded, Host and
 // tailnettest.Tailnet implement it.
 type Tailnet interface {
 	// Status returns this node, its peers and whether it's logged in.
@@ -33,7 +33,7 @@ type Tailnet interface {
 	Dial(ctx context.Context, network, addr string) (net.Conn, error)
 }
 
-// Node is a Tailnet that Roost serves its app on.
+// Node is a Tailnet that Bield serves its app on.
 type Node interface {
 	Tailnet
 	// Listen waits until the node is on the tailnet, then returns a listener
@@ -67,7 +67,7 @@ type Status struct {
 	// ControlURL is the control server the node is logged in to when it
 	// isn't Tailscale's, such as a Headscale server's, and "" when it is.
 	ControlURL string
-	// Self is the node Roost runs as: its own node in embedded mode, or the
+	// Self is the node Bield runs as: its own node in embedded mode, or the
 	// machine's in host mode.
 	Self Device
 	// Peers are the other nodes this one can see, ordered by DNS name.
@@ -90,7 +90,7 @@ type Device struct {
 	Owner string
 	Tags  []string
 	// Online reports whether the node is connected to the control server.
-	// Roost's own node is online while the State is StateRunning.
+	// Bield's own node is online while the State is StateRunning.
 	Online bool
 	// LastSeen is when an offline node was last connected to the control
 	// server. It's zero while the node is online.
@@ -112,8 +112,8 @@ type Device struct {
 	KeyExpiry time.Time
 	// ExitNode reports whether this node routes our internet traffic.
 	ExitNode bool
-	// SameMachine marks the peer that is the machine Roost runs on. Only an
-	// Embedded node sets it, since Roost is a separate node there.
+	// SameMachine marks the peer that is the machine Bield runs on. Only an
+	// Embedded node sets it, since Bield is a separate node there.
 	SameMachine bool
 	// TailscaleSSH reports whether the node runs Tailscale SSH, which
 	// answers SSH connections to its tailnet address on port 22 itself, and

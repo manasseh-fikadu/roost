@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/config"
+	"github.com/manasseh-fikadu/bield/internal/config"
 )
 
 func TestParse(t *testing.T) {
@@ -43,25 +43,25 @@ func TestParse(t *testing.T) {
 		{
 			name: "environment",
 			env: map[string]string{
-				"ROOST_TAILSCALE":    "host",
-				"ROOST_HOSTNAME":     "hub",
-				"ROOST_SETUP_LISTEN": ":9000",
-				"ROOST_PORT":         "8443",
-				"ROOST_DATA_DIR":     "/srv/roost",
-				"ROOST_HOST_ROOT":    "/host",
-				"ROOST_DEV_UI":       "http://127.0.0.1:5173",
-				"ROOST_ADMINS":       "alice@example.com, bob@github,",
-				"ROOST_DEMO":         "true",
-				"ROOST_DEMO_LISTEN":  "0.0.0.0:8080",
-				"ROOST_DEMO_DEVICES": "200",
-				"ROOST_DEMO_DAYS":    "30",
+				"BIELD_TAILSCALE":    "host",
+				"BIELD_HOSTNAME":     "hub",
+				"BIELD_SETUP_LISTEN": ":9000",
+				"BIELD_PORT":         "8443",
+				"BIELD_DATA_DIR":     "/srv/bield",
+				"BIELD_HOST_ROOT":    "/host",
+				"BIELD_DEV_UI":       "http://127.0.0.1:5173",
+				"BIELD_ADMINS":       "alice@example.com, bob@github,",
+				"BIELD_DEMO":         "true",
+				"BIELD_DEMO_LISTEN":  "0.0.0.0:8080",
+				"BIELD_DEMO_DEVICES": "200",
+				"BIELD_DEMO_DAYS":    "30",
 			},
 			want: config.Config{
 				Tailscale:   config.Host,
 				Hostname:    "hub",
 				SetupListen: ":9000",
 				Port:        8443,
-				DataDir:     "/srv/roost",
+				DataDir:     "/srv/bield",
 				HostRoot:    "/host",
 				DevUI:       "http://127.0.0.1:5173",
 				Admins:      []string{"alice@example.com", "bob@github"},
@@ -73,13 +73,13 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name: "empty environment variable is unset",
-			env:  map[string]string{"ROOST_SETUP_LISTEN": "", "ROOST_DATA_DIR": "", "ROOST_PORT": ""},
+			env:  map[string]string{"BIELD_SETUP_LISTEN": "", "BIELD_DATA_DIR": "", "BIELD_PORT": ""},
 			want: defaults,
 		},
 		{
 			name: "flag beats environment",
 			args: []string{"--setup-listen", "127.0.0.1:1", "--data-dir", "data", "--port", "443"},
-			env:  map[string]string{"ROOST_SETUP_LISTEN": ":9000", "ROOST_DATA_DIR": "/srv/roost", "ROOST_PORT": "1"},
+			env:  map[string]string{"BIELD_SETUP_LISTEN": ":9000", "BIELD_DATA_DIR": "/srv/bield", "BIELD_PORT": "1"},
 			want: with(func(c *config.Config) { c.SetupListen, c.DataDir, c.Port = "127.0.0.1:1", "data", 443 }),
 		},
 		{
@@ -104,19 +104,19 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:    "port in the environment isn't a number",
-			env:     map[string]string{"ROOST_PORT": "https"},
+			env:     map[string]string{"BIELD_PORT": "https"},
 			wantErr: true,
 		},
 		{
 			name: "port flag replaces a bad one in the environment",
 			args: []string{"--port", "4800"},
-			env:  map[string]string{"ROOST_PORT": "https"},
+			env:  map[string]string{"BIELD_PORT": "https"},
 			want: with(func(c *config.Config) { c.Port = 4800 }),
 		},
 		{
 			name: "admins flag beats environment",
 			args: []string{"--admins", "carol@example.com"},
-			env:  map[string]string{"ROOST_ADMINS": "alice@example.com"},
+			env:  map[string]string{"BIELD_ADMINS": "alice@example.com"},
 			want: with(func(c *config.Config) { c.Admins = []string{"carol@example.com"} }),
 		},
 		{
@@ -127,12 +127,12 @@ func TestParse(t *testing.T) {
 		{
 			name: "control URL flag beats environment",
 			args: []string{"--control-url", "https://hs.example.com:8443"},
-			env:  map[string]string{"ROOST_CONTROL_URL": "https://other.example.com"},
+			env:  map[string]string{"BIELD_CONTROL_URL": "https://other.example.com"},
 			want: with(func(c *config.Config) { c.ControlURL = "https://hs.example.com:8443" }),
 		},
 		{
 			name: "control URL from the environment",
-			env:  map[string]string{"ROOST_CONTROL_URL": "http://127.0.0.1:8080/"},
+			env:  map[string]string{"BIELD_CONTROL_URL": "http://127.0.0.1:8080/"},
 			want: with(func(c *config.Config) { c.ControlURL = "http://127.0.0.1:8080/" }),
 		},
 		{
@@ -178,7 +178,7 @@ func TestParse(t *testing.T) {
 		{
 			name: "host root flag beats environment",
 			args: []string{"--host-root", "/mnt/host"},
-			env:  map[string]string{"ROOST_HOST_ROOT": "/host"},
+			env:  map[string]string{"BIELD_HOST_ROOT": "/host"},
 			want: with(func(c *config.Config) { c.HostRoot = "/mnt/host" }),
 		},
 		{
@@ -199,17 +199,17 @@ func TestParse(t *testing.T) {
 		{
 			name: "demo flag beats a bad environment variable",
 			args: []string{"--demo=false"},
-			env:  map[string]string{"ROOST_DEMO": "maybe"},
+			env:  map[string]string{"BIELD_DEMO": "maybe"},
 			want: defaults,
 		},
 		{
 			name:    "demo environment variable isn't true or false",
-			env:     map[string]string{"ROOST_DEMO": "maybe"},
+			env:     map[string]string{"BIELD_DEMO": "maybe"},
 			wantErr: true,
 		},
 		{
 			name:    "demo devices in the environment isn't a number",
-			env:     map[string]string{"ROOST_DEMO_DEVICES": "many"},
+			env:     map[string]string{"BIELD_DEMO_DEVICES": "many"},
 			wantErr: true,
 		},
 		{

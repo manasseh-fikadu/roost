@@ -7,9 +7,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/config"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/config"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
 )
 
 // TestServe_ui checks that a build with the ui tag serves the web app on the
@@ -18,7 +18,7 @@ func TestServe_ui(t *testing.T) {
 	t.Parallel()
 	tn := fakeTailnet(tailnet.StateRunning)
 	log := startServe(t, testConfig(t, config.Embedded), tn)
-	log.waitFor(t, "roost is running")
+	log.waitFor(t, "bield is running")
 
 	// An app route gets the app's page, which loads the bundled JS.
 	code, body := get(t, tn.Client(laptopIP), tailnettest.URL+"/devices")

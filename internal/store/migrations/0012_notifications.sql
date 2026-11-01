@@ -1,4 +1,4 @@
--- Where Roost sends a notification when an alert opens, and what each one
+-- Where Bield sends a notification when an alert opens, and what each one
 -- has been told. The config is JSON, and holds the channel's secrets, such as
 -- a webhook URL or a bot token.
 CREATE TABLE notification_channels (
@@ -15,7 +15,7 @@ CREATE TABLE notification_channels (
 CREATE UNIQUE INDEX notification_channels_name ON notification_channels (name COLLATE NOCASE);
 
 -- What a channel was last told about an alert, so a restart doesn't repeat it
--- and Roost knows when to remind. A row goes when its alert resolves and the
+-- and Bield knows when to remind. A row goes when its alert resolves and the
 -- channel has been told, or when either is deleted.
 CREATE TABLE notification_state (
     alert_id    INTEGER NOT NULL REFERENCES alerts (id) ON DELETE CASCADE,

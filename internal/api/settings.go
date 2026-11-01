@@ -6,8 +6,8 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/systemd"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/systemd"
 )
 
 // settings answers GET /api/settings.
@@ -156,7 +156,7 @@ func newSettings(s settings.Settings) Settings {
 }
 
 // installedServices answers GET /api/settings/units, which lists the services
-// on Roost's machine to pick the ones to watch from.
+// on Bield's machine to pick the ones to watch from.
 func (h *handler) installedServices(w http.ResponseWriter, r *http.Request) {
 	out := InstalledServices{Services: []InstalledService{}}
 	if h.opts.Systemd == nil {
@@ -167,7 +167,7 @@ func (h *handler) installedServices(w http.ResponseWriter, r *http.Request) {
 	services, err := h.opts.Systemd.Installed(r.Context())
 	if err != nil {
 		h.log.Warn("list the services on this machine", "error", err)
-		h.writeJSON(w, r, http.StatusBadGateway, ErrorBody{Error: "Roost couldn't list the services systemd has"})
+		h.writeJSON(w, r, http.StatusBadGateway, ErrorBody{Error: "Bield couldn't list the services systemd has"})
 		return
 	}
 	for _, s := range services {

@@ -146,7 +146,7 @@
 
 <PageHeader
 	title="Activity"
-	description="Devices coming and going, alerts opening and resolving, and what people did in Roost."
+	description="Devices coming and going, alerts opening and resolving, and what people did in Bield."
 />
 
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -204,7 +204,7 @@
 		{/if}
 	</div>
 
-	<Card title="Collectors" description="The jobs that gather what Roost knows.">
+	<Card title="Collectors" description="The jobs that gather what Bield knows.">
 		{#each live.snapshot?.collectors ?? [] as c (c.name)}
 			<div class="border-b border-line px-4 py-2.5 last:border-0">
 				<div class="flex items-center justify-between gap-2">

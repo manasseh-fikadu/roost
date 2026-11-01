@@ -13,7 +13,7 @@ import (
 func Changes(before, after Settings) []string {
 	var out []string
 	if before.General.Name != after.General.Name {
-		out = append(out, fmt.Sprintf("Renamed Roost to %q", after.General.Name))
+		out = append(out, fmt.Sprintf("Renamed Bield to %q", after.General.Name))
 	}
 	switch {
 	case before.General.PublicURL == after.General.PublicURL:
@@ -97,7 +97,7 @@ func Changes(before, after Settings) []string {
 		}
 	}
 	if len(keep) > 0 {
-		out = append(out, "Changed how long Roost keeps history: "+strings.Join(keep, ", "))
+		out = append(out, "Changed how long Bield keeps history: "+strings.Join(keep, ", "))
 	}
 	return append(out, notificationChanges(before.Notifications, after.Notifications)...)
 }
@@ -138,7 +138,7 @@ func hours(n int) string {
 // ruleLabels name the rules in ruleFlags' order.
 var ruleLabels = []string{
 	"offline devices", "key expiry", "stopped agents", "disk", "memory", "CPU", "checks", "containers",
-	"systemd units", "Roost's own jobs",
+	"systemd units", "Bield's own jobs",
 }
 
 func ruleFlags(r Rules) []bool {

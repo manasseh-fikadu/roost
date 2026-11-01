@@ -15,21 +15,21 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/ssh/sshtest"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/ssh/sshtest"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
-// dockerEnv is an sshEnv with a fake Docker on the machine Roost runs on, and
-// another on alice's laptop, which Roost reaches over SSH.
+// dockerEnv is an sshEnv with a fake Docker on the machine Bield runs on, and
+// another on alice's laptop, which Bield reaches over SSH.
 type dockerEnv struct {
 	*sshEnv
 	hub, laptop *engine
 }
 
 // newDockerEnv makes a dockerEnv. In a synctest bubble, call it after
-// opening st there. If noHub is true, the machine Roost runs on has no Docker.
+// opening st there. If noHub is true, the machine Bield runs on has no Docker.
 func newDockerEnv(t *testing.T, st *store.Store, noHub bool) *dockerEnv {
 	t.Helper()
 	e := &dockerEnv{sshEnv: newSSHEnv(t, st, nil), hub: newEngine(), laptop: newEngine()}
@@ -82,7 +82,7 @@ func errorOf(t *testing.T, rec *httptest.ResponseRecorder) string {
 func TestDocker_overview(t *testing.T) {
 	t.Parallel()
 	e := newDockerEnv(t, testStore(t), false)
-	for _, dev := range []string{"roost", "laptop"} {
+	for _, dev := range []string{"bield", "laptop"} {
 		t.Run(dev, func(t *testing.T) {
 			var admin, viewer api.DockerOverview
 			get(t, e.h, "/api/devices/"+dev+"/docker/overview", laptopIP, &admin)
@@ -114,7 +114,7 @@ func TestDocker_containers(t *testing.T) {
 	t.Parallel()
 	e := newDockerEnv(t, testStore(t), false)
 	var got api.DockerContainerList
-	get(t, e.h, "/api/devices/roost/docker/containers", phoneIP, &got)
+	get(t, e.h, "/api/devices/bield/docker/containers", phoneIP, &got)
 	if len(got.Containers) != 2 || got.Containers[0].Name != "backup" || got.Containers[1].Name != "web" {
 		t.Fatalf("containers = %+v, want backup and web by name", got.Containers)
 	}
@@ -154,8 +154,8 @@ func TestDocker_detail(t *testing.T) {
 	t.Parallel()
 	e := newDockerEnv(t, testStore(t), false)
 	var admin, viewer api.DockerContainerDetail
-	get(t, e.h, "/api/devices/roost/docker/containers/web", laptopIP, &admin)
-	phone := serve(e.h, newRequest(t, http.MethodGet, "/api/devices/roost/docker/containers/web", phoneIP))
+	get(t, e.h, "/api/devices/bield/docker/containers/web", laptopIP, &admin)
+	phone := serve(e.h, newRequest(t, http.MethodGet, "/api/devices/bield/docker/containers/web", phoneIP))
 	if phone.Code != http.StatusOK {
 		t.Fatalf("GET as a viewer = %d %s", phone.Code, phone.Body)
 	}
@@ -226,7 +226,7 @@ func TestDocker_detail(t *testing.T) {
 func TestDocker_whoCanUseWhat(t *testing.T) {
 	t.Parallel()
 	e := newDockerEnv(t, testStore(t), false)
-	const base = "/api/devices/roost/docker/"
+	const base = "/api/devices/bield/docker/"
 	tests := []struct {
 		method, path string
 		viewer       bool
@@ -285,7 +285,7 @@ func TestDocker_badIDsNeverReachDocker(t *testing.T) {
 	// slash and a dot.
 	for _, id := range []string{"%2E%2E", "..%2Fimages%2Fjson", "a%2Fb", "%2e%2e%2f%2e%2e", "-x", ".hidden", "a%20b", "a%3Fb", "a%23b", "%00", strings.Repeat("a", 129)} {
 		for _, rt := range routes {
-			rec := e.do(t, rt.method, "/api/devices/roost/docker/containers/"+id+rt.suffix, laptopIP)
+			rec := e.do(t, rt.method, "/api/devices/bield/docker/containers/"+id+rt.suffix, laptopIP)
 			if rec.Code != http.StatusBadRequest {
 				t.Errorf("%s with the id %q = %d %s, want 400", rt.method+" "+rt.suffix, id, rec.Code, rec.Body)
 			}
@@ -298,10 +298,10 @@ func TestDocker_badIDsNeverReachDocker(t *testing.T) {
 
 func TestDocker_unavailable(t *testing.T) {
 	t.Parallel()
-	t.Run("the machine Roost runs on has no Docker", func(t *testing.T) {
+	t.Run("the machine Bield runs on has no Docker", func(t *testing.T) {
 		t.Parallel()
 		e := newDockerEnv(t, testStore(t), true)
-		rec := e.do(t, http.MethodGet, "/api/devices/roost/docker/overview", laptopIP)
+		rec := e.do(t, http.MethodGet, "/api/devices/bield/docker/overview", laptopIP)
 		if rec.Code != http.StatusConflict || !strings.Contains(errorOf(t, rec), "no Docker socket") {
 			t.Errorf("GET = %d %s, want 409 about the socket", rec.Code, rec.Body)
 		}
@@ -340,11 +340,11 @@ func TestDocker_unavailable(t *testing.T) {
 	t.Run("Docker's own errors", func(t *testing.T) {
 		t.Parallel()
 		e := newDockerEnv(t, testStore(t), false)
-		rec := e.do(t, http.MethodGet, "/api/devices/roost/docker/containers/nope", laptopIP)
+		rec := e.do(t, http.MethodGet, "/api/devices/bield/docker/containers/nope", laptopIP)
 		if rec.Code != http.StatusNotFound || errorOf(t, rec) != "No such container: nope" {
 			t.Errorf("GET = %d %s, want Docker's 404 and its message", rec.Code, rec.Body)
 		}
-		rec = e.do(t, http.MethodPost, "/api/devices/roost/docker/containers/nope/stop", laptopIP)
+		rec = e.do(t, http.MethodPost, "/api/devices/bield/docker/containers/nope/stop", laptopIP)
 		if rec.Code != http.StatusNotFound {
 			t.Errorf("POST = %d %s, want 404", rec.Code, rec.Body)
 		}
@@ -354,7 +354,7 @@ func TestDocker_unavailable(t *testing.T) {
 func TestDocker_inspectAndTop(t *testing.T) {
 	t.Parallel()
 	e := newDockerEnv(t, testStore(t), false)
-	// The whole inspection is what Docker wrote, with fields Roost doesn't
+	// The whole inspection is what Docker wrote, with fields Bield doesn't
 	// read.
 	var raw map[string]any
 	get(t, e.h, "/api/devices/laptop/docker/containers/web/inspect", laptopIP, &raw)
@@ -376,7 +376,7 @@ func TestDocker_resources(t *testing.T) {
 	e := newDockerEnv(t, testStore(t), false)
 
 	var vols []api.DockerVolume
-	get(t, e.h, "/api/devices/roost/docker/volumes", phoneIP, &vols)
+	get(t, e.h, "/api/devices/bield/docker/volumes", phoneIP, &vols)
 	if len(vols) != 2 || vols[0].Name != "old_data" || vols[1].Name != "shop_data" {
 		t.Fatalf("volumes = %+v, want old_data and shop_data", vols)
 	}
@@ -388,7 +388,7 @@ func TestDocker_resources(t *testing.T) {
 	}
 
 	var images []api.DockerImage
-	get(t, e.h, "/api/devices/roost/docker/images", phoneIP, &images)
+	get(t, e.h, "/api/devices/bield/docker/images", phoneIP, &images)
 	if len(images) != 2 || !images[0].Dangling || images[0].Size != 100 || len(images[0].Tags) != 0 || len(images[0].Digests) != 0 {
 		t.Fatalf("images = %+v, want the newer, untagged one first", images)
 	}
@@ -397,7 +397,7 @@ func TestDocker_resources(t *testing.T) {
 	}
 
 	var nets []api.DockerNetwork
-	get(t, e.h, "/api/devices/roost/docker/networks", phoneIP, &nets)
+	get(t, e.h, "/api/devices/bield/docker/networks", phoneIP, &nets)
 	if len(nets) != 2 || nets[0].Name != "shop_default" || nets[1].Name != "bridge" {
 		t.Fatalf("networks = %+v, want the one with a container first", nets)
 	}
@@ -420,7 +420,7 @@ func TestDocker_actions(t *testing.T) {
 		t.Fatalf("stop = %d %s, want 200 and a change", rec.Code, rec.Body)
 	}
 	// Docker waits as long as the container's own stop timeout says, as it
-	// does for `docker stop`: Roost doesn't give a time.
+	// does for `docker stop`: Bield doesn't give a time.
 	if got := e.laptop.query("/containers/web/stop"); got != "" {
 		t.Errorf("Docker was told %q, want no time given for the container to stop", got)
 	}
@@ -469,13 +469,13 @@ func TestDocker_history(t *testing.T) {
 		t.Fatal(err)
 	}
 	var got api.DockerHistory
-	get(t, e.h, "/api/devices/roost/docker/containers/web/history?range=1h", phoneIP, &got)
+	get(t, e.h, "/api/devices/bield/docker/containers/web/history?range=1h", phoneIP, &got)
 	if got.Step != time.Minute.Milliseconds() || len(got.CPU) != 2 || got.CPU[0].V == nil || *got.CPU[0].V != 10 || *got.CPU[1].V != 30 ||
 		len(got.Mem) != 2 || got.NetRx[0].V != nil {
 		t.Errorf("1h history = %+v, want the hub's web for the last hour", got)
 	}
 	// By ID: it's kept under the container's name.
-	get(t, e.h, "/api/devices/roost/docker/containers/"+webID+"/history?range=24h", phoneIP, &got)
+	get(t, e.h, "/api/devices/bield/docker/containers/"+webID+"/history?range=24h", phoneIP, &got)
 	// The two recent rows share a five minute step or have one each,
 	// depending on the time of day. The one from three hours ago is first.
 	if n := len(got.CPU); n < 2 || n > 3 || got.CPU[0].V == nil || *got.CPU[0].V != 50 {
@@ -487,11 +487,11 @@ func TestDocker_history(t *testing.T) {
 		t.Errorf("laptop's history = %+v", got.CPU)
 	}
 	// A container that Docker forgot still has its history.
-	get(t, e.h, "/api/devices/roost/docker/containers/gone/history", phoneIP, &got)
+	get(t, e.h, "/api/devices/bield/docker/containers/gone/history", phoneIP, &got)
 	if len(got.CPU) != 0 {
 		t.Errorf("history of a container that never was = %+v", got.CPU)
 	}
-	if rec := e.do(t, http.MethodGet, "/api/devices/roost/docker/containers/web/history?range=1y", phoneIP); rec.Code != http.StatusBadRequest {
+	if rec := e.do(t, http.MethodGet, "/api/devices/bield/docker/containers/web/history?range=1y", phoneIP); rec.Code != http.StatusBadRequest {
 		t.Errorf("history for a year = %d, want 400", rec.Code)
 	}
 }
@@ -650,7 +650,7 @@ func TestDocker_logsFollow(t *testing.T) {
 				t.Errorf("event %+v, want only comments to keep the stream alive", ev)
 			}
 		}
-		// Demoting the admin ends the stream. Roost keeps one admin.
+		// Demoting the admin ends the stream. Bield keeps one admin.
 		if _, err := e.st.SetRole(context.Background(), bob, store.Admin); err != nil {
 			t.Fatal(err)
 		}
@@ -792,11 +792,11 @@ func TestDocker_deviceFlag(t *testing.T) {
 		local bool
 		want  map[string]bool
 	}{
-		// The machine Roost runs on has Docker if it reads it, and the laptop
+		// The machine Bield runs on has Docker if it reads it, and the laptop
 		// if the check found a socket. Tailscale doesn't say what the server
-		// runs, and Roost has no access to it.
-		{"with a Docker socket here", true, map[string]bool{"roost": true, "laptop": true, "server": false, "phone": false}},
-		{"without one", false, map[string]bool{"roost": false, "laptop": true, "server": false, "phone": false}},
+		// runs, and Bield has no access to it.
+		{"with a Docker socket here", true, map[string]bool{"bield": true, "laptop": true, "server": false, "phone": false}},
+		{"without one", false, map[string]bool{"bield": false, "laptop": true, "server": false, "phone": false}},
 	} {
 		snap := feed(tt.local)
 		for id, want := range tt.want {
@@ -805,7 +805,7 @@ func TestDocker_deviceFlag(t *testing.T) {
 			}
 		}
 	}
-	// Viewers get the flag, but not how Roost logs in.
+	// Viewers get the flag, but not how Bield logs in.
 	dev, ok := api.Redact(findDevice(t, feed(true), "laptop")).(api.Device)
 	if !ok || !dev.Docker || dev.SSH != nil {
 		t.Errorf("a viewer gets docker %v and ssh %+v, want the flag and no access", dev.Docker, dev.SSH)
@@ -821,7 +821,7 @@ func TestDocker_deviceFlag(t *testing.T) {
 	}
 }
 
-// In embedded mode, the machine Roost runs on is two nodes. Only the machine's
+// In embedded mode, the machine Bield runs on is two nodes. Only the machine's
 // own has Docker, so a list of machines with Docker has it once.
 func TestDocker_deviceFlagOfTheHostMachine(t *testing.T) {
 	t.Parallel()
@@ -830,7 +830,7 @@ func TestDocker_deviceFlagOfTheHostMachine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The test tailnet's server is the machine Roost runs on.
+	// The test tailnet's server is the machine Bield runs on.
 	for i := range status.Peers {
 		status.Peers[i].SameMachine = status.Peers[i].ID == "server"
 	}
@@ -839,7 +839,7 @@ func TestDocker_deviceFlagOfTheHostMachine(t *testing.T) {
 		Tailnet: e.opts.Snapshot, Store: e.st, SSH: e.opts.SSH.Access,
 		Docker: func() docker.Reading { return docker.Reading{} },
 	}).Latest()
-	for id, want := range map[string]bool{"roost": false, "server": true, "laptop": true, "phone": false} {
+	for id, want := range map[string]bool{"bield": false, "server": true, "laptop": true, "phone": false} {
 		if got := findDevice(t, snap, id).Docker; got != want {
 			t.Errorf("%s has Docker: %v, want %v", id, got, want)
 		}
@@ -873,9 +873,9 @@ func TestDocker_answersOnce(t *testing.T) {
 	}
 }
 
-// How Roost reaches a machine is for admins, as a device's SSH access is. A
+// How Bield reaches a machine is for admins, as a device's SSH access is. A
 // viewer who can see the machine's Docker is told only that it can't.
-func TestDocker_viewersAreNotToldHowRoostReachesAMachine(t *testing.T) {
+func TestDocker_viewersAreNotToldHowBieldReachesAMachine(t *testing.T) {
 	t.Parallel()
 	e := newDockerEnv(t, testStore(t), false)
 	e.sshd.Drop()
@@ -885,7 +885,7 @@ func TestDocker_viewersAreNotToldHowRoostReachesAMachine(t *testing.T) {
 	if admin.Code < 500 && admin.Code != http.StatusConflict || viewer.Code != admin.Code {
 		t.Fatalf("with SSH down, admin got %d %s and viewer %d %s, want the same failure", admin.Code, admin.Body, viewer.Code, viewer.Body)
 	}
-	if got := errorOf(t, viewer); got != "Roost can't reach Docker on this machine right now" {
+	if got := errorOf(t, viewer); got != "Bield can't reach Docker on this machine right now" {
 		t.Errorf("a viewer was told %q", got)
 	}
 	// The admin hears why, and it isn't the viewer's message.
@@ -894,7 +894,7 @@ func TestDocker_viewersAreNotToldHowRoostReachesAMachine(t *testing.T) {
 	}
 	// What Docker answers to a bad request is for anyone.
 	e.sshd.Refuse(false)
-	if rec := e.do(t, http.MethodGet, "/api/devices/roost/docker/containers/nope", phoneIP); rec.Code != http.StatusNotFound || errorOf(t, rec) != "No such container: nope" {
+	if rec := e.do(t, http.MethodGet, "/api/devices/bield/docker/containers/nope", phoneIP); rec.Code != http.StatusNotFound || errorOf(t, rec) != "No such container: nope" {
 		t.Errorf("a viewer asking for a container that isn't there got %d %s", rec.Code, rec.Body)
 	}
 	// And the messages about how a machine is set up.
@@ -911,8 +911,8 @@ func TestDocker_volumeLabelsThatLookLikeCredentialsAreForAdmins(t *testing.T) {
 	t.Parallel()
 	e := newDockerEnv(t, testStore(t), false)
 	var admin, viewer []api.DockerVolume
-	get(t, e.h, "/api/devices/roost/docker/volumes", laptopIP, &admin)
-	rec := serve(e.h, newRequest(t, http.MethodGet, "/api/devices/roost/docker/volumes", phoneIP))
+	get(t, e.h, "/api/devices/bield/docker/volumes", laptopIP, &admin)
+	rec := serve(e.h, newRequest(t, http.MethodGet, "/api/devices/bield/docker/volumes", phoneIP))
 	if err := json.Unmarshal(rec.Body.Bytes(), &viewer); err != nil {
 		t.Fatal(err)
 	}
@@ -973,7 +973,7 @@ func TestDocker_logDownloadThatBreaks(t *testing.T) {
 	t.Parallel()
 	e := newDockerEnv(t, testStore(t), false)
 	rec := httptest.NewRecorder()
-	req := newRequest(t, http.MethodGet, "/api/devices/roost/docker/containers/backup/logs/download", laptopIP)
+	req := newRequest(t, http.MethodGet, "/api/devices/bield/docker/containers/backup/logs/download", laptopIP)
 	var aborted any
 	func() {
 		defer func() { aborted = recover() }()
@@ -987,7 +987,7 @@ func TestDocker_logDownloadThatBreaks(t *testing.T) {
 func TestDocker_containerWithNoExposedPorts(t *testing.T) {
 	t.Parallel()
 	e := newDockerEnv(t, testStore(t), false)
-	rec := e.do(t, http.MethodGet, "/api/devices/roost/docker/containers/backup", laptopIP)
+	rec := e.do(t, http.MethodGet, "/api/devices/bield/docker/containers/backup", laptopIP)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("GET = %d %s", rec.Code, rec.Body)
 	}

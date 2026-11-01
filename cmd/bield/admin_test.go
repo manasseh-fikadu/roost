@@ -31,7 +31,7 @@ func TestAdmin(t *testing.T) {
 		{
 			args:   []string{"list"},
 			out:    "alice@example.com  admin\nbob@github         viewer\ncarol@example.com  admin\n",
-			errOut: "No one else can view Roost",
+			errOut: "No one else can view Bield",
 		},
 		{args: []string{"remove", "carol@example.com"}, out: "carol@example.com no longer has a role\n"},
 		{args: []string{"remove", "carol@example.com"}, out: "carol@example.com had no role\n"},
@@ -39,15 +39,15 @@ func TestAdmin(t *testing.T) {
 		{args: []string{"remove", "alice@example.com"}, wantErr: "the last admin has to stay an admin"},
 		{args: []string{"add", "alice smith"}, wantErr: "isn't a login"},
 		{args: []string{"who-can-view"}, out: "listed\n"},
-		{args: []string{"who-can-view", "tailnet"}, out: "Anyone who signs in from the tailnet can view Roost\n"},
+		{args: []string{"who-can-view", "tailnet"}, out: "Anyone who signs in from the tailnet can view Bield\n"},
 		{args: []string{"who-can-view"}, out: "tailnet\n"},
 		{
 			args:   []string{"list"},
 			out:    "alice@example.com  admin\nbob@github         viewer\n",
-			errOut: "Anyone who signs in from the tailnet can view Roost too",
+			errOut: "Anyone who signs in from the tailnet can view Bield too",
 		},
 		{args: []string{"who-can-view", "everyone"}, wantErr: `not "everyone"`},
-		{args: []string{"who-can-view", "listed"}, out: "Only Roost's admins and viewers can view it\n"},
+		{args: []string{"who-can-view", "listed"}, out: "Only Bield's admins and viewers can view it\n"},
 		// A Headscale user without an email is just a name.
 		{args: []string{"add-viewer", "dave"}, out: "dave is now a viewer\n"},
 		{args: []string{"add", "dave"}, out: "dave is now an admin\n"},
@@ -81,7 +81,7 @@ func TestAdmin_usage(t *testing.T) {
 		{"admin", "who-can-view", "--data-dir", dir, "tailnet", "listed"},
 	} {
 		var stderr bytes.Buffer
-		if err := run(t.Context(), args, &bytes.Buffer{}, &stderr); !errors.Is(err, errUsage) || !strings.Contains(stderr.String(), "roost admin add") {
+		if err := run(t.Context(), args, &bytes.Buffer{}, &stderr); !errors.Is(err, errUsage) || !strings.Contains(stderr.String(), "bield admin add") {
 			t.Errorf("run(%q) error = %v, stderr %q; want the admin usage", args, err, stderr.String())
 		}
 	}

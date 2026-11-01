@@ -122,12 +122,12 @@ jobs:
         with:
           bun-version-file: web/package.json
       - run: make build
-      # Roost only serves the app on the tailnet, so the UI check runs roost
+      # Bield only serves the app on the tailnet, so the UI check runs bield
       # serve against the fake tailnet in a test built with the ui tag.
       - name: Check the binary runs and serves the embedded UI
         run: |
-          ./roost version
-          go test -tags ui -run '^TestServe_ui$' ./cmd/roost
+          ./bield version
+          go test -tags ui -run '^TestServe_ui$' ./cmd/bield
 
   # Starts the binary in demo mode, which needs no Tailscale, and clicks through
   # every page of the app in a browser, on a desktop and on a phone.

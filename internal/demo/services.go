@@ -11,7 +11,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // A probe is a check of the demo, and how its target behaves. The same

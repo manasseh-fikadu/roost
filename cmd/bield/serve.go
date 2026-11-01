@@ -19,28 +19,28 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/alerts"
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/checks"
-	"github.com/manasseh-fikadu/roost/internal/config"
-	"github.com/manasseh-fikadu/roost/internal/demo"
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
-	"github.com/manasseh-fikadu/roost/internal/notify"
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/systemd"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/usage"
-	"github.com/manasseh-fikadu/roost/web"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/alerts"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/checks"
+	"github.com/manasseh-fikadu/bield/internal/config"
+	"github.com/manasseh-fikadu/bield/internal/demo"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/hostmetrics"
+	"github.com/manasseh-fikadu/bield/internal/notify"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/systemd"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/usage"
+	"github.com/manasseh-fikadu/bield/web"
 )
 
 // shutdownTimeout is how long in-flight requests get to finish after a stop signal.
 const shutdownTimeout = 10 * time.Second
 
-// openNodeFunc connects Roost to the tailnet. Tests pass a fake.
+// openNodeFunc connects Bield to the tailnet. Tests pass a fake.
 type openNodeFunc func(ctx context.Context, cfg config.Config, logger *slog.Logger) (tailnet.Node, error)
 
 func serve(ctx context.Context, args []string, stderr io.Writer) error {
@@ -49,9 +49,9 @@ func serve(ctx context.Context, args []string, stderr io.Writer) error {
 		return err
 	}
 	if cfg.Demo {
-		// A demo keeps nothing, and never touches the data of a Roost that
+		// A demo keeps nothing, and never touches the data of a Bield that
 		// is run for real.
-		dir, err := os.MkdirTemp("", "roost-demo-")
+		dir, err := os.MkdirTemp("", "bield-demo-")
 		if err != nil {
 			return fmt.Errorf("make a directory for the demo: %w", err)
 		}
@@ -90,7 +90,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		logger.Warn("built without the web UI, so only /api is served; `make build` embeds it")
 	}
 
-	dbPath := filepath.Join(cfg.DataDir, "roost.db")
+	dbPath := filepath.Join(cfg.DataDir, "bield.db")
 	st, err := store.Open(ctx, dbPath, store.Options{Logger: logger, Retention: settings.StoreRetention})
 	if err != nil {
 		return fmt.Errorf("open %s: %w", dbPath, err)
@@ -104,7 +104,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		world = demo.New(demo.Options{Devices: cfg.DemoDevices, Listen: cfg.DemoListen, Logger: logger})
 		defer world.Close()
 		open = func(context.Context, config.Config, *slog.Logger) (tailnet.Node, error) { return world.Node(), nil }
-		logger.Info("running a demo, with a made-up tailnet and data that goes away when Roost stops",
+		logger.Info("running a demo, with a made-up tailnet and data that goes away when Bield stops",
 			"devices", cfg.DemoDevices, "history_days", cfg.DemoDays)
 	}
 	var setupLn net.Listener
@@ -145,8 +145,8 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		}), setupLn)
 		logger.Info("serving the setup page", "url", setupURL)
 		if !loopback(setupLn.Addr()) {
-			logger.Warn("other machines can reach the setup page, and until Roost is logged in, anyone who opens it "+
-				"can add Roost to their own tailnet; listen on 127.0.0.1 (in a container, publish the port on "+
+			logger.Warn("other machines can reach the setup page, and until Bield is logged in, anyone who opens it "+
+				"can add Bield to their own tailnet; listen on 127.0.0.1 (in a container, publish the port on "+
 				"127.0.0.1 only), or log in with TS_AUTHKEY", "address", setupLn.Addr().String())
 		}
 		wg.Go(func() { announceLogin(ctx, node, setupURL, logger) })
@@ -216,7 +216,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 
 	poller := tailnet.NewPoller(node, logger)
 	wg.Go(func() { poller.Run(ctx) })
-	// SSH reaches peers through the node, and the machine Roost runs on
+	// SSH reaches peers through the node, and the machine Bield runs on
 	// through its loopback address.
 	sshOpts := ssh.Options{
 		KeyDir:   filepath.Join(cfg.DataDir, "ssh"),
@@ -236,7 +236,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	if world != nil {
 		key, err := remote.Key()
 		if err != nil {
-			return errors.Join(fmt.Errorf("make Roost's SSH key: %w", err), res.ln.Close(), srvs.stop(ctx))
+			return errors.Join(fmt.Errorf("make Bield's SSH key: %w", err), res.ln.Close(), srvs.stop(ctx))
 		}
 		world.AuthorizeSSH(key.PublicKey())
 	}
@@ -256,7 +256,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	}
 	switch {
 	case world != nil:
-		// The machine Roost pretends to run on is measured by the demo.
+		// The machine Bield pretends to run on is measured by the demo.
 		host := world.Host()
 		host.SetWindow(cpuWindow)
 		wg.Go(func() { world.Run(ctx) })
@@ -288,7 +288,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		wg.Go(func() { containers.Run(ctx) })
 		feedOpts.Docker, feedOpts.DockerChanged = containers.Reading, containers.Changes()
 	}
-	// The Docker of the machine Roost runs on is on its socket, and the
+	// The Docker of the machine Bield runs on is on its socket, and the
 	// others' are on theirs, over SSH.
 	fleet := docker.NewFleet(localDocker, remote.DialDocker)
 	defer fleet.Close()
@@ -325,7 +325,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		Changed:  feed.Poke,
 		Logger:   logger,
 	})
-	// The app checks requests against Roost's own names, from the first status.
+	// The app checks requests against Bield's own names, from the first status.
 	select {
 	case <-poller.Polled():
 	case <-ctx.Done():
@@ -364,7 +364,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	// until they're told to.
 	app.RegisterOnShutdown(func() { close(stopping) })
 	appURL.Store(&res.url)
-	logger.Info("roost is running", "version", buildVersion(), "url", res.url, "data_dir", cfg.DataDir)
+	logger.Info("bield is running", "version", buildVersion(), "url", res.url, "data_dir", cfg.DataDir)
 
 	select {
 	case <-srvs.failed:
@@ -374,7 +374,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	return srvs.stop(ctx)
 }
 
-// dockerTargets returns the machines whose containers Roost records the use
+// dockerTargets returns the machines whose containers Bield records the use
 // of: the one it runs on, if it has Docker, and the online ones whose SSH
 // access found a Docker it can use.
 func dockerTargets(fleet *docker.Fleet, snap tailnet.Snapshot, access map[string]ssh.Access) []docker.Target {
@@ -387,7 +387,7 @@ func dockerTargets(fleet *docker.Fleet, snap tailnet.Snapshot, access map[string
 	}
 	for _, d := range snap.Status.Peers {
 		a := access[d.ID]
-		// In embedded mode, the machine Roost runs on is a peer too, which
+		// In embedded mode, the machine Bield runs on is a peer too, which
 		// was added already.
 		if d.SameMachine || !d.Online || a.State != ssh.StateOK || a.Docker == nil || !*a.Docker {
 			continue
@@ -399,8 +399,8 @@ func dockerTargets(fleet *docker.Fleet, snap tailnet.Snapshot, access map[string
 	return out
 }
 
-// addFirstAdmins makes the owner of Roost's node and the logins in admins
-// Roost's admins, if it has none yet. A tagged node has no owner. Logins are
+// addFirstAdmins makes the owner of Bield's node and the logins in admins
+// Bield's admins, if it has none yet. A tagged node has no owner. Logins are
 // whatever the tailnet calls its users: an email address on Tailscale, and a
 // name or an email address on Headscale.
 func addFirstAdmins(ctx context.Context, st *store.Store, tn tailnet.Tailnet, admins []string, logger *slog.Logger) error {
@@ -417,7 +417,7 @@ func addFirstAdmins(ctx context.Context, st *store.Store, tn tailnet.Tailnet, ad
 		return err
 	}
 	if added {
-		logger.Info("made Roost's first admins", "logins", strings.Join(logins, ","))
+		logger.Info("made Bield's first admins", "logins", strings.Join(logins, ","))
 		return nil
 	}
 	users, err := st.Users(ctx)
@@ -425,8 +425,8 @@ func addFirstAdmins(ctx context.Context, st *store.Store, tn tailnet.Tailnet, ad
 		return err
 	}
 	if !slices.ContainsFunc(users, func(u store.User) bool { return u.Role == store.Admin }) {
-		logger.Warn("Roost has no admins, since its node has no owner (it's tagged, or its tailnet hasn't said who owns it yet) " +
-			"and ROOST_ADMINS is empty; restart Roost, or add one with `roost admin add <login>`")
+		logger.Warn("Bield has no admins, since its node has no owner (it's tagged, or its tailnet hasn't said who owns it yet) " +
+			"and BIELD_ADMINS is empty; restart Bield, or add one with `bield admin add <login>`")
 	}
 	return nil
 }
@@ -444,7 +444,7 @@ func announceLogin(ctx context.Context, tn tailnet.Tailnet, setupURL string, log
 			}
 			if st.LoginURL != "" && st.LoginURL != last {
 				last = st.LoginURL
-				logger.Info("log Roost in to your tailnet with the setup page or the login URL",
+				logger.Info("log Bield in to your tailnet with the setup page or the login URL",
 					"setup_page", setupURL, "login_url", st.LoginURL)
 			}
 		}

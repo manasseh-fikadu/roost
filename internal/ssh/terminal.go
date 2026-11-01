@@ -14,7 +14,7 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
-// The largest terminal Roost asks for, in columns and rows.
+// The largest terminal Bield asks for, in columns and rows.
 const (
 	MaxCols = 500
 	MaxRows = 200
@@ -210,7 +210,7 @@ type Session struct {
 	// happened in it.
 	Created, Activity time.Time
 	// Attached is how many clients are attached, such as terminals in
-	// Roost and SSH logins.
+	// Bield and SSH logins.
 	Attached int
 	Windows  int
 	// Command is what runs in its active pane, such as bash or htop.

@@ -13,11 +13,11 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/checks"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/checks"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
 )
 
 // checksStore returns a testStore without its default checks.
@@ -270,13 +270,13 @@ func TestChecks_addChangeDelete(t *testing.T) {
 		{"change a bad check", http.MethodPut, "/api/checks/" + added.ID, `{"name":"DB","kind":"tcp","target":"db"}`,
 			http.StatusBadRequest, "the target must be a host and a port, such as db.example.com:5432"},
 		{"change a ping check", http.MethodPut, "/api/checks/ping:laptop", `{"name":"DB","kind":"tcp","target":"db:5432"}`,
-			http.StatusBadRequest, "Roost pings every peer on its own, so its ping checks can't be changed or run"},
+			http.StatusBadRequest, "Bield pings every peer on its own, so its ping checks can't be changed or run"},
 		{"delete a deleted check", http.MethodDelete, "/api/checks/" + added.ID, "", http.StatusNotFound, "no check has this ID"},
 		{"delete a ping check", http.MethodDelete, "/api/checks/ping:laptop", "", http.StatusBadRequest,
-			"Roost pings every peer on its own, so its ping checks can't be changed or run"},
+			"Bield pings every peer on its own, so its ping checks can't be changed or run"},
 		{"run a deleted check", http.MethodPost, "/api/checks/" + added.ID + "/run", "", http.StatusNotFound, "no check has this ID"},
 		{"run a ping check", http.MethodPost, "/api/checks/ping:laptop/run", "", http.StatusBadRequest,
-			"Roost pings every peer on its own, so its ping checks can't be changed or run"},
+			"Bield pings every peer on its own, so its ping checks can't be changed or run"},
 	} {
 		rec := send(t, h, tt.method, tt.target, laptopIP, tt.body)
 		var body api.ErrorBody

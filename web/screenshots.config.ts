@@ -1,10 +1,10 @@
 import { defineConfig } from '@playwright/test';
 
-// Retakes the screenshots in docs/images from `roost serve --demo`. Build the
+// Retakes the screenshots in docs/images from `bield serve --demo`. Build the
 // binary first (`make build` in the repository's root), then run `make
 // screenshots`. The demo listens on its default address, so the commands in the
 // pictures read the way they do for a person who tries it.
-const port = Number(process.env.ROOST_SCREENSHOT_PORT ?? 4700);
+const port = Number(process.env.BIELD_SCREENSHOT_PORT ?? 4700);
 const url = `http://127.0.0.1:${port}`;
 
 export default defineConfig({
@@ -32,7 +32,7 @@ export default defineConfig({
 		}
 	],
 	webServer: {
-		command: `../roost serve --demo --demo-listen 127.0.0.1:${port}`,
+		command: `../bield serve --demo --demo-listen 127.0.0.1:${port}`,
 		url: `${url}/api/health`,
 		timeout: 120_000,
 		stderr: 'pipe'

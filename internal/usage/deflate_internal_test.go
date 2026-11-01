@@ -46,7 +46,7 @@ func TestDeflate_roundTrip(t *testing.T) {
 	}
 }
 
-// BenchmarkDeflate packs a minute for storing, as Roost does for each device
+// BenchmarkDeflate packs a minute for storing, as Bield does for each device
 // each minute.
 func BenchmarkDeflate(b *testing.B) {
 	d := sampleDetail()

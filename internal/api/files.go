@@ -14,8 +14,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/manasseh-fikadu/roost/internal/files"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/files"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // maxFilesBody is the largest JSON body the file routes read: ten thousand
@@ -94,7 +94,7 @@ func (a *fileAudit) flushLocked(h *handler, key string) {
 	h.addEvent(context.WithoutCancel(context.Background()), b.event)
 }
 
-// flushAll logs every batch that is waiting, when Roost shuts down.
+// flushAll logs every batch that is waiting, when Bield shuts down.
 func (a *fileAudit) flushAll(h *handler) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -473,7 +473,7 @@ func (h *handler) uploadFile(w http.ResponseWriter, r *http.Request) {
 	limit := cmp.Or(h.opts.MaxUpload, defaultMaxUpload)
 	if r.ContentLength > limit {
 		// Before connecting to the machine, or reading any of it.
-		h.writeJSON(w, r, http.StatusRequestEntityTooLarge, ErrorBody{Error: "Roost uploads files up to " + byteLabel(limit)})
+		h.writeJSON(w, r, http.StatusRequestEntityTooLarge, ErrorBody{Error: "Bield uploads files up to " + byteLabel(limit)})
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, limit)

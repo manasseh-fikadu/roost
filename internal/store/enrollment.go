@@ -16,7 +16,7 @@ const EnrollmentCodeLife = time.Hour
 
 // Why a machine can't enroll its agent with a code.
 var (
-	// ErrUnknownCode means Roost didn't make the code, or it expired a while
+	// ErrUnknownCode means Bield didn't make the code, or it expired a while
 	// ago.
 	ErrUnknownCode = errors.New("unknown enrollment code")
 	// ErrCodeExpired means the code expired.
@@ -175,7 +175,7 @@ func (s *Store) Enrollments(ctx context.Context) (map[string]Enrollment, error) 
 }
 
 // Unenroll deletes the secrets of the agents on the machines with the node
-// IDs nodeIDs, so Roost refuses their heartbeats, and reports whether any
+// IDs nodeIDs, so Bield refuses their heartbeats, and reports whether any
 // had one. A machine can still enroll again with the code it used until the
 // code expires, such as to install the agent again after uninstalling it.
 func (s *Store) Unenroll(ctx context.Context, nodeIDs ...string) (bool, error) {

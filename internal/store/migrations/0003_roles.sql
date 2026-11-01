@@ -1,4 +1,4 @@
--- The Tailscale logins that have a role in Roost, admin or viewer. Each login
+-- The Tailscale logins that have a role in Bield, admin or viewer. Each login
 -- has one role. Tailscale doesn't promise a login's case, so they're compared
 -- without it. This replaces the admins table.
 CREATE TABLE roles (

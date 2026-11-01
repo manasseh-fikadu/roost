@@ -14,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 const (
@@ -364,7 +364,7 @@ func decodeTuple(b []byte, dst ...any) error {
 
 // deflaters holds the writers that deflate has used. A writer at the best
 // compression takes over a megabyte, and a device's minute is a few kilobytes,
-// so a new one for each minute of 200 devices would be most of what Roost
+// so a new one for each minute of 200 devices would be most of what Bield
 // allocates.
 var deflaters sync.Pool // of *flate.Writer
 

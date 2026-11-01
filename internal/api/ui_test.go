@@ -10,7 +10,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/api"
 )
 
 func TestUI(t *testing.T) {

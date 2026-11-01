@@ -13,14 +13,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 const (
 	// passEvery is how often a Dispatcher looks at the open alerts.
 	passEvery = 5 * time.Second
-	// maxTries is how many times Roost tries to send one message before it
+	// maxTries is how many times Bield tries to send one message before it
 	// gives up on it.
 	maxTries = 4
 	// EventKind is the kind of the events a Dispatcher adds to the activity
@@ -28,11 +28,11 @@ const (
 	EventKind = "notification"
 )
 
-// retryAfter is how long Roost waits after a message fails, by how many
+// retryAfter is how long Bield waits after a message fails, by how many
 // times it has failed.
 var retryAfter = [maxTries - 1]time.Duration{30 * time.Second, 2 * time.Minute, 10 * time.Minute}
 
-// A Delivery is what happened the last time Roost sent to a channel.
+// A Delivery is what happened the last time Bield sent to a channel.
 type Delivery struct {
 	At    time.Time
 	Event Event
@@ -59,9 +59,9 @@ type Options struct {
 	Store Store
 	// Open returns the open alerts. Required.
 	Open func() []store.Alert
-	// Settings says when to remind and what Roost is called. Required.
+	// Settings says when to remind and what Bield is called. Required.
 	Settings *settings.Cache
-	// AppURL is where Roost is on the tailnet, which the links in messages
+	// AppURL is where Bield is on the tailnet, which the links in messages
 	// start with unless the settings have a public URL. If both are empty,
 	// messages have no link.
 	AppURL string
@@ -167,7 +167,7 @@ func (d *Dispatcher) Run(ctx context.Context) {
 }
 
 // Last returns what the channel with an ID did last, if it has sent since
-// Roost started.
+// Bield started.
 func (d *Dispatcher) Last(channelID int64) (Delivery, bool) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -555,7 +555,7 @@ func (d *Dispatcher) message(s settings.Settings, j job, now time.Time) Message 
 	return m
 }
 
-// baseURL returns where Roost is, without a slash at the end, or "".
+// baseURL returns where Bield is, without a slash at the end, or "".
 func (d *Dispatcher) baseURL(s settings.Settings) string {
 	return strings.TrimSuffix(cmp.Or(s.General.PublicURL, d.opts.AppURL), "/")
 }

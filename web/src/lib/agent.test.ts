@@ -41,7 +41,7 @@ describe('agentState', () => {
 			device: device('linux', undefined, { measuredBy: 'hub' }),
 			label: 'Built in',
 			status: 'online',
-			detail: 'Roost runs here and measures it'
+			detail: 'Bield runs here and measures it'
 		},
 		{ name: 'no agent', device: device('macOS'), label: 'Not installed', status: 'unknown' },
 		{

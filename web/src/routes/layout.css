@@ -3,7 +3,7 @@
 @import '@fontsource-variable/geist-mono';
 
 /*
- * Roost's dark theme: the old dashboard's palette, after the Geist design
+ * Bield's dark theme: the old dashboard's palette, after the Geist design
  * system. Surfaces get lighter as they rise (canvas, surface, raised, hover),
  * lines get stronger as they matter more, and text fades from fg to faint.
  * Each status color has a fill and a lighter -fg for text on dark.

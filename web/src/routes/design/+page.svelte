@@ -175,7 +175,7 @@
 					options={['1h', '6h', '24h', '7d'].map((r) => ({ value: r, label: r }))}
 				/>
 			</div>
-			<CodeLine command="roost admin add-viewer bob@example.com" />
+			<CodeLine command="bield admin add-viewer bob@example.com" />
 			<p class="text-[13px] text-fg-subtle">
 				Keys: <Kbd>⌘</Kbd>
 				<Kbd>K</Kbd> opens the palette, <Kbd>esc</Kbd> closes it.
@@ -188,7 +188,7 @@
 			<Dialog
 				bind:open={dialogOpen}
 				title="Edit device"
-				description="Change how this device shows up in Roost."
+				description="Change how this device shows up in Bield."
 			>
 				{#snippet trigger({ props })}
 					<Button {...props}>Open dialog</Button>

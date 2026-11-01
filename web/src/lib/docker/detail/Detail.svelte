@@ -46,7 +46,7 @@
 		name: string;
 		/** Where the list of this device's containers is. */
 		backHref: string;
-		/** Whether Roost can open the machine's files, which admins can follow a path into. */
+		/** Whether Bield can open the machine's files, which admins can follow a path into. */
 		filesReady: boolean;
 	}
 

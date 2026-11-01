@@ -13,8 +13,8 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
 )
 
 var (
@@ -28,7 +28,7 @@ var (
 func testStatus(state string) tailnet.Status {
 	return tailnet.Status{
 		State: state,
-		Self:  tailnet.Device{ID: "self", DNSName: "roost.example.ts.net", IPs: []netip.Addr{selfIP}, Online: true},
+		Self:  tailnet.Device{ID: "self", DNSName: "bield.example.ts.net", IPs: []netip.Addr{selfIP}, Online: true},
 		Peers: []tailnet.Device{
 			{ID: "direct", IPs: []netip.Addr{netip.MustParseAddr("fd7a:115c:a1e0::2"), directIP}, Online: true},
 			{ID: "derp", IPs: []netip.Addr{derpIP}, Online: true, Relay: "fra"},

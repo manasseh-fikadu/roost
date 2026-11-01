@@ -20,10 +20,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/config"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/config"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
 )
 
 var laptopIP = netip.MustParseAddr("100.64.0.2")
@@ -43,7 +43,7 @@ func fakeTailnet(state string) *tailnettest.Tailnet {
 	return tailnettest.New(tailnet.Status{
 		State:    state,
 		LoginURL: "https://login.tailscale.com/a/0123456789",
-		Self:     tailnet.Device{ID: "roost", DNSName: "roost.example.ts.net", IPs: []netip.Addr{netip.MustParseAddr("100.64.0.1")}},
+		Self:     tailnet.Device{ID: "bield", DNSName: "bield.example.ts.net", IPs: []netip.Addr{netip.MustParseAddr("100.64.0.1")}},
 		Peers: []tailnet.Device{
 			{ID: "laptop", DNSName: "laptop.example.ts.net", IPs: []netip.Addr{laptopIP}, Owner: "alice@example.com", Online: true},
 		},
@@ -96,14 +96,14 @@ func TestServe_tailnet(t *testing.T) {
 			tn := fakeTailnet(tailnet.StateRunning)
 			cfg := testConfig(t, mode)
 			log := startServe(t, cfg, tn)
-			log.waitFor(t, "roost is running")
+			log.waitFor(t, "bield is running")
 
 			code, body := get(t, tn.Client(laptopIP), tailnettest.URL+"/api/health")
 
 			if code != http.StatusOK || !strings.Contains(body, `"status":"ok"`) {
 				t.Errorf("GET /api/health on the tailnet = %d %q, want 200 and ok", code, body)
 			}
-			if _, err := os.Stat(filepath.Join(cfg.DataDir, "roost.db")); err != nil {
+			if _, err := os.Stat(filepath.Join(cfg.DataDir, "bield.db")); err != nil {
 				t.Errorf("runServe() didn't create the database: %v", err)
 			}
 			if !strings.Contains(log.String(), "url="+tailnettest.URL) {
@@ -121,7 +121,7 @@ func TestServe_login(t *testing.T) {
 	t.Parallel()
 	tn := fakeTailnet(tailnet.StateNeedsLogin)
 	log := startServe(t, testConfig(t, config.Embedded), tn)
-	line := log.waitFor(t, "log Roost in to your tailnet")
+	line := log.waitFor(t, "log Bield in to your tailnet")
 	m := regexp.MustCompile(`setup_page=(\S+)`).FindStringSubmatch(line)
 	if m == nil || !strings.Contains(line, "login_url=https://login.tailscale.com/a/0123456789") {
 		t.Fatalf("the login line doesn't give the setup page and the login URL: %s", line)
@@ -132,15 +132,15 @@ func TestServe_login(t *testing.T) {
 		t.Errorf("warned that a setup page on 127.0.0.1 can be reached from other machines; log:\n%s", log)
 	}
 
-	if code, body := get(t, local, setupURL); code != http.StatusOK || !strings.Contains(body, "Add Roost to your tailnet") {
+	if code, body := get(t, local, setupURL); code != http.StatusOK || !strings.Contains(body, "Add Bield to your tailnet") {
 		t.Errorf("setup page before login = %d:\n%s", code, body)
 	}
 	if code, _ := get(t, local, setupURL+"/api/health"); code != http.StatusNotFound {
 		t.Errorf("GET /api/health on the setup address = %d, want 404", code)
 	}
 
-	tn.SetStatus(tailnet.Status{State: tailnet.StateRunning, Self: tailnet.Device{ID: "roost"}})
-	log.waitFor(t, "roost is running")
+	tn.SetStatus(tailnet.Status{State: tailnet.StateRunning, Self: tailnet.Device{ID: "bield"}})
+	log.waitFor(t, "bield is running")
 
 	if code, body := get(t, local, setupURL); code != http.StatusOK || !strings.Contains(body, `href="`+tailnettest.URL+`"`) {
 		t.Errorf("setup page after login = %d, want a link to the app:\n%s", code, body)
@@ -152,16 +152,16 @@ func TestServe_firstAdmins(t *testing.T) {
 	const alice, bob, carol = "alice@example.com", "bob@example.com", "carol@example.com"
 	tests := []struct {
 		name     string
-		owner    string   // of Roost's node; "" means it's tagged
-		admins   []string // ROOST_ADMINS
+		owner    string   // of Bield's node; "" means it's tagged
+		admins   []string // BIELD_ADMINS
 		existing []string // admins already in the database
 		want     []string
 		wantLog  string
 	}{
-		{name: "owner of Roost's node", owner: alice, want: []string{alice}, wantLog: "made Roost's first admins"},
-		{name: "owner and ROOST_ADMINS", owner: alice, admins: []string{bob}, want: []string{alice, bob}},
-		{name: "tagged node uses ROOST_ADMINS", admins: []string{bob}, want: []string{bob}},
-		{name: "tagged node and no ROOST_ADMINS", wantLog: "Roost has no admins"},
+		{name: "owner of Bield's node", owner: alice, want: []string{alice}, wantLog: "made Bield's first admins"},
+		{name: "owner and BIELD_ADMINS", owner: alice, admins: []string{bob}, want: []string{alice, bob}},
+		{name: "tagged node uses BIELD_ADMINS", admins: []string{bob}, want: []string{bob}},
+		{name: "tagged node and no BIELD_ADMINS", wantLog: "Bield has no admins"},
 		{name: "already has admins", owner: alice, admins: []string{bob}, existing: []string{carol}, want: []string{carol}},
 	}
 	for _, tt := range tests {
@@ -173,7 +173,7 @@ func TestServe_firstAdmins(t *testing.T) {
 				var out bytes.Buffer
 				for _, login := range tt.existing {
 					if err := run(t.Context(), []string{"admin", "add", "--data-dir", cfg.DataDir, login}, &out, &out); err != nil {
-						t.Fatalf("roost admin add: %v\n%s", err, &out)
+						t.Fatalf("bield admin add: %v\n%s", err, &out)
 					}
 				}
 			}
@@ -182,12 +182,12 @@ func TestServe_firstAdmins(t *testing.T) {
 			if tt.owner != "" {
 				st.Self.Owner = tt.owner
 			} else {
-				st.Self.Tags = []string{"tag:roost"}
+				st.Self.Tags = []string{"tag:bield"}
 			}
 			tn.SetStatus(*st)
 
 			log := startServe(t, cfg, tn)
-			log.waitFor(t, "roost is running")
+			log.waitFor(t, "bield is running")
 
 			var out bytes.Buffer
 			if err := run(t.Context(), []string{"admin", "list", "--data-dir", cfg.DataDir}, &out, io.Discard); err != nil {
@@ -209,7 +209,7 @@ func TestServe_firstAdmins(t *testing.T) {
 	}
 }
 
-// The owner of Roost's node signs in from their own devices, and the node
+// The owner of Bield's node signs in from their own devices, and the node
 // itself is anonymous.
 func TestServe_signIn(t *testing.T) {
 	t.Parallel()
@@ -218,7 +218,7 @@ func TestServe_signIn(t *testing.T) {
 	st.Self.Owner = "alice@example.com"
 	tn.SetStatus(*st)
 	log := startServe(t, testConfig(t, config.Host), tn)
-	log.waitFor(t, "roost is running")
+	log.waitFor(t, "bield is running")
 
 	code, body := get(t, tn.Client(laptopIP), tailnettest.URL+"/api/me")
 	if code != http.StatusOK || !strings.Contains(body, `"login":"alice@example.com"`) || !strings.Contains(body, `"role":"admin"`) {
@@ -228,8 +228,8 @@ func TestServe_signIn(t *testing.T) {
 		t.Errorf("GET /api/debug/tailnet from alice's laptop = %d, want 200", code)
 	}
 	self := netip.MustParseAddr("100.64.0.1")
-	if code, body := get(t, tn.Client(self), tailnettest.URL+"/api/me"); !strings.Contains(body, `"reason":"roost-machine"`) {
-		t.Errorf("GET /api/me from Roost's own node = %d %s, want anonymous", code, body)
+	if code, body := get(t, tn.Client(self), tailnettest.URL+"/api/me"); !strings.Contains(body, `"reason":"bield-machine"`) {
+		t.Errorf("GET /api/me from Bield's own node = %d %s, want anonymous", code, body)
 	}
 }
 
@@ -246,7 +246,7 @@ func TestServe_endsStreams(t *testing.T) {
 	log := newLogWriter()
 	done := make(chan error, 1)
 	go func() { done <- runServe(ctx, testConfig(t, config.Host), log, openFake(tn)) }()
-	log.waitFor(t, "roost is running")
+	log.waitFor(t, "bield is running")
 
 	req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, tailnettest.URL+"/api/stream", nil)
 	if err != nil {
@@ -305,7 +305,7 @@ func TestServe_errors(t *testing.T) {
 				}
 				return cfg
 			},
-			wantErr: "roost.db",
+			wantErr: "bield.db",
 		},
 		{
 			name: "Tailscale isn't running",
@@ -347,7 +347,7 @@ func TestLoopback(t *testing.T) {
 		{&net.TCPAddr{IP: net.IPv4zero, Port: 4700}, false},
 		{&net.TCPAddr{IP: net.IPv6unspecified, Port: 4700}, false},
 		{&net.TCPAddr{IP: net.IPv4(192, 168, 1, 20), Port: 4700}, false},
-		{&net.UnixAddr{Name: "/run/roost.sock", Net: "unix"}, false},
+		{&net.UnixAddr{Name: "/run/bield.sock", Net: "unix"}, false},
 	}
 	for _, tt := range tests {
 		if got := loopback(tt.addr); got != tt.want {
@@ -448,7 +448,7 @@ func TestServe_demo(t *testing.T) {
 	}
 	// A demo has a tailnet of its own, whatever it's given.
 	log := startServe(t, cfg, nil)
-	line := log.waitFor(t, "roost is running")
+	line := log.waitFor(t, "bield is running")
 	url := regexp.MustCompile(`url=(\S+)`).FindStringSubmatch(line)
 	if url == nil {
 		t.Fatalf("the log line %q doesn't give a URL", line)
@@ -461,7 +461,7 @@ func TestServe_demo(t *testing.T) {
 	}
 
 	snap := firstSnapshot(t, client, url[1])
-	if !snap.Hub.Demo || snap.Hub.Name != "Roost demo" || !snap.Hub.SetupDone {
+	if !snap.Hub.Demo || snap.Hub.Name != "Bield demo" || !snap.Hub.SetupDone {
 		t.Errorf("hub = %+v, want a demo that has been set up", snap.Hub)
 	}
 	if len(snap.Devices) != config.DefaultDemoDevices {
@@ -491,7 +491,7 @@ func TestServe_demo(t *testing.T) {
 	if strings.Contains(log.String(), "level=ERROR") {
 		t.Errorf("the demo logged an error:\n%s", log)
 	}
-	if _, err := os.Stat(filepath.Join(cfg.DataDir, "roost.db")); err != nil {
+	if _, err := os.Stat(filepath.Join(cfg.DataDir, "bield.db")); err != nil {
 		t.Errorf("the demo didn't make its database: %v", err)
 	}
 }

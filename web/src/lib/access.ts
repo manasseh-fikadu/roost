@@ -4,7 +4,7 @@
 import {
 	ReasonNoUser,
 	ReasonRoleLookupFailed,
-	ReasonRoostMachine,
+	ReasonBieldMachine,
 	ReasonTaggedDevice,
 	ReasonUnknownDevice,
 	ReasonWhoIsFailed,
@@ -15,12 +15,12 @@ import {
 	type Role
 } from './api/types.js';
 
-/** Whether the caller can do everything in Roost. */
+/** Whether the caller can do everything in Bield. */
 export function isAdmin(me: Me | null | undefined): boolean {
 	return me?.role === RoleAdmin;
 }
 
-/** Whether the caller can view Roost at all, as an admin or a viewer. */
+/** Whether the caller can view Bield at all, as an admin or a viewer. */
 export function canView(me: Me | null | undefined): boolean {
 	return me?.role === RoleAdmin || me?.role === RoleViewer;
 }
@@ -36,14 +36,14 @@ export function roleLabel(role: Role): string {
 }
 
 const reasons: Record<Reason, string> = {
-	[ReasonUnknownDevice]: "This device isn't one Tailscale knows on Roost's tailnet.",
+	[ReasonUnknownDevice]: "This device isn't one Tailscale knows on Bield's tailnet.",
 	[ReasonTaggedDevice]:
-		"This device is tagged, so it belongs to no one. Open Roost from a device you're logged in to.",
+		"This device is tagged, so it belongs to no one. Open Bield from a device you're logged in to.",
 	[ReasonNoUser]: 'Tailscale knows this device, but not who uses it.',
-	[ReasonRoostMachine]:
-		"You're on the machine Roost runs on. Any program here could connect to Roost, so Roost signs no one in from it. Open Roost from another device.",
-	[ReasonWhoIsFailed]: "Roost couldn't ask Tailscale who you are. Try again in a moment.",
-	[ReasonRoleLookupFailed]: "Roost couldn't look up your role. Try again in a moment."
+	[ReasonBieldMachine]:
+		"You're on the machine Bield runs on. Any program here could connect to Bield, so Bield signs no one in from it. Open Bield from another device.",
+	[ReasonWhoIsFailed]: "Bield couldn't ask Tailscale who you are. Try again in a moment.",
+	[ReasonRoleLookupFailed]: "Bield couldn't look up your role. Try again in a moment."
 };
 
 function isReason(reason: string | undefined): reason is Reason {
@@ -51,34 +51,34 @@ function isReason(reason: string | undefined): reason is Reason {
 }
 
 /**
- * Whether Roost couldn't find out who the caller is or what their role is,
+ * Whether Bield couldn't find out who the caller is or what their role is,
  * this time. Asking again may work.
  */
 export function lookupFailed(me: Me): boolean {
 	return me.reason === ReasonWhoIsFailed || me.reason === ReasonRoleLookupFailed;
 }
 
-/** Why the caller can't view Roost, in a sentence or two, or "" if they can. */
+/** Why the caller can't view Bield, in a sentence or two, or "" if they can. */
 export function whyCantView(me: Me): string {
 	if (canView(me)) {
 		return '';
 	}
 	if (me.signedIn && !lookupFailed(me)) {
 		const as = me.login ? ` as ${me.login}` : '';
-		return `You're signed in${as}, but only Roost's admins and viewers can view it. Ask an admin to add you.`;
+		return `You're signed in${as}, but only Bield's admins and viewers can view it. Ask an admin to add you.`;
 	}
-	return isReason(me.reason) ? reasons[me.reason] : "Roost couldn't tell who you are.";
+	return isReason(me.reason) ? reasons[me.reason] : "Bield couldn't tell who you are.";
 }
 
 /**
- * The command an admin can run on Roost's machine to make a signed-in caller
+ * The command an admin can run on Bield's machine to make a signed-in caller
  * without a role a viewer, or undefined if that wouldn't help.
  */
 export function addViewerCommand(me: Me): string | undefined {
 	if (canView(me) || !me.signedIn || !me.login || lookupFailed(me)) {
 		return undefined;
 	}
-	return `roost admin add-viewer ${shellWord(me.login)}`;
+	return `bield admin add-viewer ${shellWord(me.login)}`;
 }
 
 /**

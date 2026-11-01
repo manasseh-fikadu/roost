@@ -1,5 +1,5 @@
 <!--
-	What runs on the machine Roost runs on: the systemd units it watches and
+	What runs on the machine Bield runs on: the systemd units it watches and
 	the ones that failed, and how many containers there are.
 -->
 <script lang="ts">
@@ -24,7 +24,7 @@
 	const running = $derived(containers.filter((c) => c.state === 'running').length);
 </script>
 
-<Card title="Services" description="systemd units Roost watches, and any that failed">
+<Card title="Services" description="systemd units Bield watches, and any that failed">
 	{#if units.length === 0}
 		<p class="px-4 py-4 text-[13px] text-fg-subtle">No watched units on this machine.</p>
 	{:else}

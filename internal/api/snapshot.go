@@ -9,16 +9,16 @@ import (
 	"strings"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/agent"
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/checks"
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/systemd"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/agent"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/checks"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/hostmetrics"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/systemd"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // sources is what a Snapshot is built from.
@@ -27,10 +27,10 @@ type sources struct {
 	// demo says the tailnet is made up.
 	demo    bool
 	tailnet tailnet.Snapshot
-	// host is what Roost measured of its own machine, or nil if it can't.
+	// host is what Bield measured of its own machine, or nil if it can't.
 	host *hostmetrics.Reading
 	// agents holds what agents reported, by device ID, or store.HubID for
-	// the machine Roost runs on.
+	// the machine Bield runs on.
 	agents map[string]agents.Report
 	// settings holds the settings of the devices that have any, by ID.
 	settings map[string]store.DeviceSettings
@@ -43,29 +43,29 @@ type sources struct {
 	pings map[string]checks.PingStatus
 	// global holds the settings admins changed.
 	global settings.Settings
-	// docker is what Roost read of the containers on its machine, and
+	// docker is what Bield read of the containers on its machine, and
 	// systemd of its units, or nil if it doesn't read them.
 	docker  *docker.Reading
 	systemd *systemd.Reading
-	// ssh says how Roost logs in to each machine, by access ID, or is nil
-	// if Roost doesn't.
+	// ssh says how Bield logs in to each machine, by access ID, or is nil
+	// if Bield doesn't.
 	ssh map[string]ssh.Access
 }
 
-// A machine is a device that Roost measures, once for each machine. The
-// machine Roost runs on can be two nodes, and only Roost's own counts.
+// A machine is a device that Bield measures, once for each machine. The
+// machine Bield runs on can be two nodes, and only Bield's own counts.
 type machine struct {
 	deviceID string
-	// sustained is its CPU, averaged over the settings' window, if Roost
+	// sustained is its CPU, averaged over the settings' window, if Bield
 	// knows it.
 	sustained *float64
-	// current reports whether its metrics say what's true now: Roost's
+	// current reports whether its metrics say what's true now: Bield's
 	// own, while it can measure, or its agent's, while it reports.
 	current bool
 }
 
-// newSnapshot builds a Snapshot of what Roost knows at now, without its
-// alerts, and returns the machines Roost measures.
+// newSnapshot builds a Snapshot of what Bield knows at now, without its
+// alerts, and returns the machines Bield measures.
 func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 	s := src.tailnet
 	out := Snapshot{
@@ -103,7 +103,7 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 	out.Hub.DNSName, out.Hub.Tailnet, out.Hub.ControlURL = st.Self.DNSName, st.Tailnet, st.ControlURL
 	devices := append([]tailnet.Device{st.Self}, st.Peers...)
 	// An agent enrolls from its machine's node, and its reports are kept
-	// under the machine's history ID. The machine Roost runs on can have two
+	// under the machine's history ID. The machine Bield runs on can have two
 	// nodes, which both show its agent.
 	enrolled := map[string]store.Enrollment{}
 	for i, d := range devices {
@@ -112,7 +112,7 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 			enrolled[id] = e
 		}
 	}
-	// In embedded mode, the machine Roost runs on is a peer too, and is the
+	// In embedded mode, the machine Bield runs on is a peer too, and is the
 	// node that the Docker pages list, since it's named for the machine.
 	hostNode := slices.ContainsFunc(st.Peers, func(d tailnet.Device) bool { return d.SameMachine })
 	var machines []machine
@@ -121,7 +121,7 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 			device: d, self: i == 0, settings: src.settings[d.ID],
 			thresholds: src.thresholdsFor(d.ID), rules: src.global.Rules,
 		}
-		// Roost measures the machine it runs on, and on a machine it can't
+		// Bield measures the machine it runs on, and on a machine it can't
 		// measure, an agent can. In embedded mode, that machine's own node
 		// is a peer.
 		if dev.self || d.SameMachine {
@@ -140,7 +140,7 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 		}
 		device.Docker = hasDocker(d, dev.self, hostNode, src)
 		out.Devices = append(out.Devices, device)
-		// In embedded mode, the machine's own node shows what Roost's does.
+		// In embedded mode, the machine's own node shows what Bield's does.
 		if m.deviceID != "" && (dev.self || !d.SameMachine) {
 			machines = append(machines, m)
 		}
@@ -206,10 +206,10 @@ func newUplink(s tailnet.Snapshot) Uplink {
 // deviceInput is what a Device is built from.
 type deviceInput struct {
 	device tailnet.Device
-	// self is true for Roost's own node.
+	// self is true for Bield's own node.
 	self     bool
 	settings store.DeviceSettings
-	// host is what Roost measured of the device, if it's the machine Roost
+	// host is what Bield measured of the device, if it's the machine Bield
 	// runs on.
 	host *hostmetrics.Reading
 	// agent is what the device's agent last reported, and enrollment is
@@ -221,7 +221,7 @@ type deviceInput struct {
 	rules      settings.Rules
 }
 
-// newDevice returns the device of in, and the machine it is, if Roost
+// newDevice returns the device of in, and the machine it is, if Bield
 // measures it.
 func newDevice(s tailnet.Snapshot, in deviceInput, now time.Time) (Device, machine) {
 	d := in.device
@@ -359,7 +359,7 @@ func newInfo(i hostmetrics.Info) *DeviceInfo {
 }
 
 // historyID returns the ID that d's history is kept under: store.HubID if d
-// is the machine Roost runs on, as Roost's own node or as the peer that is
+// is the machine Bield runs on, as Bield's own node or as the peer that is
 // the same machine, or else d's ID.
 func historyID(d tailnet.Device, self bool) string {
 	if self || d.SameMachine {
@@ -370,7 +370,7 @@ func historyID(d tailnet.Device, self bool) string {
 
 // deviceStatus works out whether d needs attention at now, by the
 // thresholds t, and why, for the rules that are on. sustained is its CPU
-// averaged over t's CPU window, if Roost knows it.
+// averaged over t's CPU window, if Bield knows it.
 func deviceStatus(d Device, sustained *float64, t settings.Thresholds, rules settings.Rules, now time.Time) (Status, string) {
 	if !d.Online {
 		return StatusOffline, "Not connected to the tailnet"
@@ -450,8 +450,8 @@ var (
 
 // inferKind guesses what sort of machine d is, from its OS, its host name
 // and the first label of its DNS name. The rest of the DNS name is the
-// tailnet's, the same for every device. hub is true for the machine Roost
-// runs on, and model is the machine's maker and product, if Roost knows them.
+// tailnet's, the same for every device. hub is true for the machine Bield
+// runs on, and model is the machine's maker and product, if Bield knows them.
 func inferKind(d tailnet.Device, hub bool, model string) DeviceKind {
 	os := strings.ToLower(d.OS)
 	name := strings.ToLower(d.HostName + " " + firstLabel(d.DNSName) + " " + model)
@@ -507,9 +507,9 @@ func firstLabel(name string) string {
 	return label
 }
 
-// hasDocker reports whether Roost can read the Docker on d: on the machine
-// Roost runs on, if it has a socket, and on another, if its SSH access found
-// one. self marks Roost's own node. That machine can be two nodes, Roost's
+// hasDocker reports whether Bield can read the Docker on d: on the machine
+// Bield runs on, if it has a socket, and on another, if its SSH access found
+// one. self marks Bield's own node. That machine can be two nodes, Bield's
 // and its own peer node, which share a Docker, and only one of them has it:
 // the peer, if hostNode says there is one.
 func hasDocker(d tailnet.Device, self, hostNode bool, src sources) bool {
@@ -527,9 +527,9 @@ func (s sources) thresholdsFor(deviceID string) settings.Thresholds {
 }
 
 // overridesFor returns the thresholds an admin set for the device with an ID.
-// The machine Roost runs on can be two nodes in embedded mode, Roost's own and
-// a peer, and Roost measures the machine once, so both nodes get the same
-// thresholds: those of Roost's own node, and for what it leaves out, the
+// The machine Bield runs on can be two nodes in embedded mode, Bield's own and
+// a peer, and Bield measures the machine once, so both nodes get the same
+// thresholds: those of Bield's own node, and for what it leaves out, the
 // peer's.
 func (s sources) overridesFor(deviceID string) store.ThresholdOverrides {
 	st := s.tailnet.Status

@@ -17,6 +17,6 @@
 
 <Card>
 	<EmptyState title="Only admins can {what}" icon={Lock}>
-		It can hold passwords and other secrets, so Roost shows it to admins only.
+		It can hold passwords and other secrets, so Bield shows it to admins only.
 	</EmptyState>
 </Card>

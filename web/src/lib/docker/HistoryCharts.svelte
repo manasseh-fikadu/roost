@@ -1,6 +1,6 @@
 <!--
 	What a container used over the last hour, 6 hours, day or week, from the
-	history Roost keeps by its name, which outlasts the container being made
+	history Bield keeps by its name, which outlasts the container being made
 	again. It loads again every minute.
 -->
 <script lang="ts">
@@ -108,7 +108,7 @@
 	{#if history && series}
 		{#if empty}
 			<p class="px-4 py-10 text-center text-[13px] text-fg-subtle">
-				Roost records each container once a minute, so history builds up from when it first sees it.
+				Bield records each container once a minute, so history builds up from when it first sees it.
 			</p>
 		{:else}
 			<div class="grid gap-6 p-4 lg:grid-cols-2">
@@ -158,7 +158,7 @@
 		{/if}
 	{:else if failed}
 		<p class="px-4 py-10 text-center text-[13px] text-fg-subtle">
-			Couldn't load the history. Roost tries again in a minute.
+			Couldn't load the history. Bield tries again in a minute.
 		</p>
 	{:else}
 		<div class="grid gap-6 p-4 lg:grid-cols-2" aria-busy="true">

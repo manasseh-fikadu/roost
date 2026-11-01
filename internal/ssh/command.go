@@ -7,10 +7,10 @@ import (
 	"unicode/utf8"
 )
 
-// sshd runs each command Roost sends with the login shell of the user Roost
+// sshd runs each command Bield sends with the login shell of the user Bield
 // logs in as, which may be sh, bash, zsh or fish. They read single quotes the
 // same way, except that fish also reads a backslash inside them as an escape,
-// so Roost never leaves a backslash inside single quotes: every command is a
+// so Bield never leaves a backslash inside single quotes: every command is a
 // fixed sh script, and the values it works on, such as a session's name or a
 // file's path, go to sh as its arguments, each in single quotes. A single
 // quote in a value becomes '\'', and a backslash becomes '\\', where the
@@ -86,7 +86,7 @@ var (
 // backslash or control character escaped, and reads # in the name it's given
 // as the start of a format, so `a#{host}b` would name the session after the
 // machine, and a session that was made with ## has a name with one # that
-// Roost couldn't give tmux again.
+// Bield couldn't give tmux again.
 func CheckSession(name string) error {
 	if name == "" || utf8.RuneCountInString(name) > maxSessionName || !utf8.ValidString(name) ||
 		strings.ContainsAny(name, ":.#\\") || strings.ContainsFunc(name, unicode.IsControl) {
@@ -95,7 +95,7 @@ func CheckSession(name string) error {
 	return nil
 }
 
-// CheckDir returns ErrBadDir unless dir is an absolute path that Roost can
+// CheckDir returns ErrBadDir unless dir is an absolute path that Bield can
 // send to a shell.
 func CheckDir(dir string) error {
 	if !strings.HasPrefix(dir, "/") || len(dir) > maxDir || !utf8.ValidString(dir) ||

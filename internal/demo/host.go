@@ -5,11 +5,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
+	"github.com/manasseh-fikadu/bield/internal/hostmetrics"
 )
 
 // Host stands in for hostmetrics.Collector in a demo: it measures the machine
-// that Roost pretends to run on, instead of the one it runs on. It answers
+// that Bield pretends to run on, instead of the one it runs on. It answers
 // to the same Reading and Changes.
 type Host struct {
 	d       *Demo

@@ -32,7 +32,7 @@
 	const needsSSH = $derived(
 		!!ssh && !open && (ssh.state === 'not-set-up' || ssh.state === 'host-key-changed')
 	);
-	// An agent to install, or to update. A machine Roost runs on has its own measuring.
+	// An agent to install, or to update. A machine Bield runs on has its own measuring.
 	const agent = $derived.by(() => {
 		const a = device.agent;
 		if (!isAdmin(page.data.me) || device.measuredBy === 'hub' || !agentRuns(device.os)) {

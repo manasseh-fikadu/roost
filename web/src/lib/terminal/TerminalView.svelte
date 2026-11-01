@@ -30,7 +30,7 @@
 
 	const font = '"Geist Mono Variable", ui-monospace, SFMono-Regular, Menlo, monospace';
 
-	// Roost's palette, so the terminal looks like part of the page.
+	// Bield's palette, so the terminal looks like part of the page.
 	const theme = {
 		background: '#0a0a0a',
 		foreground: '#ededed',
@@ -127,8 +127,8 @@
 				state: 'closed',
 				message:
 					ev.code === 1001
-						? "Roost is restarting. Reattach once it's back."
-						: "The connection dropped, or Roost couldn't open it."
+						? "Bield is restarting. Reattach once it's back."
+						: "The connection dropped, or Bield couldn't open it."
 			});
 		};
 	}

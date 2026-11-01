@@ -15,7 +15,7 @@ var (
 	ErrChannelNameTaken = errors.New("another notification channel has this name")
 )
 
-// A Channel is a place where Roost sends notifications, such as an ntfy topic.
+// A Channel is a place where Bield sends notifications, such as an ntfy topic.
 type Channel struct {
 	ID   int64
 	Name string

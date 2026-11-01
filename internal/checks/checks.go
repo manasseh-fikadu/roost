@@ -15,8 +15,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 const (
@@ -29,9 +29,9 @@ const (
 	// UptimeSpan is the time an uptime covers.
 	UptimeSpan = 24 * time.Hour
 	// startSpread is the time between the checks' first runs, so they don't
-	// all run as Roost starts.
+	// all run as Bield starts.
 	startSpread = 400 * time.Millisecond
-	// failingAfter is how many results in a row must fail before Roost logs
+	// failingAfter is how many results in a row must fail before Bield logs
 	// that a check is failing.
 	failingAfter = 2
 )
@@ -40,11 +40,11 @@ const (
 var ErrNotFound = errors.New("no check has this ID")
 
 // errStopped is the error of a run that Runner.Run stopped before it ended.
-var errStopped = errors.New("roost is shutting down")
+var errStopped = errors.New("bield is shutting down")
 
 // Options configures NewRunner.
 type Options struct {
-	// Dial connects to the targets of HTTP and TCP checks. Roost passes its
+	// Dial connects to the targets of HTTP and TCP checks. Bield passes its
 	// node's, which reaches the tailnet as well as everything else.
 	// Required.
 	Dial DialFunc
@@ -362,7 +362,7 @@ func (r *Runner) finish(ctx context.Context, id string, run *run, res Result) (c
 	if ok && e.run == run {
 		e.run = nil
 	}
-	// A run that Roost stopped as it shut down says nothing of the target,
+	// A run that Bield stopped as it shut down says nothing of the target,
 	// and one that started before an admin changed the check isn't of the
 	// check as it is.
 	if ctx.Err() != nil {
@@ -573,7 +573,7 @@ func (r *Runner) Pings() map[string]PingStatus {
 
 // ObservePings keeps the pings in snap that are newer than the ones it has,
 // and forgets a device's pings once its latest is more than UptimeSpan old,
-// such as after it left the tailnet. A ping that failed on Roost's side says
+// such as after it left the tailnet. A ping that failed on Bield's side says
 // nothing about the peer, so it's left out.
 func (r *Runner) ObservePings(snap tailnet.Snapshot) {
 	r.mu.Lock()
@@ -597,7 +597,7 @@ func (r *Runner) ObservePings(snap tailnet.Snapshot) {
 		// offline.
 		p.misses = rec.Misses
 	}
-	// The peers can't say which devices left: right after Roost starts,
+	// The peers can't say which devices left: right after Bield starts,
 	// the tailnet's status can have none yet.
 	old := time.Now().Add(-UptimeSpan)
 	maps.DeleteFunc(r.pings, func(_ string, p *pinged) bool { return p.last.Before(old) })

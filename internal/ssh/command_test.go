@@ -126,7 +126,7 @@ func runRaw(t *testing.T, shell, bin, start, cmd string) []string {
 	if err != nil {
 		t.Skipf("%s isn't installed", shell)
 	}
-	c := exec.CommandContext(t.Context(), path, "-c", cmd) //nolint:gosec // G204: the test runs Roost's commands in each shell.
+	c := exec.CommandContext(t.Context(), path, "-c", cmd) //nolint:gosec // G204: the test runs Bield's commands in each shell.
 	c.Dir = start
 	c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"))
 	var stderr bytes.Buffer
@@ -205,7 +205,7 @@ func TestCheckDir(t *testing.T) {
 	}
 }
 
-// shells are the login shells a user may have, which sshd runs Roost's
+// shells are the login shells a user may have, which sshd runs Bield's
 // commands with. The tests use those on the machine.
 var shells = []string{"sh", "dash", "bash", "zsh", "fish"}
 
@@ -237,7 +237,7 @@ func runIn(t *testing.T, shell, bin, start, cmd string) []string {
 	if err != nil {
 		t.Skipf("%s isn't installed", shell)
 	}
-	c := exec.CommandContext(t.Context(), path, "-c", cmd) //nolint:gosec // G204: the test runs Roost's commands in each shell.
+	c := exec.CommandContext(t.Context(), path, "-c", cmd) //nolint:gosec // G204: the test runs Bield's commands in each shell.
 	c.Dir = start
 	c.Env = append(os.Environ(), "PATH="+bin+":"+os.Getenv("PATH"), "SHELL="+filepath.Join(bin, "login"))
 	var stderr bytes.Buffer
@@ -431,7 +431,7 @@ func TestKillScript(t *testing.T) {
 
 func TestSetupCommand(t *testing.T) {
 	t.Parallel()
-	line := `from="100.64.0.1",no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample roost@roost`
+	line := `from="100.64.0.1",no-agent-forwarding,no-X11-forwarding ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample bield@bield`
 	for _, shell := range shells {
 		t.Run(shell, func(t *testing.T) {
 			t.Parallel()

@@ -1,4 +1,4 @@
-module github.com/manasseh-fikadu/roost
+module github.com/manasseh-fikadu/bield
 
 go 1.27.3
 

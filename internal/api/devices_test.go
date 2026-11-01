@@ -11,12 +11,12 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/usage"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/hostmetrics"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/usage"
 )
 
 func TestSetDeviceSettings(t *testing.T) {
@@ -55,8 +55,8 @@ func TestSetDeviceSettings(t *testing.T) {
 			stored:   store.DeviceSettings{DisplayName: "Work laptop"},
 		},
 		{
-			name:     "Roost's own node",
-			device:   "roost",
+			name:     "Bield's own node",
+			device:   "bield",
 			body:     `{"displayName":"Hub","alertOffline":true,"notes":""}`,
 			wantCode: http.StatusOK,
 			want:     api.DeviceSettings{DisplayName: "Hub", AlertOffline: true},
@@ -148,7 +148,7 @@ func TestDeviceHistory(t *testing.T) {
 	err = st.AddMetrics(t.Context(), []store.MetricsRow{
 		{DeviceID: "laptop", At: minute.Add(-20 * time.Minute), CPU: new(10.0), Mem: new(40.0), NetRx: new(100.0)},
 		{DeviceID: "laptop", At: minute.Add(-20*time.Minute + 30*time.Second), CPU: new(20.0), Mem: new(60.0), NetRx: new(300.0)},
-		// Roost's own machine.
+		// Bield's own machine.
 		{DeviceID: store.HubID, At: minute.Add(-5 * time.Minute), CPU: new(50.0)},
 	})
 	if err != nil {
@@ -194,7 +194,7 @@ func TestDeviceHistory(t *testing.T) {
 	}
 
 	// The hub's metrics are kept apart from its node's ID.
-	rec = serve(h, newRequest(t, http.MethodGet, "/api/devices/roost/history?range=1h", phoneIP))
+	rec = serve(h, newRequest(t, http.MethodGet, "/api/devices/bield/history?range=1h", phoneIP))
 	var hub api.DeviceHistory
 	if err := json.Unmarshal(rec.Body.Bytes(), &hub); err != nil {
 		t.Fatal(err)
@@ -305,7 +305,7 @@ func TestFeed_recordsPings(t *testing.T) {
 		go feed.Run(t.Context())
 		synctest.Wait()
 
-		// The server's ping failed on Roost's side, so it isn't a miss.
+		// The server's ping failed on Bield's side, so it isn't a miss.
 		first := time.Now()
 		ping(map[string]tailnet.PingRecord{
 			"laptop": {At: first, Result: &tailnet.PingResult{Latency: 10 * time.Millisecond}},

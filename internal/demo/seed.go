@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/notify"
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/usage"
+	"github.com/manasseh-fikadu/bield/internal/notify"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/usage"
 )
 
 // metricsEvery and pingEvery are how often a made-up history has a row for a
@@ -21,7 +21,7 @@ const (
 	metricsEvery = 30 * time.Second
 	pingEvery    = time.Minute
 	// usageEvery is how often a made-up history has what ran on a machine for
-	// the last day, and usageOlderEvery before that. Roost stores a minute of
+	// the last day, and usageOlderEvery before that. Bield stores a minute of
 	// it each time, so this history is thinner than a real one, which would
 	// take too long to make.
 	usageEvery      = 5 * time.Minute
@@ -32,7 +32,7 @@ const (
 
 // Seed starts a new database with the demo's settings, people, checks and
 // history, which ends where the demo starts and reaches back span. It writes
-// what Roost would have written if it had watched this tailnet for that long.
+// what Bield would have written if it had watched this tailnet for that long.
 func (d *Demo) Seed(ctx context.Context, st *store.Store, span time.Duration) error {
 	steps := []struct {
 		name string
@@ -46,7 +46,7 @@ func (d *Demo) Seed(ctx context.Context, st *store.Store, span time.Duration) er
 		{"pings", func() error { return d.seedPings(ctx, st, span) }},
 		{"container metrics", func() error { return d.seedContainers(ctx, st, span) }},
 		{"usage", func() error { return d.seedUsage(ctx, st, span) }},
-		// Roost folds the last 48 hours into buckets now, so it needn't wait a
+		// Bield folds the last 48 hours into buckets now, so it needn't wait a
 		// few minutes to read the history from them.
 		{"buckets", func() error { return st.RollUp(ctx, time.Now()) }},
 	}
@@ -60,7 +60,7 @@ func (d *Demo) Seed(ctx context.Context, st *store.Store, span time.Duration) er
 
 func (d *Demo) seedSettings(ctx context.Context, st *store.Store, span time.Duration) error {
 	s := settings.Defaults()
-	s.General.Name = "Roost demo"
+	s.General.Name = "Bield demo"
 	s.General.SetupDone = true
 	// The history is kept as long as it reaches back.
 	days := int(math.Ceil(span.Hours() / 24))
@@ -232,7 +232,7 @@ func historyID(m *machine) string {
 	return m.id
 }
 
-// seedMetrics writes the metrics as Roost keeps them: every sample of the last
+// seedMetrics writes the metrics as Bield keeps them: every sample of the last
 // store.RawKeep, and before that, buckets: of store.FineStep for as far back as
 // they last, and of store.CoarseStep for the rest.
 func (d *Demo) seedMetrics(ctx context.Context, st *store.Store, span time.Duration) error {
@@ -279,10 +279,10 @@ func (d *Demo) seedMetrics(ctx context.Context, st *store.Store, span time.Durat
 	return st.AddMetricsRollups(ctx, buckets)
 }
 
-// eachBucket calls fn for each bucket that Roost would have made of a history
+// eachBucket calls fn for each bucket that Bield would have made of a history
 // that reaches back span, up to the last that is over: the buckets of
 // store.FineStep for as far back as they last, and of store.CoarseStep for all
-// of it. It goes oldest first, a step at a time. Roost makes buckets for the
+// of it. It goes oldest first, a step at a time. Bield makes buckets for the
 // time of the raw samples too, and the buckets of the two steps overlap.
 func (d *Demo) eachBucket(span time.Duration, fn func(step time.Duration, at time.Time) error) error {
 	over := d.start.Add(-time.Minute)
@@ -343,7 +343,7 @@ func (d *Demo) metricsRow(m *machine, t time.Time) store.MetricsRow {
 	return row
 }
 
-// seedPings writes the pings as Roost keeps them, like the metrics.
+// seedPings writes the pings as Bield keeps them, like the metrics.
 func (d *Demo) seedPings(ctx context.Context, st *store.Store, span time.Duration) error {
 	var pings []store.Ping
 	for t := d.start.Add(-min(span, store.RawKeep)).Truncate(pingEvery); t.Before(d.start); t = t.Add(pingEvery) {
@@ -450,7 +450,7 @@ func (d *Demo) seedContainers(ctx context.Context, st *store.Store, span time.Du
 }
 
 // seedUsage records what ran on the first machines, with a Recorder, the way
-// Roost keeps it: a sample every usageEvery is each a minute of its own.
+// Bield keeps it: a sample every usageEvery is each a minute of its own.
 func (d *Demo) seedUsage(ctx context.Context, st *store.Store, span time.Duration) error {
 	span = min(span, store.DetailKeep)
 	rec := usage.NewRecorder(st, d.log)
@@ -478,7 +478,7 @@ func (d *Demo) seedUsage(ctx context.Context, st *store.Store, span time.Duratio
 
 // seedAlerts writes the alerts that opened and cleared over the past days, and
 // the ones that are open now, with what the admin did about them. The open ones
-// are conditions that are really there, so Roost carries them on.
+// are conditions that are really there, so Bield carries them on.
 func (d *Demo) seedAlerts(ctx context.Context, st *store.Store, checks map[string]store.Check) error {
 	byHost := func(host string) *machine { return d.machineNamed(host, d.machines[0]) }
 	type alert struct {
@@ -569,7 +569,7 @@ func (d *Demo) seedAlerts(ctx context.Context, st *store.Store, checks map[strin
 }
 
 // seedChannels adds the notification channels: an ntfy topic and a webhook, both
-// on the tailnet, where the demo's servers take whatever Roost sends.
+// on the tailnet, where the demo's servers take whatever Bield sends.
 func (d *Demo) seedChannels(ctx context.Context, st *store.Store) ([]store.Channel, error) {
 	host := "http://homelab.tail-demo.ts.net"
 	configs := []struct {
@@ -577,8 +577,8 @@ func (d *Demo) seedChannels(ctx context.Context, st *store.Store) ([]store.Chann
 		resolve         bool
 		cfg             notify.Config
 	}{
-		{"Phone (ntfy)", "ntfy", "warning", true, notify.Config{Server: host + ":8090", Topic: "roost-alerts"}},
-		{"Node-RED", "webhook", "info", false, notify.Config{URL: host + ":1880/hook/roost"}},
+		{"Phone (ntfy)", "ntfy", "warning", true, notify.Config{Server: host + ":8090", Topic: "bield-alerts"}},
+		{"Node-RED", "webhook", "info", false, notify.Config{URL: host + ":1880/hook/bield"}},
 	}
 	var out []store.Channel
 	for _, c := range configs {

@@ -23,23 +23,23 @@ import (
 
 	gossh "golang.org/x/crypto/ssh"
 
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/ssh/sshtest"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/ssh/sshtest"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 const admin = "alice@example.com"
 
 var (
-	roostIP  = netip.MustParseAddr("100.64.0.1")
+	bieldIP  = netip.MustParseAddr("100.64.0.1")
 	laptopIP = netip.MustParseAddr("100.64.0.2")
 	vpsIP    = netip.MustParseAddr("100.64.0.3")
 )
 
-// env is a Manager on a tailnet with Roost's node, a Linux laptop, an
+// env is a Manager on a tailnet with Bield's node, a Linux laptop, an
 // iPhone and a Mac that's offline, and fake sshds for the laptop and for
-// Roost's own machine on its loopback address.
+// Bield's own machine on its loopback address.
 type env struct {
 	m      *ssh.Manager
 	st     *store.Store
@@ -52,13 +52,13 @@ type env struct {
 
 type envOptions struct {
 	hostMode bool
-	// sameMachine adds a peer that is the machine Roost runs on, as in
+	// sameMachine adds a peer that is the machine Bield runs on, as in
 	// embedded mode, at vpsIP.
 	sameMachine bool
 	// noRun leaves Run off until the test ends, when it runs once to close
 	// the connections.
 	noRun bool
-	// unauthorized leaves Roost's key out of the laptop's authorized_keys.
+	// unauthorized leaves Bield's key out of the laptop's authorized_keys.
 	unauthorized bool
 }
 
@@ -66,7 +66,7 @@ type envOptions struct {
 // a synctest bubble.
 func newEnv(t *testing.T, opts envOptions) *env {
 	t.Helper()
-	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "roost.db"), store.Options{})
+	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "bield.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func newEnv(t *testing.T, opts envOptions) *env {
 	e := &env{st: st, laptop: sshtest.New(), hub: sshtest.New()}
 	e.status = tailnet.Status{
 		State: tailnet.StateRunning,
-		Self:  tailnet.Device{ID: "roost", DNSName: "roost.example.ts.net", OS: "linux", IPs: []netip.Addr{roostIP}, Online: true},
+		Self:  tailnet.Device{ID: "bield", DNSName: "bield.example.ts.net", OS: "linux", IPs: []netip.Addr{bieldIP}, Online: true},
 		Peers: []tailnet.Device{
 			{ID: "laptop", HostName: "laptop", OS: "linux", IPs: []netip.Addr{laptopIP}, Online: true},
 			{ID: "phone", HostName: "phone", OS: "iOS", IPs: []netip.Addr{netip.MustParseAddr("100.64.0.4")}, Online: true},
@@ -100,7 +100,7 @@ func newEnv(t *testing.T, opts envOptions) *env {
 			return tailnet.Snapshot{Status: &st}
 		},
 		// On the tailnet, the hub machine answers at its tailnet address.
-		Dial:      sshtest.Route(map[string]*sshtest.Server{laptopIP.String(): e.laptop, roostIP.String(): e.hub, vpsIP.String(): e.hub}),
+		Dial:      sshtest.Route(map[string]*sshtest.Server{laptopIP.String(): e.laptop, bieldIP.String(): e.hub, vpsIP.String(): e.hub}),
 		DialLocal: sshtest.Route(map[string]*sshtest.Server{"127.0.0.1": e.hub}),
 		HostMode:  opts.hostMode,
 	})
@@ -369,7 +369,7 @@ func TestManager_trustHostKey(t *testing.T) {
 			t.Fatalf("offered key = %s, want %s", a.OfferedKey, seen)
 		}
 
-		// It offers another key by the time Roost sees it again, so what the
+		// It offers another key by the time Bield sees it again, so what the
 		// admin looked at isn't what they'd trust.
 		other := gossh.FingerprintSHA256(e.laptop.ChangeHostKey())
 		if _, err := e.m.Exec(t.Context(), "laptop", "true"); !errors.Is(err, ssh.ErrHostKeyChange) {
@@ -408,7 +408,7 @@ func TestManager_trustHostKey(t *testing.T) {
 }
 
 // Trusting a key pins the one an admin looked at, not whichever the machine
-// offers by the time Roost logs in again, which Roost then refuses.
+// offers by the time Bield logs in again, which Bield then refuses.
 func TestManager_trustHostKey_pinsTheKeyThatWasSeen(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newEnv(t, envOptions{})
@@ -422,7 +422,7 @@ func TestManager_trustHostKey_pinsTheKeyThatWasSeen(t *testing.T) {
 		if _, err := e.m.Exec(t.Context(), "laptop", "true"); !errors.Is(err, ssh.ErrHostKeyChange) {
 			t.Fatalf("Exec = %v, want ErrHostKeyChange", err)
 		}
-		// Another machine starts answering, and Roost hasn't seen its key.
+		// Another machine starts answering, and Bield hasn't seen its key.
 		later := gossh.FingerprintSHA256(e.laptop.ChangeHostKey())
 
 		a, err := e.m.TrustHostKey(t.Context(), "laptop", seen)
@@ -479,7 +479,7 @@ func TestManager_connectErrors(t *testing.T) {
 		{
 			name: "key not authorized",
 			opts: envOptions{noRun: true, unauthorized: true},
-			want: "Roost's key isn't in the authorized_keys of alice on laptop",
+			want: "Bield's key isn't in the authorized_keys of alice on laptop",
 		},
 		{
 			name:   "nothing listening",
@@ -580,18 +580,18 @@ func TestManager_hub(t *testing.T) {
 		name     string
 		opts     envOptions
 		deviceID string
-		// refuse makes the loopback address refuse, so Roost tries the
+		// refuse makes the loopback address refuse, so Bield tries the
 		// machine's tailnet address.
 		refuse bool
 		want   []string
 	}{
-		{name: "host mode", opts: envOptions{hostMode: true}, deviceID: "roost", want: []string{"127.0.0.1:22"}},
+		{name: "host mode", opts: envOptions{hostMode: true}, deviceID: "bield", want: []string{"127.0.0.1:22"}},
 		{
-			name: "host mode, sshd on the tailnet only", opts: envOptions{hostMode: true}, deviceID: "roost", refuse: true,
+			name: "host mode, sshd on the tailnet only", opts: envOptions{hostMode: true}, deviceID: "bield", refuse: true,
 			want: []string{"127.0.0.1:22", "100.64.0.1:22"},
 		},
-		{name: "embedded", deviceID: "roost", want: []string{"127.0.0.1:22"}},
-		{name: "embedded, refused", deviceID: "roost", refuse: true, want: []string{"127.0.0.1:22"}},
+		{name: "embedded", deviceID: "bield", want: []string{"127.0.0.1:22"}},
+		{name: "embedded, refused", deviceID: "bield", refuse: true, want: []string{"127.0.0.1:22"}},
 		{
 			name: "embedded, the machine's node", opts: envOptions{sameMachine: true}, deviceID: "vps", refuse: true,
 			want: []string{"127.0.0.1:22", "100.64.0.3:22"},
@@ -645,7 +645,7 @@ func TestManager_hub(t *testing.T) {
 					t.Fatal(err)
 				}
 				if !setup.Hub || !strings.HasPrefix(setup.AuthorizedKey, `from="127.0.0.1,::1,100.64.0.1",`) {
-					t.Errorf("setup = %+v, want the hub's, from the loopback and Roost's addresses", setup)
+					t.Errorf("setup = %+v, want the hub's, from the loopback and Bield's addresses", setup)
 				}
 			})
 		})
@@ -675,8 +675,8 @@ func TestManager_setup(t *testing.T) {
 		if s.Hub || s.AuthorizedKey != want || s.Command != ssh.SetupCommand(want) {
 			t.Errorf("Setup = %+v, want %q for a peer", s, want)
 		}
-		if !strings.HasSuffix(key.PublicKey(), " roost@roost") {
-			t.Errorf("key = %q, want it named after Roost's node", key.PublicKey())
+		if !strings.HasSuffix(key.PublicKey(), " bield@bield") {
+			t.Errorf("key = %q, want it named after Bield's node", key.PublicKey())
 		}
 		if _, err := e.m.Setup("phone"); !errors.Is(err, ssh.ErrUnsupported) {
 			t.Errorf("Setup on a phone = %v, want ErrUnsupported", err)
@@ -782,7 +782,7 @@ func TestManager_run(t *testing.T) {
 	})
 }
 
-// A terminal that logs in to a machine whose last check failed says Roost
+// A terminal that logs in to a machine whose last check failed says Bield
 // can log in, but not what the machine offers, so the machine is checked
 // again soon, not an hour later.
 func TestManager_checksAfterALoginThatMendsAFailure(t *testing.T) {

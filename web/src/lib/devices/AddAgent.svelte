@@ -2,7 +2,7 @@
 	A button that makes a new command to install the agent, and shows it in a
 	dialog until a machine enrolls with it and reports. With `device`, the
 	command is for that device: to add the agent, or to enroll it again,
-	which also updates it. If Roost can log in to the device over SSH, the
+	which also updates it. If Bield can log in to the device over SSH, the
 	dialog offers to run the install there. Only admins can make one.
 -->
 <script lang="ts">
@@ -48,7 +48,7 @@
 	/** Counts the codes asked for, so an answer that comes late is dropped. */
 	let asked = 0;
 
-	// Roost can run the install on a device it's logged in to.
+	// Bield can run the install on a device it's logged in to.
 	const overSSH = $derived(device?.ssh?.state === 'ok' ? device.ssh : null);
 
 	async function installOverSSH() {
@@ -108,7 +108,7 @@
 	const expired = $derived(code !== null && now >= Date.parse(code.expiresAt));
 	/**
 	 * The device that enrolled with the code, once one has: `device` if it
-	 * was, since the machine Roost runs on can show up as two devices.
+	 * was, since the machine Bield runs on can show up as two devices.
 	 */
 	const enrolled = $derived.by(() => {
 		const isNew = (d: Device) => !!d.agent?.enrolledAt && Date.parse(d.agent.enrolledAt) >= madeAt;
@@ -138,7 +138,7 @@
 		{#if device && overSSH}
 			<div class="mb-4 space-y-2 rounded-lg border border-line bg-canvas p-3">
 				<p class="text-[13px] text-fg-muted">
-					Roost can log in to {device.name} as
+					Bield can log in to {device.name} as
 					<span class="font-mono text-fg">{overSSH.user}</span>
 					{#if overSSH.method === 'tailscale'}with Tailscale SSH{/if}
 					and install it there, with no command to copy.

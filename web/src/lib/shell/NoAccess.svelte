@@ -1,5 +1,5 @@
 <!--
-	What someone sees instead of the app when they can't view Roost, or when
+	What someone sees instead of the app when they can't view Bield, or when
 	the hub didn't say who they are.
 -->
 <script lang="ts">
@@ -13,14 +13,14 @@
 	const me = $derived(page.data.me);
 	const command = $derived(me ? addViewerCommand(me) : undefined);
 	/**
-	 * Whether asking again could help: the hub didn't answer, Roost couldn't
+	 * Whether asking again could help: the hub didn't answer, Bield couldn't
 	 * tell who they are or what their role is, or an admin can still add them.
 	 */
 	const canRetry = $derived(!me || me.signedIn || lookupFailed(me));
 </script>
 
 <svelte:head>
-	<title>Roost</title>
+	<title>Bield</title>
 </svelte:head>
 
 <main class="grid min-h-dvh place-items-center p-6">
@@ -31,13 +31,13 @@
 			>
 				<Logo class="size-4" />
 			</span>
-			<h1 class="text-[16px] font-semibold tracking-[-0.01em]">Roost</h1>
+			<h1 class="text-[16px] font-semibold tracking-[-0.01em]">Bield</h1>
 		</div>
 		{#if me}
 			<p class="mt-4 text-[14px] text-fg-muted">{whyCantView(me)}</p>
 			{#if command}
 				<p class="mt-4 mb-2 text-[13px] text-fg-subtle">
-					They can run this on the machine Roost runs on:
+					They can run this on the machine Bield runs on:
 				</p>
 				<CodeLine {command} />
 			{/if}

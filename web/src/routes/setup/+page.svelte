@@ -1,5 +1,5 @@
 <!--
-	The first-run setup: whether Roost sees what it needs to, what it's called
+	The first-run setup: whether Bield sees what it needs to, what it's called
 	and who the admins are, and the optional rest. Admins see it on their first
 	visit, every step can be skipped, and Settings opens it again.
 -->
@@ -35,7 +35,7 @@
 	let name = $state('');
 	let busy = $state(false);
 
-	// Roost's name and how it joins the tailnet, once.
+	// Bield's name and how it joins the tailnet, once.
 	$effect(() => {
 		let current = true;
 		getSettings()
@@ -53,7 +53,7 @@
 		};
 	});
 
-	const nameProblem = $derived(name.trim() === '' ? 'Give Roost a name.' : '');
+	const nameProblem = $derived(name.trim() === '' ? 'Give Bield a name.' : '');
 
 	/** Saves the name if it changed. It reports whether the setup can go on. */
 	async function saveName(): Promise<boolean> {
@@ -65,7 +65,7 @@
 			return false;
 		}
 		try {
-			view = await changeSettings({ general: { name: trimmed } }, 'Named Roost');
+			view = await changeSettings({ general: { name: trimmed } }, 'Named Bield');
 			return true;
 		} catch {
 			// changeSettings showed the error.
@@ -107,7 +107,7 @@
 
 <AdminOnly>
 	<PageHeader
-		title="Set up Roost"
+		title="Set up Bield"
 		description="A few checks and choices. Skip any step, and Settings brings this back."
 	>
 		{#snippet actions()}
@@ -178,7 +178,7 @@
 	</div>
 	{#snippet fallback()}
 		<Card>
-			<EmptyState title="Only admins can set up Roost">
+			<EmptyState title="Only admins can set up Bield">
 				Ask an admin to open this page, or to add you as one.
 			</EmptyState>
 		</Card>

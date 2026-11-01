@@ -7,7 +7,7 @@ import "time"
 // the server can't drift.
 //
 // A field that can carry a secret, such as a container's environment or a
-// process's command line, is tagged roost:"secret", and only admins get its
+// process's command line, is tagged bield:"secret", and only admins get its
 // value. Everyone else gets the field's zero value. Say so in its comment.
 
 // Health is the response to GET /api/health.
@@ -23,7 +23,7 @@ type ErrorBody struct {
 	Error string `json:"error"`
 }
 
-// Me is the response to GET /api/me: who Roost thinks is asking.
+// Me is the response to GET /api/me: who Bield thinks is asking.
 type Me struct {
 	// SignedIn is false for an anonymous caller.
 	SignedIn bool `json:"signedIn"`
@@ -33,11 +33,11 @@ type Me struct {
 	Name string `json:"name,omitempty"`
 	// Device is the MagicDNS name of the device the request came from.
 	Device string `json:"device,omitempty"`
-	// Role is what the caller may do. It's empty if they can't view Roost:
+	// Role is what the caller may do. It's empty if they can't view Bield:
 	// anonymous callers can't, and neither can signed-in callers without a
 	// role unless anyone on the tailnet can view it.
 	Role Role `json:"role,omitempty"`
-	// Reason says why an anonymous caller isn't signed in, or why Roost
+	// Reason says why an anonymous caller isn't signed in, or why Bield
 	// doesn't know a signed-in caller's role: one of the Reason constants.
 	Reason string `json:"reason,omitempty"`
 }
@@ -51,24 +51,24 @@ const (
 	ReasonTaggedDevice = "tagged-device"
 	// ReasonNoUser means Tailscale named the device but no user.
 	ReasonNoUser = "no-user"
-	// ReasonRoostMachine means the request came from Roost's own node, which
-	// in host mode is the machine Roost runs on. Any process there could
+	// ReasonBieldMachine means the request came from Bield's own node, which
+	// in host mode is the machine Bield runs on. Any process there could
 	// send it, so it doesn't count as the machine's owner.
-	ReasonRoostMachine = "roost-machine"
-	// ReasonWhoIsFailed means Roost couldn't ask Tailscale.
+	ReasonBieldMachine = "bield-machine"
+	// ReasonWhoIsFailed means Bield couldn't ask Tailscale.
 	ReasonWhoIsFailed = "whois-failed"
-	// ReasonRoleLookupFailed means the caller is signed in, but Roost
+	// ReasonRoleLookupFailed means the caller is signed in, but Bield
 	// couldn't look up their role, so for now they have none.
 	ReasonRoleLookupFailed = "role-lookup-failed"
 )
 
-// Role is what a signed-in caller may do in Roost.
+// Role is what a signed-in caller may do in Bield.
 type Role string
 
 // The roles a caller can have.
 const (
 	// RoleAdmin can do everything: open terminals, change files, control
-	// Docker and change Roost's settings, including who has a role.
+	// Docker and change Bield's settings, including who has a role.
 	RoleAdmin Role = "admin"
 	// RoleViewer can see the read-only dashboard, without logs, files,
 	// process command lines or other secrets.
@@ -76,7 +76,7 @@ const (
 )
 
 // Access is the response to GET /api/access and to the requests that change
-// it: who has a role in Roost, and who else can view it. Only admins can see
+// it: who has a role in Bield, and who else can view it. Only admins can see
 // or change it.
 type Access struct {
 	WhoCanView WhoCanView `json:"whoCanView"`
@@ -84,19 +84,19 @@ type Access struct {
 	Users []User `json:"users"`
 }
 
-// WhoCanView is who can view Roost, other than the users with a role.
+// WhoCanView is who can view Bield, other than the users with a role.
 type WhoCanView string
 
-// Who can view Roost.
+// Who can view Bield.
 const (
 	// WhoCanViewTailnet makes anyone who signs in from the tailnet a viewer,
 	// unless they have a role of their own.
 	WhoCanViewTailnet WhoCanView = "tailnet"
-	// WhoCanViewListed lets only the users with a role view Roost.
+	// WhoCanViewListed lets only the users with a role view Bield.
 	WhoCanViewListed WhoCanView = "listed"
 )
 
-// A User is a Tailscale login with a role in Roost.
+// A User is a Tailscale login with a role in Bield.
 type User struct {
 	Login string `json:"login"`
 	Role  Role   `json:"role"`
@@ -106,40 +106,40 @@ type User struct {
 
 // ChangeAccess is the body of PATCH /api/access.
 type ChangeAccess struct {
-	// WhoCanView, if it's set, changes who can view Roost.
+	// WhoCanView, if it's set, changes who can view Bield.
 	WhoCanView WhoCanView `json:"whoCanView,omitempty"`
 }
 
 // SetRole is the body of PUT /api/access/users/{login}, which gives a
-// Tailscale login a role. DELETE takes the role away. Roost always keeps an
+// Tailscale login a role. DELETE takes the role away. Bield always keeps an
 // admin, so the last one can't be made a viewer or removed.
 type SetRole struct {
 	Role Role `json:"role"`
 }
 
-// Settings are what admins can change about how Roost works. GET
-// /api/settings has them, and PATCH changes them. They're live: Roost uses a
+// Settings are what admins can change about how Bield works. GET
+// /api/settings has them, and PATCH changes them. They're live: Bield uses a
 // change as soon as it's saved.
 type Settings struct {
 	General    GeneralSettings `json:"general"`
 	Thresholds Thresholds      `json:"thresholds"`
-	// Rules say which alerts Roost raises.
+	// Rules say which alerts Bield raises.
 	Rules AlertRules `json:"rules"`
-	// WatchedUnits are the systemd units on the machine Roost runs on that
+	// WatchedUnits are the systemd units on the machine Bield runs on that
 	// it watches, such as "ssh.service", or "user:app.service" for a unit of
-	// the user Roost runs as. Roost always shows failed units too.
+	// the user Bield runs as. Bield always shows failed units too.
 	WatchedUnits  []string             `json:"watchedUnits"`
 	Retention     RetentionSettings    `json:"retention"`
 	Notifications NotificationSettings `json:"notifications"`
 }
 
-// GeneralSettings are how Roost presents itself.
+// GeneralSettings are how Bield presents itself.
 type GeneralSettings struct {
 	// Name is shown in the app's header and in the title of every page.
 	Name string `json:"name"`
-	// PublicURL is the address that people and agents reach Roost at, such
-	// as https://roost.example.ts.net, if it isn't the one Roost knows. It
-	// is used in the links and commands Roost writes, such as the agent's
+	// PublicURL is the address that people and agents reach Bield at, such
+	// as https://bield.example.ts.net, if it isn't the one Bield knows. It
+	// is used in the links and commands Bield writes, such as the agent's
 	// install command. It's empty to use the address of the request.
 	PublicURL string `json:"publicUrl"`
 	// SetupDone is whether an admin finished or skipped the first-run setup,
@@ -170,7 +170,7 @@ type Thresholds struct {
 	CheckFailures int `json:"checkFailures"`
 }
 
-// AlertRules say which alerts Roost raises. A device that a rule is off for
+// AlertRules say which alerts Bield raises. A device that a rule is off for
 // isn't flagged for it on the dashboard either, and turning a rule off
 // resolves its open alerts.
 type AlertRules struct {
@@ -186,18 +186,18 @@ type AlertRules struct {
 	CPU    bool `json:"cpu"`
 	// Checks is a check that keeps failing.
 	Checks bool `json:"checks"`
-	// Containers is a Docker container on Roost's machine that stopped
+	// Containers is a Docker container on Bield's machine that stopped
 	// unexpectedly.
 	Containers bool `json:"containers"`
 	// Units is a systemd unit that failed, or a watched one that isn't
 	// running.
 	Units bool `json:"units"`
-	// Collectors is one of Roost's own jobs that keeps failing.
+	// Collectors is one of Bield's own jobs that keeps failing.
 	Collectors bool `json:"collectors"`
 }
 
-// RetentionSettings are how many days Roost keeps each kind of history.
-// Roost deletes what is older within the hour.
+// RetentionSettings are how many days Bield keeps each kind of history.
+// Bield deletes what is older within the hour.
 type RetentionSettings struct {
 	// ActivityDays is how long the activity log and resolved alerts last.
 	ActivityDays int `json:"activityDays"`
@@ -210,18 +210,18 @@ type RetentionSettings struct {
 	ChecksDays int `json:"checksDays"`
 }
 
-// NotificationSettings are when Roost sends notifications. Which alerts each
+// NotificationSettings are when Bield sends notifications. Which alerts each
 // channel hears about is up to the channel.
 type NotificationSettings struct {
 	// RemindHours is how many hours after the last notification about an
-	// alert Roost sends another, while the alert is open and nobody has
+	// alert Bield sends another, while the alert is open and nobody has
 	// acknowledged or snoozed it. 0 sends none.
 	RemindHours int `json:"remindHours"`
 	// Quiet holds notifications back at night.
 	Quiet QuietHours `json:"quiet"`
 }
 
-// QuietHours are the hours when Roost holds notifications back. Those that
+// QuietHours are the hours when Bield holds notifications back. Those that
 // are still due when the hours end are sent then.
 type QuietHours struct {
 	Enabled bool `json:"enabled"`
@@ -230,7 +230,7 @@ type QuietHours struct {
 	Start string `json:"start"`
 	End   string `json:"end"`
 	// Timezone is the name of the time zone the times are in, such as
-	// "Europe/Berlin". It's empty for the one Roost's machine is in.
+	// "Europe/Berlin". It's empty for the one Bield's machine is in.
 	Timezone string `json:"timezone"`
 	// AllowCritical sends notifications about critical alerts during the
 	// quiet hours too.
@@ -241,22 +241,22 @@ type QuietHours struct {
 // changes them. Only admins can see or change them.
 type SettingsView struct {
 	Settings Settings `json:"settings"`
-	// Defaults are the settings of a new Roost, so the app can say what
+	// Defaults are the settings of a new Bield, so the app can say what
 	// resetting one would do.
 	Defaults Settings `json:"defaults"`
-	// Tailscale is how Roost joins the tailnet. It's set when Roost starts.
+	// Tailscale is how Bield joins the tailnet. It's set when Bield starts.
 	Tailscale TailscaleMode `json:"tailscale"`
 }
 
-// TailscaleMode is how Roost joins the tailnet.
+// TailscaleMode is how Bield joins the tailnet.
 type TailscaleMode string
 
-// The ways Roost can join the tailnet.
+// The ways Bield can join the tailnet.
 const (
-	// TailscaleModeEmbedded runs a Tailscale node inside Roost, so Roost is
+	// TailscaleModeEmbedded runs a Tailscale node inside Bield, so Bield is
 	// its own machine on the tailnet.
 	TailscaleModeEmbedded TailscaleMode = "embedded"
-	// TailscaleModeHost uses the Tailscale already running on Roost's
+	// TailscaleModeHost uses the Tailscale already running on Bield's
 	// machine.
 	TailscaleModeHost TailscaleMode = "host"
 )
@@ -334,10 +334,10 @@ type ChangeQuiet struct {
 }
 
 // InstalledServices is the response to GET /api/settings/units: the services
-// on the machine Roost runs on, to pick the ones to watch from. Only admins
+// on the machine Bield runs on, to pick the ones to watch from. Only admins
 // can see it.
 type InstalledServices struct {
-	// Available is false if Roost can't ask systemd on its machine, which
+	// Available is false if Bield can't ask systemd on its machine, which
 	// is the case on a machine that doesn't run it.
 	Available bool `json:"available"`
 	// Services are the system's first, by name.
@@ -347,7 +347,7 @@ type InstalledServices struct {
 // InstalledService is a systemd service that the machine has.
 type InstalledService struct {
 	// Key is how the settings name it: its name, or "user:" and its name for
-	// a unit of the user Roost runs as.
+	// a unit of the user Bield runs as.
 	Key         string    `json:"key"`
 	Name        string    `json:"name"`
 	Scope       UnitScope `json:"scope"`
@@ -358,7 +358,7 @@ type InstalledService struct {
 }
 
 // Snapshot is the data of each "snapshot" event on GET /api/stream: what
-// Roost knows at one moment. The hub builds one each time something changes,
+// Bield knows at one moment. The hub builds one each time something changes,
 // at most once a second, and at least every few seconds. The stream sends the
 // latest as soon as it opens, then each new one, and the web app keeps the
 // latest.
@@ -366,10 +366,10 @@ type Snapshot struct {
 	// GeneratedAt is when the hub made the snapshot.
 	GeneratedAt time.Time `json:"generatedAt"`
 	Hub         Hub       `json:"hub"`
-	// Collectors are the jobs that gather what Roost knows, in a fixed order.
+	// Collectors are the jobs that gather what Bield knows, in a fixed order.
 	Collectors []Collector `json:"collectors"`
 	Uplink     Uplink      `json:"uplink"`
-	// Devices are the nodes on the tailnet: Roost's own first, then servers,
+	// Devices are the nodes on the tailnet: Bield's own first, then servers,
 	// laptops, desktops, tablets, phones and others, each by name.
 	Devices []Device `json:"devices"`
 	// Checks are the checks admins set up, by group and name, and then a
@@ -380,10 +380,10 @@ type Snapshot struct {
 	// Alerts are the alerts that are open, acknowledged or snoozed, the most
 	// severe first. GET /api/alerts has the resolved ones.
 	Alerts []Alert `json:"alerts"`
-	// Containers are the Docker containers on the machine Roost runs on, by
+	// Containers are the Docker containers on the machine Bield runs on, by
 	// name. GET /api/devices/{id}/docker/containers has any machine's.
 	Containers []Container `json:"containers"`
-	// Units are the systemd units Roost watches on the machine it runs on,
+	// Units are the systemd units Bield watches on the machine it runs on,
 	// and the ones that failed, the system's first, by name.
 	Units []Unit `json:"units"`
 	// LastEventID is the ID of the activity log's latest event, so the app
@@ -391,9 +391,9 @@ type Snapshot struct {
 	LastEventID int64 `json:"lastEventId"`
 }
 
-// Hub is the Roost server itself.
+// Hub is the Bield server itself.
 type Hub struct {
-	// Name is what Roost is called, which the app shows in its header. Admins
+	// Name is what Bield is called, which the app shows in its header. Admins
 	// can change it in the settings.
 	Name string `json:"name"`
 	// SetupDone is whether an admin finished or skipped the first-run setup.
@@ -401,25 +401,25 @@ type Hub struct {
 	SetupDone bool `json:"setupDone"`
 	// Version is the hub's build version.
 	Version string `json:"version"`
-	// DNSName is the MagicDNS name of Roost's node, such as
-	// roost.example.ts.net.
+	// DNSName is the MagicDNS name of Bield's node, such as
+	// bield.example.ts.net.
 	DNSName string `json:"dnsName"`
 	// Tailnet is the tailnet's name, such as example.com. Only admins get
 	// it: a personal tailnet is named after its owner's email address.
-	Tailnet string `json:"tailnet" roost:"secret"`
+	Tailnet string `json:"tailnet" bield:"secret"`
 	// ControlURL is the control server the tailnet is on when it isn't
 	// Tailscale's, such as a Headscale server's, and "" when it is. Only
 	// admins get it, like the tailnet's name.
-	ControlURL string `json:"controlUrl" roost:"secret"`
+	ControlURL string `json:"controlUrl" bield:"secret"`
 	// Thresholds are when a device needs attention, unless it has some of
 	// its own, as the settings have them now.
 	Thresholds Thresholds `json:"thresholds"`
-	// Demo is whether this Roost runs a demo, whose tailnet is made up. It
+	// Demo is whether this Bield runs a demo, whose tailnet is made up. It
 	// can't open terminals or files, or change Docker, and the app says so.
 	Demo bool `json:"demo"`
 }
 
-// A Collector is a job that gathers what Roost knows, such as polling
+// A Collector is a job that gathers what Bield knows, such as polling
 // Tailscale for the tailnet's status.
 type Collector struct {
 	// Name says what the collector gathers, such as "Tailscale status".
@@ -427,8 +427,8 @@ type Collector struct {
 	State CollectorState `json:"state"`
 	// Error is why the latest run failed, while State is
 	// CollectorStateFailing. Only admins get it, since it can name paths and
-	// addresses on Roost's machine.
-	Error string `json:"error,omitempty" roost:"secret"`
+	// addresses on Bield's machine.
+	Error string `json:"error,omitempty" bield:"secret"`
 	// LastOK is when a run last worked, if one has.
 	LastOK *time.Time `json:"lastOk,omitempty"`
 }
@@ -446,7 +446,7 @@ const (
 	CollectorStateWaiting CollectorState = "waiting"
 )
 
-// Uplink is how Roost's machine reaches the internet and Tailscale's DERP
+// Uplink is how Bield's machine reaches the internet and Tailscale's DERP
 // relays, from Tailscale's latest connectivity check.
 type Uplink struct {
 	// CheckedAt is when connectivity was last checked, if it has been. The
@@ -457,9 +457,9 @@ type Uplink struct {
 	// IPv4 and IPv6 report whether the internet answered over each.
 	IPv4 bool `json:"ipv4"`
 	IPv6 bool `json:"ipv6"`
-	// PublicIP is the address the internet sees Roost's machine at, IPv4 if
+	// PublicIP is the address the internet sees Bield's machine at, IPv4 if
 	// it has one. Only admins get it.
-	PublicIP string `json:"publicIp,omitempty" roost:"secret"`
+	PublicIP string `json:"publicIp,omitempty" bield:"secret"`
 	// DERP is the relay region with the lowest latency, if any answered.
 	DERP *DERPRegion `json:"derp,omitempty"`
 }
@@ -489,7 +489,7 @@ type Device struct {
 	// "linux" or "macOS".
 	OS string `json:"os"`
 	// Kind is what sort of machine it is: the kind an admin set, or else
-	// Roost's guess.
+	// Bield's guess.
 	Kind DeviceKind `json:"kind"`
 	IPs  []string   `json:"ips"`
 	// Online reports whether the node is connected to Tailscale.
@@ -497,15 +497,15 @@ type Device struct {
 	// LastSeen is when an offline node was last connected, if Tailscale
 	// knows.
 	LastSeen *time.Time `json:"lastSeen,omitempty"`
-	// Self marks Roost's own node.
+	// Self marks Bield's own node.
 	Self   bool   `json:"self,omitempty"`
 	Status Status `json:"status"`
 	// StatusReason says why the device has its status, such as
 	// "Disk 91% full".
 	StatusReason string `json:"statusReason"`
 	Path         Path   `json:"path"`
-	// RxBytes and TxBytes count the traffic between Roost's node and this
-	// one since Roost's node started.
+	// RxBytes and TxBytes count the traffic between Bield's node and this
+	// one since Bield's node started.
 	RxBytes int64 `json:"rxBytes"`
 	TxBytes int64 `json:"txBytes"`
 	// KeyExpiry is when the node's Tailscale key expires, unless expiry is
@@ -513,41 +513,41 @@ type Device struct {
 	KeyExpiry *time.Time `json:"keyExpiry,omitempty"`
 	// Created is when the node joined the tailnet.
 	Created *time.Time `json:"created,omitempty"`
-	// ExitNode reports whether Roost's traffic to the internet goes through
+	// ExitNode reports whether Bield's traffic to the internet goes through
 	// this node.
 	ExitNode bool `json:"exitNode,omitempty"`
-	// MeasuredBy says where Metrics and Info come from. It's empty if Roost
+	// MeasuredBy says where Metrics and Info come from. It's empty if Bield
 	// doesn't measure the device.
 	MeasuredBy MeasuredBy `json:"measuredBy,omitempty"`
-	// Metrics are the device's latest metrics, if Roost measures it. Roost
+	// Metrics are the device's latest metrics, if Bield measures it. Bield
 	// measures its own machine on Linux. Other machines need the agent.
 	Metrics *Metrics `json:"metrics,omitempty"`
-	// Info is what the machine is, if Roost measures it.
+	// Info is what the machine is, if Bield measures it.
 	Info *DeviceInfo `json:"info,omitempty"`
-	// Agent is the device's agent, if one enrolled or reported. Roost
+	// Agent is the device's agent, if one enrolled or reported. Bield
 	// measures the device with it once it reports.
 	Agent    *Agent         `json:"agent,omitempty"`
 	Settings DeviceSettings `json:"settings"`
-	// SSH is how Roost logs in to the device, if it can: Linux, macOS and
+	// SSH is how Bield logs in to the device, if it can: Linux, macOS and
 	// FreeBSD machines. Only admins get it.
-	SSH *DeviceSSH `json:"ssh,omitempty" roost:"secret"`
-	// TailscaleSSH reports whether the device runs Tailscale SSH, which Roost
+	SSH *DeviceSSH `json:"ssh,omitempty" bield:"secret"`
+	// TailscaleSSH reports whether the device runs Tailscale SSH, which Bield
 	// can log in to without a key, if the tailnet policy lets it.
 	TailscaleSSH bool `json:"tailscaleSsh,omitempty"`
-	// Docker reports whether Roost can read the Docker on the device: on the
-	// machine Roost runs on, if it has a Docker socket, and on another, if
-	// Roost has SSH access and found one there. Viewers get it too, since
-	// they can see Docker's overview, but not how Roost logs in.
+	// Docker reports whether Bield can read the Docker on the device: on the
+	// machine Bield runs on, if it has a Docker socket, and on another, if
+	// Bield has SSH access and found one there. Viewers get it too, since
+	// they can see Docker's overview, but not how Bield logs in.
 	Docker bool `json:"docker"`
 }
 
-// MeasuredBy says how Roost measures a device.
+// MeasuredBy says how Bield measures a device.
 type MeasuredBy string
 
-// The ways Roost measures a device.
+// The ways Bield measures a device.
 const (
-	// MeasuredByHub means the device is the machine Roost runs on, which
-	// Roost measures itself.
+	// MeasuredByHub means the device is the machine Bield runs on, which
+	// Bield measures itself.
 	MeasuredByHub MeasuredBy = "hub"
 	// MeasuredByAgent means the device's agent reports its metrics.
 	MeasuredByAgent MeasuredBy = "agent"
@@ -565,19 +565,19 @@ type Agent struct {
 	// Stale reports whether the device is online, but the agent stopped
 	// sending heartbeats.
 	Stale bool `json:"stale,omitempty"`
-	// Outdated reports whether the agent is older than the one Roost serves.
+	// Outdated reports whether the agent is older than the one Bield serves.
 	// A new install command updates it.
 	Outdated bool `json:"outdated,omitempty"`
 	// EnrolledAt is when the agent enrolled. It's missing if it isn't
 	// enrolled, such as an agent from before enrollment, whose heartbeats
-	// Roost refuses.
+	// Bield refuses.
 	EnrolledAt *time.Time `json:"enrolledAt,omitempty"`
 	// EnrolledBy is the login of the admin who made the code it enrolled
 	// with.
-	EnrolledBy string `json:"enrolledBy,omitempty" roost:"secret"`
+	EnrolledBy string `json:"enrolledBy,omitempty" bield:"secret"`
 }
 
-// Status is the state of something Roost watches, such as a device.
+// Status is the state of something Bield watches, such as a device.
 type Status string
 
 // The states of a Status.
@@ -603,18 +603,18 @@ const (
 	DeviceKindOther   DeviceKind = "other"
 )
 
-// Path is how traffic gets from Roost's node to a device.
+// Path is how traffic gets from Bield's node to a device.
 type Path struct {
 	Kind PathKind `json:"kind"`
 	// Endpoint is the device's public ip:port on a direct path. Only admins
 	// get it, since it says where the device is on the internet.
-	Endpoint string `json:"endpoint,omitempty" roost:"secret"`
+	Endpoint string `json:"endpoint,omitempty" bield:"secret"`
 	// DERP is the code of the DERP region that relays traffic, on a DERP
 	// path.
 	DERP string `json:"derp,omitempty"`
 	// PeerRelay is the ip:port:vni of the node that relays traffic, on a
 	// peer relay path. Only admins get it.
-	PeerRelay string `json:"peerRelay,omitempty" roost:"secret"`
+	PeerRelay string `json:"peerRelay,omitempty" bield:"secret"`
 	// HomeDERP is the code of the device's home DERP region, such as "fra".
 	HomeDERP string `json:"homeDerp,omitempty"`
 	// RTTMs is the round trip of the latest ping in milliseconds, if that
@@ -627,12 +627,12 @@ type Path struct {
 	Unanswered bool `json:"unanswered,omitempty"`
 }
 
-// PathKind says how traffic gets from Roost's node to a device.
+// PathKind says how traffic gets from Bield's node to a device.
 type PathKind string
 
 // The kinds of Path.
 const (
-	// PathKindSelf is Roost's own node.
+	// PathKindSelf is Bield's own node.
 	PathKindSelf PathKind = "self"
 	// PathKindDirect is a peer-to-peer WireGuard connection.
 	PathKindDirect PathKind = "direct"
@@ -691,7 +691,7 @@ type DeviceInfo struct {
 	OSVersion string `json:"osVersion,omitempty"`
 	// Kernel is the kernel's release, such as 6.12.48+deb13-amd64. Only
 	// admins get it, since it says which known bugs the machine has.
-	Kernel string `json:"kernel,omitempty" roost:"secret"`
+	Kernel string `json:"kernel,omitempty" bield:"secret"`
 	// Model is the machine's maker and product, if it says.
 	Model string `json:"model,omitempty"`
 	// Arch is the CPU architecture, such as x86_64.
@@ -706,7 +706,7 @@ type DeviceSettings struct {
 	// it's empty.
 	DisplayName string `json:"displayName"`
 	// Kind is what sort of machine an admin says the device is. If it's
-	// empty, Roost guesses.
+	// empty, Bield guesses.
 	Kind DeviceKind `json:"kind,omitempty"`
 	// AlertOffline says whether to raise an alert when the device goes
 	// offline. It's on by default, except for phones and tablets, which
@@ -753,7 +753,7 @@ type DeviceHistory struct {
 	// Step is the time each point sums up, in milliseconds.
 	Step int64 `json:"step"`
 	// CPU is the average percentage of time the CPUs were busy, and Memory
-	// the average percentage of memory used, for each step in which Roost
+	// the average percentage of memory used, for each step in which Bield
 	// measured the device. A value is null if the device didn't report it.
 	CPU    []Point `json:"cpu"`
 	Memory []Point `json:"memory"`
@@ -761,7 +761,7 @@ type DeviceHistory struct {
 	// for the same steps.
 	NetRx []Point `json:"netRx"`
 	NetTx []Point `json:"netTx"`
-	// RTT is the average round trip from Roost's node in milliseconds, for
+	// RTT is the average round trip from Bield's node in milliseconds, for
 	// each step in which the device was pinged. The value is null if no
 	// ping in the step got a reply.
 	RTT []Point `json:"rtt"`
@@ -777,7 +777,7 @@ type Point struct {
 
 // AgentSetup is the response to GET /api/agent. Only admins can see it.
 type AgentSetup struct {
-	// Version is the version of the agent that Roost serves.
+	// Version is the version of the agent that Bield serves.
 	Version string `json:"version"`
 	// UninstallCommand removes the agent from the machine it runs on, for
 	// the user who runs it.
@@ -790,7 +790,7 @@ type AgentSetup struct {
 // the first that uses it. That machine can use it again until it expires,
 // such as after a failed install, unless an admin revokes its agent.
 type AgentCode struct {
-	InstallCommand string `json:"installCommand" roost:"secret"`
+	InstallCommand string `json:"installCommand" bield:"secret"`
 	// CreatedAt and ExpiresAt are by the hub's clock.
 	CreatedAt time.Time `json:"createdAt"`
 	ExpiresAt time.Time `json:"expiresAt"`
@@ -807,7 +807,7 @@ type AgentRun struct {
 
 // AgentSecret is the response to POST /api/agent/enroll: the secret the
 // agent sends with each heartbeat from then on. It's not tagged
-// roost:"secret", since only the machine that enrolled gets it.
+// bield:"secret", since only the machine that enrolled gets it.
 type AgentSecret struct {
 	Secret string `json:"secret"`
 }
@@ -816,7 +816,7 @@ type AgentSecret struct {
 // device's CPU and memory now. With ?at= and a time in Unix milliseconds,
 // it's the stored minute nearest that time instead.
 type DeviceUsage struct {
-	// Sample is missing if Roost has none.
+	// Sample is missing if Bield has none.
 	Sample *UsageSample `json:"sample,omitempty"`
 	// Interval is how often the device sends a new sample, in seconds.
 	Interval int `json:"interval"`
@@ -886,7 +886,7 @@ type UsageProc struct {
 	User string `json:"user"`
 	// Cmd is the command line. Only admins get it, since command lines can
 	// hold passwords and tokens.
-	Cmd string `json:"cmd" roost:"secret"`
+	Cmd string `json:"cmd" bield:"secret"`
 	// CPU and Mem are as in UsageGroup.
 	CPU float64 `json:"cpu"`
 	Mem uint64  `json:"mem"`
@@ -909,7 +909,7 @@ type UsageHistory struct {
 	To   time.Time `json:"to"`
 	// Step is the time each point sums up, in milliseconds.
 	Step int64 `json:"step"`
-	// Minutes is how many minutes Roost stored in the range. It stores one a
+	// Minutes is how many minutes Bield stored in the range. It stores one a
 	// minute while it gets samples from the device.
 	Minutes int `json:"minutes"`
 	// Consumers are the biggest groups by average CPU, and by average
@@ -945,7 +945,7 @@ type UsageSeries struct {
 }
 
 // A Check probes something from the hub every so often: a URL, a TCP port or
-// a host name that an admin set up, or a peer, which Roost pings.
+// a host name that an admin set up, or a peer, which Bield pings.
 type Check struct {
 	// ID is a ping check's "ping:" and its device's ID.
 	ID   string    `json:"id"`
@@ -953,7 +953,7 @@ type Check struct {
 	Kind CheckKind `json:"kind"`
 	// Target is what the check probes: a URL, host:port, host name, or a
 	// peer's IP address. Only admins get it, since a URL can hold a secret.
-	Target string `json:"target" roost:"secret"`
+	Target string `json:"target" bield:"secret"`
 	// Endpoint is the part of Target that holds no secret, for everyone: a
 	// URL's scheme, host and port, or else all of Target.
 	Endpoint string `json:"endpoint"`
@@ -973,7 +973,7 @@ type Check struct {
 	// Paused reports whether an admin paused the check, so it only runs when
 	// they ask.
 	Paused bool `json:"paused,omitempty"`
-	// DeviceID is the device a ping check pings. Roost makes a ping check for
+	// DeviceID is the device a ping check pings. Bield makes a ping check for
 	// each peer, and they can't be changed.
 	DeviceID string     `json:"deviceId,omitempty"`
 	State    CheckState `json:"state"`
@@ -1003,7 +1003,7 @@ const (
 	CheckKindTCP CheckKind = "tcp"
 	// CheckKindDNS passes if a host name resolves, with the hub's resolver.
 	CheckKindDNS CheckKind = "dns"
-	// CheckKindPing is Roost's ping of a peer over the tailnet, every
+	// CheckKindPing is Bield's ping of a peer over the tailnet, every
 	// minute. It fails when the peer misses two pings in a row, as on the
 	// device's page, since a peer can miss one now and then.
 	CheckKindPing CheckKind = "ping"
@@ -1082,7 +1082,7 @@ const (
 type CheckInput struct {
 	// Name is required.
 	Name string `json:"name"`
-	// Kind is http, tcp or dns. Roost makes the ping checks.
+	// Kind is http, tcp or dns. Bield makes the ping checks.
 	Kind CheckKind `json:"kind"`
 	// Target is a full http or https URL for an HTTP check, host:port for a
 	// TCP check, or a host name for a DNS check.
@@ -1122,13 +1122,13 @@ type HealthHistory struct {
 	To   time.Time `json:"to"`
 	// Step is the time each point sums up, in milliseconds.
 	Step int64 `json:"step"`
-	// Score is the average health score for each step that has one. Roost
+	// Score is the average health score for each step that has one. Bield
 	// samples it every minute.
 	Score []Point `json:"score"`
 }
 
 // An Alert is a condition that needs attention, such as a disk that's nearly
-// full, from when Roost saw it until it cleared. It resolves by itself when
+// full, from when Bield saw it until it cleared. It resolves by itself when
 // the condition clears.
 type Alert struct {
 	ID     int64       `json:"id"`
@@ -1140,10 +1140,10 @@ type Alert struct {
 	Severity AlertSeverity `json:"severity"`
 	State    AlertState    `json:"state"`
 	// Title and Detail say what's wrong, such as "Disk 91% full on laptop".
-	// While the alert is open, they say what Roost sees now.
+	// While the alert is open, they say what Bield sees now.
 	Title  string `json:"title"`
 	Detail string `json:"detail"`
-	// OpenedAt is when Roost first saw the condition, and LastSeen when it
+	// OpenedAt is when Bield first saw the condition, and LastSeen when it
 	// last did.
 	OpenedAt time.Time `json:"openedAt"`
 	LastSeen time.Time `json:"lastSeen"`
@@ -1152,11 +1152,11 @@ type Alert struct {
 	// AckedAt is when an admin acknowledged the alert, if one did, and
 	// AckedBy their login, which only admins get.
 	AckedAt *time.Time `json:"ackedAt,omitempty"`
-	AckedBy string     `json:"ackedBy,omitempty" roost:"secret"`
+	AckedBy string     `json:"ackedBy,omitempty" bield:"secret"`
 	// SnoozedUntil is when a snoozed alert wakes, and SnoozedBy the login of
 	// the admin who snoozed it, which only admins get.
 	SnoozedUntil *time.Time `json:"snoozedUntil,omitempty"`
-	SnoozedBy    string     `json:"snoozedBy,omitempty" roost:"secret"`
+	SnoozedBy    string     `json:"snoozedBy,omitempty" bield:"secret"`
 	// Notes are what admins wrote on it, oldest first.
 	Notes []AlertNote `json:"notes"`
 }
@@ -1165,7 +1165,7 @@ type Alert struct {
 type AlertNote struct {
 	At time.Time `json:"at"`
 	// By is the admin's login. Only admins get it.
-	By   string `json:"by,omitempty" roost:"secret"`
+	By   string `json:"by,omitempty" bield:"secret"`
 	Text string `json:"text"`
 }
 
@@ -1189,7 +1189,7 @@ const (
 	// AlertSourceUnit is a systemd unit that failed, or a watched one that
 	// isn't running.
 	AlertSourceUnit AlertSource = "unit"
-	// AlertSourceCollector is one of Roost's collectors that keeps failing.
+	// AlertSourceCollector is one of Bield's collectors that keeps failing.
 	AlertSourceCollector AlertSource = "collector"
 )
 
@@ -1238,7 +1238,7 @@ type AddNote struct {
 	Text string `json:"text"`
 }
 
-// Event is a line in the activity log: something Roost saw happen, or
+// Event is a line in the activity log: something Bield saw happen, or
 // something someone did.
 type Event struct {
 	ID      int64      `json:"id"`
@@ -1249,7 +1249,7 @@ type Event struct {
 	// DeviceID is the device it's about, if any.
 	DeviceID string `json:"deviceId,omitempty"`
 	// Actor is the login of who did it, if someone did. Only admins get it.
-	Actor string `json:"actor,omitempty" roost:"secret"`
+	Actor string `json:"actor,omitempty" bield:"secret"`
 }
 
 // EventLevel says how an event went.
@@ -1282,9 +1282,9 @@ const (
 	// EventKindContainer is a container that started, stopped or was
 	// removed.
 	EventKindContainer EventKind = "container"
-	// EventKindAccess is a change to who has a role in Roost.
+	// EventKindAccess is a change to who has a role in Bield.
 	EventKindAccess EventKind = "access"
-	// EventKindSettings is a change an admin made to Roost's settings.
+	// EventKindSettings is a change an admin made to Bield's settings.
 	EventKindSettings EventKind = "settings"
 	// EventKindSSH is SSH access to a device that an admin set up, changed
 	// or removed, or a host key that changed.
@@ -1295,7 +1295,7 @@ const (
 	// EventKindFiles is a change an admin made to a device's files, or a
 	// folder they downloaded.
 	EventKindFiles EventKind = "files"
-	// EventKindNotification is a notification Roost sent to a channel, or
+	// EventKindNotification is a notification Bield sent to a channel, or
 	// couldn't, and a channel an admin added, changed or deleted.
 	EventKindNotification EventKind = "notification"
 )
@@ -1383,7 +1383,7 @@ type Unit struct {
 	MainPID int        `json:"mainPid,omitempty"`
 	// Memory is the memory it uses, in bytes, if systemd counts it.
 	Memory uint64 `json:"memory,omitempty"`
-	// Watched reports whether Roost watches it. Other units are only
+	// Watched reports whether Bield watches it. Other units are only
 	// listed while they've failed.
 	Watched bool `json:"watched"`
 	// DeviceID is the device it runs on.
@@ -1397,119 +1397,119 @@ type UnitScope string
 const (
 	// UnitScopeSystem is the machine's.
 	UnitScopeSystem UnitScope = "system"
-	// UnitScopeUser is the user Roost runs as.
+	// UnitScopeUser is the user Bield runs as.
 	UnitScopeUser UnitScope = "user"
 )
 
-// DeviceSSH is how Roost logs in to a device over SSH, with its own key,
-// for terminals, files and Docker. The machine Roost runs on can be two
+// DeviceSSH is how Bield logs in to a device over SSH, with its own key,
+// for terminals, files and Docker. The machine Bield runs on can be two
 // nodes, which share it.
 type DeviceSSH struct {
 	State SSHState `json:"state"`
-	// User is the account Roost logs in as, and Port where sshd listens.
+	// User is the account Bield logs in as, and Port where sshd listens.
 	// They're empty until an admin sets up access.
 	User string `json:"user,omitempty"`
 	Port int    `json:"port,omitempty"`
-	// Hub marks the machine Roost runs on, where Roost logs in on the
+	// Hub marks the machine Bield runs on, where Bield logs in on the
 	// loopback address, and can add its key for the user it runs as.
 	Hub bool `json:"hub,omitempty"`
 	// HostKey is the SHA256 fingerprint of the machine's host key, which
-	// Roost pinned the first time it logged in.
+	// Bield pinned the first time it logged in.
 	HostKey string `json:"hostKey,omitempty"`
 	// OfferedKey is the fingerprint of the key the machine offered instead,
 	// while the State is SSHStateHostKeyChanged.
 	OfferedKey string `json:"offeredKey,omitempty"`
-	// Error says why Roost can't log in, while the State is
+	// Error says why Bield can't log in, while the State is
 	// SSHStateFailing or SSHStateHostKeyChanged.
 	Error string `json:"error,omitempty"`
-	// Method is how Roost logged in the last time it did, while the State is
+	// Method is how Bield logged in the last time it did, while the State is
 	// SSHStateOK.
 	Method SSHMethod `json:"method,omitempty"`
 	// Policy is the change to the tailnet policy that Tailscale SSH on the
-	// machine needs before it lets Roost in, while the State is
+	// machine needs before it lets Bield in, while the State is
 	// SSHStateFailing and the policy is why.
 	Policy *SSHPolicy `json:"policy,omitempty"`
-	// CheckedAt is when Roost last checked the machine, if it has.
+	// CheckedAt is when Bield last checked the machine, if it has.
 	CheckedAt *time.Time `json:"checkedAt,omitempty"`
 	// Tmux says whether the machine has tmux, which keeps terminals running
-	// after their tab closes, and Docker whether Roost's user can open its
+	// after their tab closes, and Docker whether Bield's user can open its
 	// Docker socket. Each is missing until a check finds out.
 	Tmux   *bool `json:"tmux,omitempty"`
 	Docker *bool `json:"docker,omitempty"`
 }
 
-// SSHState says whether Roost can log in to a device.
+// SSHState says whether Bield can log in to a device.
 type SSHState string
 
 // The states of a DeviceSSH.
 const (
 	// SSHStateNotSetUp means no admin has set up access yet.
 	SSHStateNotSetUp SSHState = "not-set-up"
-	// SSHStateUnchecked means Roost hasn't logged in since it started, or
+	// SSHStateUnchecked means Bield hasn't logged in since it started, or
 	// since the access changed.
 	SSHStateUnchecked SSHState = "unchecked"
 	SSHStateOK        SSHState = "ok"
 	SSHStateFailing   SSHState = "failing"
 	// SSHStateHostKeyChanged means the machine offered another host key
-	// than the one Roost pinned, so Roost won't log in until an admin
+	// than the one Bield pinned, so Bield won't log in until an admin
 	// resets it, such as after the machine was reinstalled.
 	SSHStateHostKeyChanged SSHState = "host-key-changed"
 )
 
-// SSHMethod says how Roost logged in to a device.
+// SSHMethod says how Bield logged in to a device.
 type SSHMethod string
 
-// The ways Roost logs in.
+// The ways Bield logs in.
 const (
-	// SSHMethodKey is a login with Roost's key, which an admin put in the
+	// SSHMethodKey is a login with Bield's key, which an admin put in the
 	// machine's authorized_keys.
 	SSHMethodKey SSHMethod = "key"
 	// SSHMethodTailscale is a login to the machine's Tailscale SSH, which
-	// let Roost in without a key.
+	// let Bield in without a key.
 	SSHMethodTailscale SSHMethod = "tailscale"
 )
 
 // SSHPolicy is what the tailnet policy needs before a device's Tailscale SSH
-// lets Roost in.
+// lets Bield in.
 type SSHPolicy struct {
 	// Refusal says what the policy does now.
 	Refusal SSHRefusal `json:"refusal"`
-	// Snippet is a rule for the "ssh" section of the policy that lets Roost
+	// Snippet is a rule for the "ssh" section of the policy that lets Bield
 	// log in as the user an admin set up, without a browser check.
 	Snippet string `json:"snippet"`
 }
 
-// SSHRefusal says why Tailscale SSH turned Roost away.
+// SSHRefusal says why Tailscale SSH turned Bield away.
 type SSHRefusal string
 
-// The ways the tailnet policy can turn Roost away.
+// The ways the tailnet policy can turn Bield away.
 const (
-	// SSHRefusalCheck means the rule that covers Roost has the action
-	// "check", which asks for a visit to a URL that Roost can't make.
+	// SSHRefusalCheck means the rule that covers Bield has the action
+	// "check", which asks for a visit to a URL that Bield can't make.
 	SSHRefusalCheck SSHRefusal = "check"
-	// SSHRefusalNode means no rule lets Roost SSH to the machine.
+	// SSHRefusalNode means no rule lets Bield SSH to the machine.
 	SSHRefusalNode SSHRefusal = "node"
-	// SSHRefusalUser means a rule lets Roost in, but not as the user an
+	// SSHRefusalUser means a rule lets Bield in, but not as the user an
 	// admin set up.
 	SSHRefusalUser SSHRefusal = "user"
 )
 
-// SSHSetup is the response to GET /api/devices/{id}/ssh: how to let Roost
+// SSHSetup is the response to GET /api/devices/{id}/ssh: how to let Bield
 // log in to a device. Only admins can see it.
 type SSHSetup struct {
 	// Command adds AuthorizedKey to the authorized_keys of the user who
 	// runs it on the device.
 	Command string `json:"command"`
-	// AuthorizedKey is Roost's key, which only works from Roost's tailnet
-	// addresses, and on the machine Roost runs on, from the loopback
+	// AuthorizedKey is Bield's key, which only works from Bield's tailnet
+	// addresses, and on the machine Bield runs on, from the loopback
 	// addresses too. Agent and X11 forwarding are off for it.
 	AuthorizedKey string `json:"authorizedKey"`
-	// HubUser is the user Roost runs as, on the machine Roost runs on,
+	// HubUser is the user Bield runs as, on the machine Bield runs on,
 	// which POST /api/devices/{id}/ssh/authorize logs in as.
 	HubUser string `json:"hubUser,omitempty"`
 }
 
-// SetSSH is the body of PUT /api/devices/{id}/ssh, which sets up how Roost
+// SetSSH is the body of PUT /api/devices/{id}/ssh, which sets up how Bield
 // logs in to a device and answers with its DeviceSSH. Changing the port
 // forgets the pinned host key. DELETE removes the access.
 type SetSSH struct {
@@ -1519,11 +1519,11 @@ type SetSSH struct {
 }
 
 // TrustHostKey is the body of PUT /api/devices/{id}/ssh/host-key, which
-// pins the host key a device offered in place of the one Roost pinned, and
+// pins the host key a device offered in place of the one Bield pinned, and
 // answers with the device's DeviceSSH. Fingerprint is DeviceSSH.OfferedKey,
-// the one an admin looked at: if the device offers another by then, Roost
+// the one an admin looked at: if the device offers another by then, Bield
 // refuses with a 409, so it pins exactly the key the admin saw. DELETE
-// forgets the pinned key instead, so Roost pins whichever key the device
+// forgets the pinned key instead, so Bield pins whichever key the device
 // offers next.
 type TrustHostKey struct {
 	Fingerprint string `json:"fingerprint"`
@@ -1548,7 +1548,7 @@ type TerminalSession struct {
 	// happened in it.
 	CreatedAt *time.Time `json:"createdAt,omitempty"`
 	ActiveAt  *time.Time `json:"activeAt,omitempty"`
-	// Attached is how many terminals are attached, in Roost or not.
+	// Attached is how many terminals are attached, in Bield or not.
 	Attached int `json:"attached"`
 	Windows  int `json:"windows"`
 	// Command is what runs in its active pane, such as bash or htop.
@@ -1643,13 +1643,13 @@ type FileEntry struct {
 
 // FileListing is the response to GET /api/devices/{id}/files/list?path=: a
 // folder and what's in it, in no order. Without a path, it's the home folder
-// of the user Roost logs in as.
+// of the user Bield logs in as.
 type FileListing struct {
 	// Path is the folder with links resolved, and Parent the folder above
 	// it, which the root doesn't have.
 	Path   string `json:"path"`
 	Parent string `json:"parent,omitempty"`
-	// Home is the home folder of the user Roost logs in as.
+	// Home is the home folder of the user Bield logs in as.
 	Home    string      `json:"home"`
 	Entries []FileEntry `json:"entries"`
 	// Space is the room on the file system that holds the folder, if the
@@ -1790,7 +1790,7 @@ type DockerOverview struct {
 	APIVersion string `json:"apiVersion,omitempty"`
 	OS         string `json:"os"`
 	// Kernel is the kernel's version. Only admins get it, as with a device's.
-	Kernel string `json:"kernel" roost:"secret"`
+	Kernel string `json:"kernel" bield:"secret"`
 	Arch   string `json:"arch"`
 	// CPUs and MemTotal are the machine's CPU cores and bytes of memory.
 	CPUs          int    `json:"cpus"`
@@ -1800,10 +1800,10 @@ type DockerOverview struct {
 	// Cgroup is the cgroup version and driver, such as "v2 (systemd)".
 	Cgroup string `json:"cgroup,omitempty"`
 	// RootDir is where Docker keeps its data. Only admins get it.
-	RootDir    string       `json:"rootDir" roost:"secret"`
+	RootDir    string       `json:"rootDir" bield:"secret"`
 	Containers DockerCounts `json:"containers"`
 	Images     int          `json:"images"`
-	Warnings   []string     `json:"warnings,omitempty" roost:"secret"`
+	Warnings   []string     `json:"warnings,omitempty" bield:"secret"`
 	// Disk is the disk space Docker uses. It's null until the daemon has
 	// worked it out, which takes a while on a big machine, so ask again soon.
 	Disk *DockerDisk `json:"disk" tstype:"DockerDisk | null,required"`
@@ -1941,20 +1941,20 @@ type DockerContainerDetail struct {
 	// Path and Args are what it runs, and Cmd and Entrypoint what it was
 	// told to. A command line can have credentials in it, so admins get
 	// them all.
-	Path       string   `json:"path" roost:"secret"`
-	Args       []string `json:"args,omitempty" roost:"secret"`
-	Cmd        []string `json:"cmd,omitempty" roost:"secret"`
-	Entrypoint []string `json:"entrypoint,omitempty" roost:"secret"`
+	Path       string   `json:"path" bield:"secret"`
+	Args       []string `json:"args,omitempty" bield:"secret"`
+	Cmd        []string `json:"cmd,omitempty" bield:"secret"`
+	Entrypoint []string `json:"entrypoint,omitempty" bield:"secret"`
 	WorkingDir string   `json:"workingDir,omitempty"`
 	User       string   `json:"user,omitempty"`
 	Hostname   string   `json:"hostname,omitempty"`
 	TTY        bool     `json:"tty"`
 	// Env are its environment variables. Only admins get them.
-	Env []DockerEnvVar `json:"env,omitempty" roost:"secret"`
+	Env []DockerEnvVar `json:"env,omitempty" bield:"secret"`
 	// Labels are its labels, except those that look like credentials, which
 	// are in SecretLabels, for admins.
 	Labels       map[string]string `json:"labels"`
-	SecretLabels map[string]string `json:"secretLabels,omitempty" roost:"secret"`
+	SecretLabels map[string]string `json:"secretLabels,omitempty" bield:"secret"`
 	// Project and Service are its Docker Compose project and service, and
 	// ComposeDir and ComposeFiles where the project's files are.
 	Project       string               `json:"project,omitempty"`
@@ -2011,7 +2011,7 @@ type DockerHealthResult struct {
 	End      time.Time `json:"end"`
 	ExitCode int       `json:"exitCode"`
 	// Output is what the check printed. Only admins get it.
-	Output string `json:"output" roost:"secret"`
+	Output string `json:"output" bield:"secret"`
 }
 
 // DockerHealthcheck is how Docker checks a container's health. The
@@ -2019,7 +2019,7 @@ type DockerHealthResult struct {
 type DockerHealthcheck struct {
 	// Test is the command, such as ["CMD-SHELL", "curl -f localhost"]. Only
 	// admins get it.
-	Test        []string `json:"test,omitempty" roost:"secret"`
+	Test        []string `json:"test,omitempty" bield:"secret"`
 	Interval    int64    `json:"interval,omitempty"`
 	Timeout     int64    `json:"timeout,omitempty"`
 	StartPeriod int64    `json:"startPeriod,omitempty"`
@@ -2118,7 +2118,7 @@ type DockerVolume struct {
 	// Labels are its labels, except those that look like credentials, which
 	// are in SecretLabels, for admins.
 	Labels       map[string]string `json:"labels"`
-	SecretLabels map[string]string `json:"secretLabels,omitempty" roost:"secret"`
+	SecretLabels map[string]string `json:"secretLabels,omitempty" bield:"secret"`
 	// Project is its Docker Compose project, if it has one.
 	Project string `json:"project,omitempty"`
 	// Size is in bytes, if the daemon has measured it.
@@ -2172,7 +2172,7 @@ type DockerNetworkContainer struct {
 // DockerHistory is the response to GET
 // /api/devices/{id}/docker/containers/{id}/history?range=, where the range
 // is 1h, 6h, 24h or 7d: what the container used, averaged over each step.
-// Roost records it once a minute, by the container's name.
+// Bield records it once a minute, by the container's name.
 type DockerHistory struct {
 	From time.Time `json:"from"`
 	To   time.Time `json:"to"`
@@ -2229,7 +2229,7 @@ type DockerStreamFailure struct {
 	Message string `json:"message"`
 }
 
-// ChannelKind is a sort of place that Roost sends notifications to.
+// ChannelKind is a sort of place that Bield sends notifications to.
 type ChannelKind string
 
 // The kinds of NotificationChannel.
@@ -2255,7 +2255,7 @@ type NotificationChannels struct {
 	Channels []NotificationChannel `json:"channels"`
 }
 
-// NotificationChannel is a place where Roost sends notifications. It leaves
+// NotificationChannel is a place where Bield sends notifications. It leaves
 // out its secrets, such as a webhook's address or a password, and says which
 // of them are saved.
 type NotificationChannel struct {
@@ -2269,12 +2269,12 @@ type NotificationChannel struct {
 	OnResolve bool          `json:"onResolve"`
 	Config    ChannelConfig `json:"config"`
 	// Secrets are the secret fields that have a value: "url", "token" or
-	// "password". Roost never sends their values.
+	// "password". Bield never sends their values.
 	Secrets []string `json:"secrets"`
 	// Summary says where the channel sends, without a secret, such as
-	// "ntfy.sh/roost-alerts".
+	// "ntfy.sh/bield-alerts".
 	Summary string `json:"summary"`
-	// Last is the latest time Roost sent to it since Roost started.
+	// Last is the latest time Bield sent to it since Bield started.
 	Last *ChannelDelivery `json:"last,omitempty"`
 }
 
@@ -2299,7 +2299,7 @@ type ChannelConfig struct {
 	To   []string `json:"to,omitempty"`
 }
 
-// ChannelDelivery is what happened when Roost last sent to a channel.
+// ChannelDelivery is what happened when Bield last sent to a channel.
 type ChannelDelivery struct {
 	At time.Time `json:"at"`
 	// Event is why it sent: opened, escalated, reminder, resolved or test.
@@ -2315,7 +2315,7 @@ type ChannelDelivery struct {
 type ChannelInput struct {
 	Name string      `json:"name"`
 	Kind ChannelKind `json:"kind"`
-	// Enabled is whether Roost sends to it.
+	// Enabled is whether Bield sends to it.
 	Enabled bool `json:"enabled"`
 	// MinSeverity is the least severe alert it hears about: info, warning or
 	// critical.

@@ -6,9 +6,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/alerts"
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/alerts"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/settings"
 )
 
 const (
@@ -29,8 +29,8 @@ func keyExpiryDetail(ownControlServer bool) string {
 }
 
 // alertConditions returns the conditions that need an alert in snap, built
-// at now from src, with the machines Roost measures, and says whose data was
-// fresh. started is when Roost started.
+// at now from src, with the machines Bield measures, and says whose data was
+// fresh. started is when Bield started.
 func alertConditions(snap Snapshot, machines []machine, src sources, started, now time.Time) ([]alerts.Condition, alerts.FreshFunc) {
 	rules := src.global.Rules
 	var out []alerts.Condition
@@ -175,7 +175,7 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 		if now.Sub(since) < collectorGrace {
 			continue
 		}
-		detail := "It hasn't worked since Roost started " + ago(now.Sub(started)) + "."
+		detail := "It hasn't worked since Bield started " + ago(now.Sub(started)) + "."
 		if c.LastOK != nil {
 			detail = "It last worked " + ago(now.Sub(*c.LastOK)) + "."
 		}

@@ -1,4 +1,4 @@
-// What an admin can do to a container, and what Roost says before it does it.
+// What an admin can do to a container, and what Bield says before it does it.
 
 import Play from '@lucide/svelte/icons/play';
 import RotateCw from '@lucide/svelte/icons/rotate-cw';

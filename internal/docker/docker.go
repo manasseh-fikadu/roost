@@ -1,7 +1,7 @@
 // Package docker talks to the Docker Engine API: on the socket of the machine
-// Roost runs on, and on other machines' sockets over SSH (see Fleet). A Client
+// Bield runs on, and on other machines' sockets over SSH (see Fleet). A Client
 // asks Docker; a Host caches what it says and shares live stats between
-// viewers; a Collector reads the containers of the machine Roost runs on for
+// viewers; a Collector reads the containers of the machine Bield runs on for
 // alerts; and a Sampler records what they use, for history.
 package docker
 
@@ -34,7 +34,7 @@ const (
 )
 
 // Socket returns the path of the Docker socket on this machine, from
-// DOCKER_HOST or the default, and whether there's one. Roost only talks to
+// DOCKER_HOST or the default, and whether there's one. Bield only talks to
 // a Docker on a unix socket.
 func Socket() (string, bool) {
 	path := defaultSocket
@@ -45,7 +45,7 @@ func Socket() (string, bool) {
 		}
 		path = p
 	}
-	info, err := os.Stat(path) //nolint:gosec // G703: DOCKER_HOST is Roost's own environment.
+	info, err := os.Stat(path) //nolint:gosec // G703: DOCKER_HOST is Bield's own environment.
 	return path, err == nil && info.Mode()&os.ModeSocket != 0
 }
 
@@ -115,7 +115,7 @@ func SocketDialer(path string) func(ctx context.Context, network, addr string) (
 		switch {
 		case err == nil:
 		case errors.Is(err, syscall.EACCES) || errors.Is(err, os.ErrPermission):
-			return nil, fmt.Errorf("%w: Roost can't use %s; add the user Roost runs as to the docker group, and restart Roost", ErrUnreachable, path)
+			return nil, fmt.Errorf("%w: Bield can't use %s; add the user Bield runs as to the docker group, and restart Bield", ErrUnreachable, path)
 		case errors.Is(err, os.ErrNotExist):
 			return nil, fmt.Errorf("%w: there's no socket at %s", ErrUnreachable, path)
 		case errors.Is(err, syscall.ECONNREFUSED):

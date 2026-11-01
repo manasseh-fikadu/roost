@@ -15,14 +15,14 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/agent"
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
-	"github.com/manasseh-fikadu/roost/internal/usage"
+	"github.com/manasseh-fikadu/bield/agent"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/hostmetrics"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/usage"
 )
 
 // laptopBeat is a heartbeat as the agent sends it, with its processes.
@@ -74,10 +74,10 @@ func TestHeartbeat(t *testing.T) {
 		name string
 		from netip.Addr
 		// enrolledOn is the node whose agent's secret the heartbeat has, or
-		// "" for a secret Roost doesn't know.
+		// "" for a secret Bield doesn't know.
 		enrolledOn string
 		body       string
-		measured   bool // Roost measures its own machine
+		measured   bool // Bield measures its own machine
 		wantCode   int
 		// wantID is the ID the report is kept under, if it's taken.
 		wantID string
@@ -85,20 +85,20 @@ func TestHeartbeat(t *testing.T) {
 		{name: "a laptop", from: laptopIP, enrolledOn: "laptop", body: laptopBeat, wantCode: http.StatusNoContent, wantID: "laptop"},
 		{name: "a tagged server", from: serverIP, enrolledOn: "server", body: laptopBeat, wantCode: http.StatusNoContent, wantID: "server"},
 		{
-			name: "the hub, which Roost measures", from: roostIP, enrolledOn: "roost", body: laptopBeat, measured: true,
+			name: "the hub, which Bield measures", from: bieldIP, enrolledOn: "bield", body: laptopBeat, measured: true,
 			wantCode: http.StatusConflict,
 		},
 		{
-			name: "the hub, which Roost can't measure", from: roostIP, enrolledOn: "roost", body: laptopBeat,
+			name: "the hub, which Bield can't measure", from: bieldIP, enrolledOn: "bield", body: laptopBeat,
 			wantCode: http.StatusNoContent, wantID: store.HubID,
 		},
 		{name: "another machine's secret", from: phoneIP, enrolledOn: "laptop", body: laptopBeat, wantCode: http.StatusForbidden},
 		{name: "a stranger", from: strangerIP, enrolledOn: "laptop", body: laptopBeat, wantCode: http.StatusForbidden},
-		{name: "a secret Roost doesn't know", from: laptopIP, body: laptopBeat, wantCode: http.StatusUnauthorized},
+		{name: "a secret Bield doesn't know", from: laptopIP, body: laptopBeat, wantCode: http.StatusUnauthorized},
 		{name: "another format", from: laptopIP, enrolledOn: "laptop", body: `{"v":2}`, wantCode: http.StatusBadRequest},
 		{name: "not JSON", from: laptopIP, enrolledOn: "laptop", body: `{"v":1`, wantCode: http.StatusBadRequest},
 		{
-			name: "a field Roost doesn't know", from: laptopIP, enrolledOn: "laptop", body: `{"v":1,"color":"red"}`,
+			name: "a field Bield doesn't know", from: laptopIP, enrolledOn: "laptop", body: `{"v":1,"color":"red"}`,
 			wantCode: http.StatusNoContent, wantID: "laptop",
 		},
 	} {
@@ -134,7 +134,7 @@ func TestHeartbeat(t *testing.T) {
 	}
 }
 
-// A device whose node Tailscale knows, but that wasn't in Roost's last
+// A device whose node Tailscale knows, but that wasn't in Bield's last
 // status, tries again later.
 func TestHeartbeat_unknownDevice(t *testing.T) {
 	t.Parallel()
@@ -143,7 +143,7 @@ func TestHeartbeat_unknownDevice(t *testing.T) {
 	opts.Snapshot = func() tailnet.Snapshot {
 		return tailnet.Snapshot{Status: &tailnet.Status{
 			State: tailnet.StateRunning,
-			Self:  tailnet.Device{ID: "roost", DNSName: roostHost, IPs: []netip.Addr{roostIP}, Online: true},
+			Self:  tailnet.Device{ID: "bield", DNSName: bieldHost, IPs: []netip.Addr{bieldIP}, Online: true},
 		}}
 	}
 	if rec := sendBeat(t, api.New(opts), laptopIP, enrolled(t, st, "laptop"), laptopBeat); rec.Code != http.StatusNotFound {
@@ -261,7 +261,7 @@ func TestSnapshot_agents(t *testing.T) {
 	}
 	status := &tailnet.Status{
 		State: tailnet.StateRunning,
-		Self:  tailnet.Device{ID: "roost", DNSName: roostHost, OS: "macOS", Online: true},
+		Self:  tailnet.Device{ID: "bield", DNSName: bieldHost, OS: "macOS", Online: true},
 		Peers: []tailnet.Device{
 			{ID: "fresh", DNSName: "fresh.example.ts.net", OS: "linux", Online: true},
 			{ID: "stale", DNSName: "stale.example.ts.net", OS: "linux", Online: true},
@@ -280,7 +280,7 @@ func TestSnapshot_agents(t *testing.T) {
 		beat(reg, "stale", agent.Version, now.Add(-2*time.Minute), `{"cpu":99}`)
 		beat(reg, "asleep", agent.Version, now.Add(-time.Hour), `{"cpu":1}`)
 		beat(reg, "old", "1.0.0", now, `{"cpu":1}`)
-		// An agent on the machine Roost runs on, which Roost can't measure
+		// An agent on the machine Bield runs on, which Bield can't measure
 		// on macOS. It enrolled from the machine's own node, a peer.
 		beat(reg, store.HubID, agent.Version, now, `{"cpu":42}`)
 		// The stale agent is from before enrollment, and the waiting one
@@ -311,12 +311,12 @@ func TestSnapshot_agents(t *testing.T) {
 			{id: "stale", by: api.MeasuredByAgent, cpu: 99, stale: true, status: api.StatusAttention, reason: "Agent stopped reporting"},
 			{id: "asleep", by: api.MeasuredByAgent, cpu: 1, enrolled: true, status: api.StatusOffline, reason: "Not connected to the tailnet"},
 			{id: "old", by: api.MeasuredByAgent, cpu: 1, outdated: true, enrolled: true, status: api.StatusOnline},
-			{id: "roost", by: api.MeasuredByAgent, cpu: 42, enrolled: true, status: api.StatusOnline},
+			{id: "bield", by: api.MeasuredByAgent, cpu: 42, enrolled: true, status: api.StatusOnline},
 			{id: "host", by: api.MeasuredByAgent, cpu: 42, enrolled: true, status: api.StatusOnline},
 			{id: "waiting", agent: true, enrolled: true, status: api.StatusOnline},
 			{id: "none", status: api.StatusOnline},
 		} {
-			if measured && (tt.id == "roost" || tt.id == "host") {
+			if measured && (tt.id == "bield" || tt.id == "host") {
 				tt.by, tt.cpu, tt.enrolled = api.MeasuredByHub, 7, false
 			}
 			d := findDevice(t, snap, tt.id)
@@ -356,7 +356,7 @@ func TestSnapshot_agents(t *testing.T) {
 
 func TestAgentSetup(t *testing.T) {
 	t.Parallel()
-	h := api.New(withTailnet(t, testTailnet(), api.Options{AppURL: "https://" + roostHost + "/"}))
+	h := api.New(withTailnet(t, testTailnet(), api.Options{AppURL: "https://" + bieldHost + "/"}))
 	rec := serve(h, newRequest(t, http.MethodGet, "/api/agent", laptopIP))
 	var got api.AgentSetup
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || rec.Code != http.StatusOK {
@@ -364,7 +364,7 @@ func TestAgentSetup(t *testing.T) {
 	}
 	want := api.AgentSetup{
 		Version:          agent.Version,
-		UninstallCommand: "curl -fsSL https://" + roostHost + "/api/agent/uninstall.sh | bash",
+		UninstallCommand: "curl -fsSL https://" + bieldHost + "/api/agent/uninstall.sh | bash",
 	}
 	if got != want {
 		t.Errorf("GET /api/agent = %+v, want %+v", got, want)
@@ -381,7 +381,7 @@ func TestAgentSetup(t *testing.T) {
 // for a secret it then sends its heartbeats with.
 func TestEnrollmentCode(t *testing.T) {
 	t.Parallel()
-	opts := withTailnet(t, testTailnet(), api.Options{AppURL: "https://" + roostHost})
+	opts := withTailnet(t, testTailnet(), api.Options{AppURL: "https://" + bieldHost})
 	h := api.New(opts)
 	before := time.Now()
 	rec := send(t, h, http.MethodPost, "/api/agent/codes", laptopIP, "")
@@ -389,7 +389,7 @@ func TestEnrollmentCode(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || rec.Code != http.StatusCreated {
 		t.Fatalf("POST /api/agent/codes = %d %s", rec.Code, rec.Body)
 	}
-	prefix := "curl -fsSL https://" + roostHost + "/api/agent/install/"
+	prefix := "curl -fsSL https://" + bieldHost + "/api/agent/install/"
 	code, ok := strings.CutPrefix(got.InstallCommand, prefix)
 	code, ok2 := strings.CutSuffix(code, " | bash")
 	if !ok || !ok2 || len(code) < 20 {
@@ -400,7 +400,7 @@ func TestEnrollmentCode(t *testing.T) {
 	}
 
 	script := serve(h, newRequest(t, http.MethodGet, "/api/agent/install/"+code, serverIP)).Body.String()
-	if !strings.Contains(script, "\nCODE='"+code+"'\n") || !strings.Contains(script, "\nSERVER_URL='https://"+roostHost+"'\n") {
+	if !strings.Contains(script, "\nCODE='"+code+"'\n") || !strings.Contains(script, "\nSERVER_URL='https://"+bieldHost+"'\n") {
 		t.Fatalf("the install script doesn't have the code and the hub's URL:\n%.300s", script)
 	}
 	rec = sendAs(t, h, http.MethodPost, "/api/agent/enroll", serverIP, code, "")
@@ -425,7 +425,7 @@ func TestEnroll(t *testing.T) {
 		from     netip.Addr
 		code     string // "fresh", "expired", "laptop's" (used by the laptop) or "unknown"
 		measured bool
-		// missing leaves the laptop out of Roost's last status.
+		// missing leaves the laptop out of Bield's last status.
 		missing bool
 		// whoIsFails makes Tailscale fail to say who sent the request.
 		whoIsFails bool
@@ -438,9 +438,9 @@ func TestEnroll(t *testing.T) {
 		{name: "an expired code", from: laptopIP, code: "expired", wantCode: http.StatusUnauthorized},
 		{name: "an unknown code", from: laptopIP, code: "unknown", wantCode: http.StatusUnauthorized},
 		{name: "a stranger", from: strangerIP, code: "fresh", wantCode: http.StatusForbidden},
-		{name: "the hub, which Roost measures", from: roostIP, code: "fresh", measured: true, wantCode: http.StatusConflict},
-		{name: "the hub, which Roost can't measure", from: roostIP, code: "fresh", wantCode: http.StatusOK},
-		{name: "a machine Roost hasn't seen yet", from: laptopIP, code: "fresh", missing: true, wantCode: http.StatusNotFound},
+		{name: "the hub, which Bield measures", from: bieldIP, code: "fresh", measured: true, wantCode: http.StatusConflict},
+		{name: "the hub, which Bield can't measure", from: bieldIP, code: "fresh", wantCode: http.StatusOK},
+		{name: "a machine Bield hasn't seen yet", from: laptopIP, code: "fresh", missing: true, wantCode: http.StatusNotFound},
 		// The laptop could use its code again once Tailscale answers.
 		{name: "Tailscale fails", from: laptopIP, code: "laptop's", whoIsFails: true, wantCode: http.StatusServiceUnavailable},
 	} {
@@ -538,7 +538,7 @@ func TestInstallScript(t *testing.T) {
 	}{
 		{name: "a fresh code", code: fresh, from: serverIP, want: "\nCODE='" + fresh + "'\n"},
 		// The request came over plain HTTP.
-		{name: "the hub's URL", code: fresh, from: serverIP, want: "\nSERVER_URL='http://" + roostHost + "'\n"},
+		{name: "the hub's URL", code: fresh, from: serverIP, want: "\nSERVER_URL='http://" + bieldHost + "'\n"},
 		{name: "a code the machine used", code: used, from: laptopIP, want: "\nCODE='" + used + "'\n"},
 		{name: "a code another machine used", code: used, from: phoneIP, refusal: "another machine used this install command"},
 		{name: "an expired code", code: newCode(t, st, time.Now().Add(-time.Hour)), from: laptopIP, refusal: "expired"},
@@ -569,7 +569,7 @@ func TestInstallScript(t *testing.T) {
 		}
 	}
 
-	// Without the machine, Roost can't tell that the laptop used the code,
+	// Without the machine, Bield can't tell that the laptop used the code,
 	// and asks it to try again rather than saying another machine did.
 	opts := withStore(t, testTailnet(), st, api.Options{})
 	opts.WhoIs = func(context.Context, string) (*tailnet.Identity, error) {
@@ -581,7 +581,7 @@ func TestInstallScript(t *testing.T) {
 	}
 }
 
-// Uninstalling the agent unenrolls it, and Roost forgets what it reported.
+// Uninstalling the agent unenrolls it, and Bield forgets what it reported.
 func TestUnenroll(t *testing.T) {
 	t.Parallel()
 	st := testStore(t)
@@ -640,7 +640,7 @@ func TestRevokeAgent(t *testing.T) {
 	}
 	// The phone's enrolled, and hasn't reported yet.
 	enrolled(t, st, "phone")
-	// Roost measures its own machine, which has no agent.
+	// Bield measures its own machine, which has no agent.
 	opts.Usage.Record(t.Context(), store.HubID, usage.Sample{At: time.Now(), Source: usage.SourceHub})
 
 	for _, tt := range []struct {
@@ -651,7 +651,7 @@ func TestRevokeAgent(t *testing.T) {
 		{"laptop", http.StatusNotFound},
 		{"server", http.StatusNoContent},
 		{"phone", http.StatusNoContent},
-		{"roost", http.StatusNotFound},
+		{"bield", http.StatusNotFound},
 		{"tablet", http.StatusNotFound},
 		{"toaster", http.StatusNotFound},
 	} {
@@ -666,7 +666,7 @@ func TestRevokeAgent(t *testing.T) {
 		t.Error("the laptop's usage is still there after its agent was revoked")
 	}
 	if _, _, ok := opts.Usage.Latest(store.HubID); !ok {
-		t.Error("revoking the agent of Roost's own machine, which has none, dropped the usage Roost measured")
+		t.Error("revoking the agent of Bield's own machine, which has none, dropped the usage Bield measured")
 	}
 	if enrollments, err := st.Enrollments(t.Context()); err != nil || len(enrollments) != 0 {
 		t.Errorf("enrollments after revoking = %v, %v, want none", enrollments, err)
@@ -680,15 +680,15 @@ func TestRevokeAgent(t *testing.T) {
 	}
 }
 
-// In embedded mode, the machine Roost runs on has Roost's node and its own,
+// In embedded mode, the machine Bield runs on has Bield's node and its own,
 // and revoking the agent from either revokes it.
 func TestRevokeAgent_hub(t *testing.T) {
 	t.Parallel()
 	hostIP := netip.MustParseAddr("100.64.0.10")
-	for _, device := range []string{"roost", "host"} {
+	for _, device := range []string{"bield", "host"} {
 		tn := tailnettest.New(tailnet.Status{
 			State: tailnet.StateRunning,
-			Self:  tailnet.Device{ID: "roost", DNSName: roostHost, IPs: []netip.Addr{roostIP}, Owner: alice, Online: true},
+			Self:  tailnet.Device{ID: "bield", DNSName: bieldHost, IPs: []netip.Addr{bieldIP}, Owner: alice, Online: true},
 			Peers: []tailnet.Device{
 				{ID: "laptop", DNSName: "laptop.example.ts.net", IPs: []netip.Addr{laptopIP}, Owner: alice, Online: true},
 				{ID: "host", DNSName: "host.example.ts.net", IPs: []netip.Addr{hostIP}, Owner: alice, Online: true, SameMachine: true},

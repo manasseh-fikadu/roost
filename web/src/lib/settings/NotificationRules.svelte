@@ -1,5 +1,5 @@
 <!--
-	When Roost sends notifications: how often it reminds about an alert nobody
+	When Bield sends notifications: how often it reminds about an alert nobody
 	has acknowledged, and the quiet hours it holds them back in. Which alerts a
 	channel hears about is up to the channel.
 -->
@@ -107,7 +107,7 @@
 				<label for="{id}-quiet">
 					<span class="block text-[13px] font-medium text-fg">Quiet hours</span>
 					<span class="block text-[12px] text-fg-subtle">
-						Roost holds notifications back, and sends the ones still due when the hours end.
+						Bield holds notifications back, and sends the ones still due when the hours end.
 					</span>
 				</label>
 				<Switch id="{id}-quiet" bind:checked={() => draft.value.quiet.enabled, toggleQuiet} />
@@ -123,7 +123,7 @@
 					<div class="sm:col-span-2">
 						<Field
 							label="Time zone"
-							hint="The times above are in this zone. Empty is the time zone of the machine Roost runs on."
+							hint="The times above are in this zone. Empty is the time zone of the machine Bield runs on."
 						>
 							<span class="flex gap-2">
 								<Input

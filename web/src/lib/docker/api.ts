@@ -1,5 +1,5 @@
 // Docker's routes: what is on a device, and what an admin can do to it. The
-// device is the ID of a device on the tailnet; Roost works out which Docker
+// device is the ID of a device on the tailnet; Bield works out which Docker
 // that is. Logs, processes and the whole inspection are for admins, and so is
 // starting and stopping.
 

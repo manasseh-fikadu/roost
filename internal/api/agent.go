@@ -11,15 +11,15 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/manasseh-fikadu/roost/agent"
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/usage"
+	"github.com/manasseh-fikadu/bield/agent"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/usage"
 )
 
-// maxHeartbeat is the largest heartbeat Roost reads. The agent's are a few
+// maxHeartbeat is the largest heartbeat Bield reads. The agent's are a few
 // kilobytes.
 const maxHeartbeat = 256 << 10
 
@@ -40,7 +40,7 @@ func (h *handler) heartbeat(w http.ResponseWriter, r *http.Request) {
 
 	var hb agents.Heartbeat
 	// Unlike the requests from the web app, a heartbeat can have fields this
-	// version of Roost doesn't know, from a newer agent.
+	// version of Bield doesn't know, from a newer agent.
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxHeartbeat)).Decode(&hb); err != nil {
 		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: "can't read the heartbeat: " + err.Error()})
 		return
@@ -74,8 +74,8 @@ func (h *handler) heartbeat(w http.ResponseWriter, r *http.Request) {
 
 // Why a machine can't have an agent, or not yet.
 const (
-	notOnTailnet   = "this machine isn't on the tailnet as Roost last saw it"
-	measuresItself = "Roost runs on this machine and measures it itself, so it doesn't need the agent"
+	notOnTailnet   = "this machine isn't on the tailnet as Bield last saw it"
+	measuresItself = "Bield runs on this machine and measures it itself, so it doesn't need the agent"
 )
 
 // newEnrollmentCode answers POST /api/agent/codes with a command that
@@ -98,14 +98,14 @@ func (h *handler) newEnrollmentCode(w http.ResponseWriter, r *http.Request) {
 // remoteTimeout is how long an install or uninstall over SSH can take.
 const remoteTimeout = 2 * time.Minute
 
-// maxRunOutput is how much of a script's output Roost sends back.
+// maxRunOutput is how much of a script's output Bield sends back.
 const maxRunOutput = 16 << 10
 
-// runRemote is the sh script that Roost runs on a device over SSH to install
+// runRemote is the sh script that Bield runs on a device over SSH to install
 // or remove the agent. It does what the one-line commands do, which pipe curl
 // into bash, but it fails if the download does, and it sets up what a
 // session without a login lacks: a user manager to talk to and a $USER.
-// $1 is where to download the script from, and $2 is Roost's address. It has
+// $1 is where to download the script from, and $2 is Bield's address. It has
 // no single quote or backslash, which a command can't carry (see ssh.Quote).
 const runRemote = `{
 if [ -z "${XDG_RUNTIME_DIR:-}" ] && [ -d "/run/user/$(id -u)" ]; then XDG_RUNTIME_DIR="/run/user/$(id -u)"; export XDG_RUNTIME_DIR; fi
@@ -121,8 +121,8 @@ exit "$code"
 
 // installAgent answers POST /api/devices/{id}/agent/install, which installs
 // the agent on the device over SSH with a new enrollment code, as the user
-// Roost logs in as. The device enrolls from its own node like any other, so
-// it has to reach Roost on the tailnet.
+// Bield logs in as. The device enrolls from its own node like any other, so
+// it has to reach Bield on the tailnet.
 func (h *handler) installAgent(w http.ResponseWriter, r *http.Request) {
 	d, historyID, ok := h.device(r)
 	if !ok {
@@ -147,7 +147,7 @@ func (h *handler) installAgent(w http.ResponseWriter, r *http.Request) {
 }
 
 // uninstallAgent answers POST /api/devices/{id}/agent/uninstall, which
-// removes the agent from the device over SSH, for the user Roost logs in as.
+// removes the agent from the device over SSH, for the user Bield logs in as.
 func (h *handler) uninstallAgent(w http.ResponseWriter, r *http.Request) {
 	d, _, ok := h.device(r)
 	if !ok {
@@ -157,7 +157,7 @@ func (h *handler) uninstallAgent(w http.ResponseWriter, r *http.Request) {
 	h.runOnDevice(w, r, d, "uninstall", "/api/agent/uninstall.sh")
 }
 
-// runOnDevice downloads the script at path from Roost on d, and runs it,
+// runOnDevice downloads the script at path from Bield on d, and runs it,
 // over SSH. what is "install" or "uninstall".
 func (h *handler) runOnDevice(w http.ResponseWriter, r *http.Request, d tailnet.Device, what, path string) {
 	base := h.appURL(r)
@@ -216,7 +216,7 @@ func (h *handler) installScript(w http.ResponseWriter, r *http.Request) {
 		_, refusal = h.codeDenial(err)
 	}
 	if refusal != "" {
-		writeScript(w, "#!/bin/sh\necho "+shellWord("Roost won't install the agent: "+refusal+".")+" >&2\nexit 1\n")
+		writeScript(w, "#!/bin/sh\necho "+shellWord("Bield won't install the agent: "+refusal+".")+" >&2\nexit 1\n")
 		return
 	}
 	writeScript(w, agent.Install(h.appURL(r), code))
@@ -269,7 +269,7 @@ func (h *handler) enroll(w http.ResponseWriter, r *http.Request) {
 }
 
 // unenroll answers DELETE /api/agent/enrollment, which uninstall.sh sends
-// with the agent's secret. Roost refuses the secret from then on, and forgets
+// with the agent's secret. Bield refuses the secret from then on, and forgets
 // what the agent reported.
 func (h *handler) unenroll(w http.ResponseWriter, r *http.Request) {
 	node := callerOf(r).node
@@ -302,7 +302,7 @@ func (h *handler) agentSetup(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// revokeAgent answers DELETE /api/devices/{id}/agent. Roost refuses the
+// revokeAgent answers DELETE /api/devices/{id}/agent. Bield refuses the
 // secret of the device's agent from then on, and forgets what it reported.
 func (h *handler) revokeAgent(w http.ResponseWriter, r *http.Request) {
 	d, historyID, ok := h.device(r)
@@ -336,7 +336,7 @@ func (h *handler) revokeAgent(w http.ResponseWriter, r *http.Request) {
 
 // forgetReports drops what an agent reported for the device whose history is
 // kept under historyID, and reports whether there was anything. Without an
-// agent report, the usage under historyID is Roost's own, of the machine it
+// agent report, the usage under historyID is Bield's own, of the machine it
 // runs on, and stays.
 func (h *handler) forgetReports(ctx context.Context, historyID string) (bool, error) {
 	switch err := h.opts.Agents.Forget(ctx, historyID); {
@@ -351,7 +351,7 @@ func (h *handler) forgetReports(ctx context.Context, historyID string) (bool, er
 
 // nodesOf returns the IDs of the nodes on the tailnet whose history is kept
 // under id: a device's own ID, or for store.HubID, each node of the machine
-// Roost runs on.
+// Bield runs on.
 func (h *handler) nodesOf(id string) []string {
 	st := h.opts.Snapshot().Status
 	if st == nil || id != store.HubID {
@@ -367,7 +367,7 @@ func (h *handler) nodesOf(id string) []string {
 }
 
 // appURL returns where the app is, without a trailing slash: the public URL
-// if an admin set one, else where Roost listens on the tailnet.
+// if an admin set one, else where Bield listens on the tailnet.
 func (h *handler) appURL(r *http.Request) string {
 	if u := h.opts.Settings.Get(r.Context()).General.PublicURL; u != "" {
 		return u
@@ -375,7 +375,7 @@ func (h *handler) appURL(r *http.Request) string {
 	if h.opts.AppURL != "" {
 		return strings.TrimSuffix(h.opts.AppURL, "/")
 	}
-	// The guard has checked that the host is one of Roost's own names.
+	// The guard has checked that the host is one of Bield's own names.
 	scheme := "http"
 	if r.TLS != nil {
 		scheme = "https"

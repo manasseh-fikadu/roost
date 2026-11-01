@@ -22,7 +22,7 @@ import (
 )
 
 // localAPI answers the Tailnet questions through a tailscaled's LocalAPI,
-// whether that tailscaled runs inside Roost (Embedded) or on the machine
+// whether that tailscaled runs inside Bield (Embedded) or on the machine
 // (Host). They differ only in how they listen and dial.
 type localAPI struct {
 	lc *local.Client

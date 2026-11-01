@@ -30,7 +30,7 @@ func TestConvertStatus(t *testing.T) {
 		AuthURL:        "",
 		CurrentTailnet: &ipnstate.TailnetStatus{Name: "example.com"},
 		Self: &ipnstate.PeerStatus{
-			ID: "self", HostName: "roost", DNSName: "roost.example.ts.net.", OS: "linux",
+			ID: "self", HostName: "bield", DNSName: "bield.example.ts.net.", OS: "linux",
 			// tsnet doesn't mark its own node online.
 			UserID: 1, TailscaleIPs: []netip.Addr{ip("100.64.0.1")}, LastSeen: lastSeen,
 		},
@@ -56,7 +56,7 @@ func TestConvertStatus(t *testing.T) {
 		State:   StateRunning,
 		Tailnet: "example.com",
 		Self: Device{
-			ID: "self", HostName: "roost", DNSName: "roost.example.ts.net", OS: "linux",
+			ID: "self", HostName: "bield", DNSName: "bield.example.ts.net", OS: "linux",
 			IPs: []netip.Addr{ip("100.64.0.1")}, Owner: "alice@example.com", Online: true,
 		},
 		Peers: []Device{
@@ -218,7 +218,7 @@ func TestMarkSameMachine(t *testing.T) {
 func TestURLHost(t *testing.T) {
 	t.Parallel()
 	v4, v6 := netip.MustParseAddr("100.64.0.1"), netip.MustParseAddr("fd7a:115c:a1e0::1")
-	self := &ipnstate.PeerStatus{DNSName: "roost.example.ts.net."}
+	self := &ipnstate.PeerStatus{DNSName: "bield.example.ts.net."}
 	magicDNS := &ipnstate.TailnetStatus{MagicDNSEnabled: true}
 	tests := []struct {
 		name       string
@@ -229,14 +229,14 @@ func TestURLHost(t *testing.T) {
 		{
 			name: "HTTPS",
 			st: &ipnstate.Status{Self: self, CurrentTailnet: magicDNS, TailscaleIPs: []netip.Addr{v4},
-				CertDomains: []string{"roost.example.ts.net"}},
-			wantHost:   "roost.example.ts.net",
-			wantDomain: "roost.example.ts.net",
+				CertDomains: []string{"bield.example.ts.net"}},
+			wantHost:   "bield.example.ts.net",
+			wantDomain: "bield.example.ts.net",
 		},
 		{
 			name:     "MagicDNS without HTTPS",
 			st:       &ipnstate.Status{Self: self, CurrentTailnet: magicDNS, TailscaleIPs: []netip.Addr{v6, v4}},
-			wantHost: "roost.example.ts.net",
+			wantHost: "bield.example.ts.net",
 		},
 		{
 			name:     "no MagicDNS prefers IPv4",
@@ -270,12 +270,12 @@ func TestAppURL(t *testing.T) {
 		port         int
 		want         string
 	}{
-		{"https", "roost.example.ts.net", 443, "https://roost.example.ts.net"},
-		{"https", "roost.example.ts.net", 4700, "https://roost.example.ts.net:4700"},
+		{"https", "bield.example.ts.net", 443, "https://bield.example.ts.net"},
+		{"https", "bield.example.ts.net", 4700, "https://bield.example.ts.net:4700"},
 		{"http", "100.64.0.1", 80, "http://100.64.0.1"},
 		{"http", "100.64.0.1", 4700, "http://100.64.0.1:4700"},
 		// Host mode on port 443 without a certificate serves HTTP there.
-		{"http", "roost.example.ts.net", 443, "http://roost.example.ts.net:443"},
+		{"http", "bield.example.ts.net", 443, "http://bield.example.ts.net:443"},
 		{"http", "[fd7a:115c:a1e0::1]", 4700, "http://[fd7a:115c:a1e0::1]:4700"},
 	}
 	for _, tt := range tests {

@@ -46,9 +46,9 @@
 	const devices = $derived(terminalDevices(all));
 	const now = $derived(live.snapshot ? Date.parse(live.snapshot.generatedAt) : Date.now());
 	/**
-	 * The device in ?device=, or else the machine Roost runs on, or else the
-	 * first. The machine Roost runs on is listed once, so a link to its other
-	 * node, such as the Terminal button on Roost's own node, opens the one
+	 * The device in ?device=, or else the machine Bield runs on, or else the
+	 * first. The machine Bield runs on is listed once, so a link to its other
+	 * node, such as the Terminal button on Bield's own node, opens the one
 	 * that's listed.
 	 */
 	const device = $derived.by((): Device | undefined => {
@@ -321,7 +321,7 @@
 	{:else if !device}
 		<Card>
 			<EmptyState title="No machine has SSH access yet" icon={SquareTerminal}>
-				Roost needs SSH access to a machine first. On the machine it runs on, that takes one click.
+				Bield needs SSH access to a machine first. On the machine it runs on, that takes one click.
 				<SetUpAccess devices={all} />
 			</EmptyState>
 		</Card>
@@ -344,7 +344,7 @@
 					icon={ShieldAlert}
 				>
 					{#if device.ssh?.state === 'host-key-changed'}
-						Roost won't log in until an admin trusts the new key, on <a
+						Bield won't log in until an admin trusts the new key, on <a
 							href="{resolve('/devices/[id]', { id: device.id })}#ssh"
 							class="text-fg underline underline-offset-4">its page</a
 						>.

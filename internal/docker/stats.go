@@ -6,7 +6,7 @@ import (
 )
 
 // RawStats is one sample from the Engine API's stats for a container, with
-// the fields Roost reads. Docker counts up, so every rate, CPU included, is
+// the fields Bield reads. Docker counts up, so every rate, CPU included, is
 // the change between two samples.
 type RawStats struct {
 	Read     string `json:"read"`
@@ -65,7 +65,7 @@ func countOf(p *uint64) count {
 // needs to work out rates.
 type Counters struct {
 	// at is when Docker took the sample, by the machine's clock, and seen is
-	// when Roost got it, by its own.
+	// when Bield got it, by its own.
 	at, seen   time.Time
 	cpu, sys   count
 	cpus       int

@@ -1,4 +1,4 @@
-<!-- The browser's own drop-down list, in Roost's style. Give it a label, such as with <Field>. -->
+<!-- The browser's own drop-down list, in Bield's style. Give it a label, such as with <Field>. -->
 <script lang="ts">
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import type { HTMLSelectAttributes } from 'svelte/elements';

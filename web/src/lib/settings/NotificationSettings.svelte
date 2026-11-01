@@ -1,4 +1,4 @@
-<!-- The Notifications tab: the channels, and when Roost sends to them. -->
+<!-- The Notifications tab: the channels, and when Bield sends to them. -->
 <script lang="ts">
 	import type { SettingsView } from '#lib/api/types.js';
 	import ChannelsCard from './ChannelsCard.svelte';

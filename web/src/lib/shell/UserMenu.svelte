@@ -67,7 +67,7 @@
 	{#if live.snapshot}
 		<MenuSeparator />
 		<MenuLabel>
-			<span class="font-mono text-[11px] text-fg-faint">Roost {live.snapshot.hub.version}</span>
+			<span class="font-mono text-[11px] text-fg-faint">Bield {live.snapshot.hub.version}</span>
 		</MenuLabel>
 	{/if}
 </Menu>

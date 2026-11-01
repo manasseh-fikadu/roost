@@ -1,6 +1,6 @@
 # Generates TypeScript for the API's types. Run `make types` after changing them.
 packages:
-  - path: github.com/manasseh-fikadu/roost/internal/api
+  - path: github.com/manasseh-fikadu/bield/internal/api
     output_path: web/src/lib/api/types.ts
     include_files:
       - types.go

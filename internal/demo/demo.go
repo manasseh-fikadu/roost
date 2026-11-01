@@ -1,12 +1,12 @@
-// Package demo is Roost's demo mode: a tailnet that doesn't exist, with a
-// dozen machines on it that are made up, and everything Roost would learn
+// Package demo is Bield's demo mode: a tailnet that doesn't exist, with a
+// dozen machines on it that are made up, and everything Bield would learn
 // about them. It's for screenshots, for the landing page's live demo, for
-// trying Roost out without a tailnet, and for testing the UI and Roost's
+// trying Bield out without a tailnet, and for testing the UI and Bield's
 // speed with hundreds of machines.
 //
-// A Demo doesn't swap out any of Roost: the checks, the alerts, the Docker
+// A Demo doesn't swap out any of Bield: the checks, the alerts, the Docker
 // pages and the SSH layer run as they do for a real tailnet, against
-// stand-ins for what's outside Roost. The tailnet is a tailnettest.Tailnet,
+// stand-ins for what's outside Bield. The tailnet is a tailnettest.Tailnet,
 // the machines' agents send real heartbeats, their sshd is an sshtest.Server
 // that serves a fake Docker, and the checks' targets are in-memory servers.
 // What each machine does is a function of the time, so the history a Demo
@@ -19,14 +19,14 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
 )
 
 // Options configures New.
 type Options struct {
-	// Devices is how many machines the tailnet has, Roost's own included. It
-	// is 12 unless a demo needs more, such as to try Roost with 200.
+	// Devices is how many machines the tailnet has, Bield's own included. It
+	// is 12 unless a demo needs more, such as to try Bield with 200.
 	Devices int
 	// Listen is the TCP address to serve the app on.
 	Listen string
@@ -115,14 +115,14 @@ func (d *Demo) machineNamed(host string, fallback *machine) *machine {
 	return fallback
 }
 
-// Node returns the tailnet, which Roost serves its app on.
+// Node returns the tailnet, which Bield serves its app on.
 func (d *Demo) Node() *Node { return d.node }
 
 // Start is when the demo started, which its history ends at.
 func (d *Demo) Start() time.Time { return d.start }
 
 // Run keeps the tailnet moving until ctx ends: it brings the status and the
-// pings up to date, and measures Roost's own machine. The machines' agents
+// pings up to date, and measures Bield's own machine. The machines' agents
 // report through Report.
 func (d *Demo) Run(ctx context.Context) {
 	var wg sync.WaitGroup
@@ -141,7 +141,7 @@ func (d *Demo) Run(ctx context.Context) {
 	}
 }
 
-// Host returns the collector for Roost's own machine, which stands in for
+// Host returns the collector for Bield's own machine, which stands in for
 // the one that reads /proc.
 func (d *Demo) Host() *Host { return d.host }
 

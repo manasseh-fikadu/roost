@@ -15,17 +15,17 @@ import (
 	"tailscale.com/tsnet"
 )
 
-// Embedded is a Tailscale node that runs inside Roost with tsnet, so Roost is
+// Embedded is a Tailscale node that runs inside Bield with tsnet, so Bield is
 // its own machine on the tailnet, with its own name and HTTPS certificate. It
 // needs nothing from the machine it runs on, so it works in a container.
 //
-// The machine Roost runs on may also be on the tailnet as a separate node.
+// The machine Bield runs on may also be on the tailnet as a separate node.
 // Status marks that peer as SameMachine when one of its tailnet IPs is on a
 // local network interface, which is the case when the machine's tailscaled
 // uses a TUN device (the default). In a container, or with userspace
 // networking, the addresses aren't visible, so the machine shows up as an
-// ordinary peer. Host names aren't compared, since Roost's node is named
-// after Roost, not the machine.
+// ordinary peer. Host names aren't compared, since Bield's node is named
+// after Bield, not the machine.
 type Embedded struct {
 	localAPI
 	srv *tsnet.Server
@@ -64,7 +64,7 @@ func NewEmbedded(opts EmbeddedOptions) (*Embedded, error) {
 		Dir:        opts.Dir,
 		Hostname:   opts.Hostname,
 		ControlURL: opts.ControlURL,
-		// tsnet repeats the login URL every few seconds; Roost reports it once.
+		// tsnet repeats the login URL every few seconds; Bield reports it once.
 		UserLogf: func(format string, args ...any) {
 			log.Debug("tsnet", "message", fmt.Sprintf(format, args...))
 		},

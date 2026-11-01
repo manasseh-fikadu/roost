@@ -109,10 +109,10 @@
 	let refreshing = $state(false);
 	let reloadKey = $state(0);
 
-	const showHidden = new Persisted('roost.files.hidden', false);
-	const sortPref = new Persisted<Sort>('roost.files.sort', { key: 'name', dir: 1 });
+	const showHidden = new Persisted('bield.files.hidden', false);
+	const sortPref = new Persisted<Sort>('bield.files.sort', { key: 'name', dir: 1 });
 	// A device's bookmarks are its own, so the key has its ID.
-	const bookmarkPref = $derived(new Persisted<string[]>(`roost.files.bookmarks.${deviceId}`, []));
+	const bookmarkPref = $derived(new Persisted<string[]>(`bield.files.bookmarks.${deviceId}`, []));
 
 	let sel = $state.raw<Selection>(emptySelection());
 	let search = $state<SearchState | null>(null);

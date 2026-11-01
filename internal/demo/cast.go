@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/usage"
+	"github.com/manasseh-fikadu/bield/internal/usage"
 )
 
 // tailnetName and dnsSuffix are the made-up tailnet's name, and the end of
@@ -18,7 +18,7 @@ const (
 )
 
 // The people whose machines are on the tailnet. Alex is the one who looks at
-// Roost, so every visitor is Alex.
+// Bield, so every visitor is Alex.
 const (
 	alex = "alex@example.com"
 	sam  = "sam@example.com"
@@ -27,7 +27,7 @@ const (
 // A machine is one made-up device: what it is, how busy it is and where it
 // sits on the tailnet.
 type machine struct {
-	// index is where the machine is in the tailnet. The first is Roost's own.
+	// index is where the machine is in the tailnet. The first is Bield's own.
 	index int
 	// id is the node's ID, and ip4 and ip6 its tailnet addresses.
 	id          string
@@ -158,18 +158,18 @@ func user(name string, cpu, memMB float64, procs int, top ...string) workload {
 // The first machines of every demo. A bigger demo adds generated ones.
 var baseCast = []machine{
 	{
-		host: "roost", os: "linux", osVersion: "Debian GNU/Linux 13 (trixie)", kernel: "6.12.43+deb13-amd64",
+		host: "bield", os: "linux", osVersion: "Debian GNU/Linux 13 (trixie)", kernel: "6.12.43+deb13-amd64",
 		model: "Hetzner CX22", arch: "x86_64", owner: alex,
 		cores: 2, memGB: 3.7, swapGB: 2, diskGB: 38, cpu: 6, cpuSwing: 5, mem: 41, memSwing: 4, disk: 44, diskPerDay: 0.08,
 		rx: 180e3, tx: 260e3, peak: 15, uptime: 61 * 24 * time.Hour, rtt: 0, relay: "fra", direct: true,
-		joined: 214 * 24 * time.Hour, hasDk: true, name: "Roost",
+		joined: 214 * 24 * time.Hour, hasDk: true, name: "Bield",
 		containers: []container{
-			srv("roost", "ghcr.io/manasseh-fikadu/roost:latest", "", 3, 96).healthy().up(-61 * 24 * time.Hour).volume("roost_data"),
+			srv("bield", "ghcr.io/manasseh-fikadu/bield:latest", "", 3, 96).healthy().up(-61 * 24 * time.Hour).volume("bield_data"),
 			srv("caddy", "caddy:2.10", "edge", 0.4, 38, port{80, 80, "0.0.0.0"}, port{443, 443, "0.0.0.0"}).up(-61 * 24 * time.Hour).volume("caddy_data"),
 			srv("watchtower", "containrrr/watchtower:1.7", "", 0.1, 24).up(-9 * 24 * time.Hour),
 		},
 		workloads: []workload{
-			svc("roost.service", 0.5, 110, 1, "roost serve"), svc("tailscaled.service", 0.2, 60, 1, "tailscaled"),
+			svc("bield.service", 0.5, 110, 1, "bield serve"), svc("tailscaled.service", 0.2, 60, 1, "tailscaled"),
 			svc("docker.service", 0.1, 90, 1, "dockerd"), svc("ssh.service", 0.0, 8, 1, "sshd"),
 			svc("systemd-journald.service", 0.05, 40, 1, "systemd-journald"),
 		},

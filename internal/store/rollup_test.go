@@ -9,14 +9,14 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // openQuiet opens a store that neither sums up nor prunes by itself, so a test
 // decides when it does.
 func openQuiet(t *testing.T) *store.Store {
 	t.Helper()
-	s, err := store.OpenWith(t.Context(), filepath.Join(t.TempDir(), "roost.db"), store.Options{NoPrune: true}, store.Migrations())
+	s, err := store.OpenWith(t.Context(), filepath.Join(t.TempDir(), "bield.db"), store.Options{NoPrune: true}, store.Migrations())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +151,7 @@ func count(t *testing.T, s *store.Store, query string) int {
 func TestStore_historyAcrossBuckets(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+		s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 		synctest.Wait()
 		now := time.Now()
 		// A sample a minute for 5 days: the CPU is the hour of the day, and the RTT
@@ -248,7 +248,7 @@ func TestStore_bucketsLastAsLongAsHistory(t *testing.T) {
 	t.Parallel()
 	const day = 24 * time.Hour
 	synctest.Test(t, func(t *testing.T) {
-		s, err := store.OpenWith(t.Context(), filepath.Join(t.TempDir(), "roost.db"),
+		s, err := store.OpenWith(t.Context(), filepath.Join(t.TempDir(), "bield.db"),
 			store.Options{Retention: fixedRetention(store.Retention{Activity: day, History: 90 * day, Checks: day})}, store.Migrations())
 		if err != nil {
 			t.Fatal(err)

@@ -7,10 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/hostmetrics"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // snapshotOf builds a snapshot of s and host, as the feed would at now.
@@ -30,7 +30,7 @@ func TestSnapshot_devices(t *testing.T) {
 	recent := now.Add(-time.Minute)
 	created := time.Date(2026, 7, 4, 0, 0, 0, 0, time.UTC)
 	self := tailnet.Device{
-		ID: "roost", HostName: "hub", DNSName: roostHost, OS: "linux", IPs: []netip.Addr{roostIP}, Online: true,
+		ID: "bield", HostName: "hub", DNSName: bieldHost, OS: "linux", IPs: []netip.Addr{bieldIP}, Online: true,
 		Relay: "fra", Created: created,
 	}
 	peers := []tailnet.Device{
@@ -78,7 +78,7 @@ func TestSnapshot_devices(t *testing.T) {
 		reason string
 		path   api.PathKind
 	}{
-		{"roost", "hub", api.DeviceKindServer, api.StatusAttention, "Disk 90% full · Memory 95% used · CPU 93% for 5m", api.PathKindSelf},
+		{"bield", "hub", api.DeviceKindServer, api.StatusAttention, "Disk 90% full · Memory 95% used · CPU 93% for 5m", api.PathKindSelf},
 		{"host", "host", api.DeviceKindServer, api.StatusAttention, "Disk 90% full · Memory 95% used · CPU 93% for 5m", api.PathKindDERP},
 		{"nas", "nas01", api.DeviceKindServer, api.StatusOnline, "Relayed through DERP", api.PathKindDERP},
 		{"pi", "pi", api.DeviceKindServer, api.StatusAttention, "Tailscale key expired", api.PathKindDERP},
@@ -103,7 +103,7 @@ func TestSnapshot_devices(t *testing.T) {
 		}
 	}
 
-	hub := findDevice(t, got, "roost")
+	hub := findDevice(t, got, "bield")
 	if m := hub.Metrics; m == nil || *m.CPU != 95 || m.Memory.Used != 95 || len(m.Load) != 3 || m.Procs != 300 {
 		t.Errorf("hub metrics = %+v, want the host's", hub.Metrics)
 	}
@@ -114,7 +114,7 @@ func TestSnapshot_devices(t *testing.T) {
 		t.Errorf("hub created %v, key expiry %v; want %v and none", hub.Created, hub.KeyExpiry, created)
 	}
 	if findDevice(t, got, "host").Metrics == nil {
-		t.Error("the peer on Roost's machine has no metrics, want the host's")
+		t.Error("the peer on Bield's machine has no metrics, want the host's")
 	}
 
 	mac := findDevice(t, got, "mac")
@@ -146,7 +146,7 @@ func TestSnapshot_devices(t *testing.T) {
 	}
 }
 
-// How Roost guesses what sort of machine a device is from its OS and name. The
+// How Bield guesses what sort of machine a device is from its OS and name. The
 // tailnet's name matches the patterns, so the guess must leave it out.
 func TestSnapshot_kinds(t *testing.T) {
 	t.Parallel()
@@ -169,7 +169,7 @@ func TestSnapshot_kinds(t *testing.T) {
 	}
 	st := &tailnet.Status{
 		State: tailnet.StateRunning,
-		Self:  tailnet.Device{ID: "roost", DNSName: "roost.pi-tab.ts.net", Online: true},
+		Self:  tailnet.Device{ID: "bield", DNSName: "bield.pi-tab.ts.net", Online: true},
 	}
 	for _, tt := range tests {
 		st.Peers = append(st.Peers, tailnet.Device{
@@ -192,7 +192,7 @@ func TestSnapshot_secrets(t *testing.T) {
 	snap := tailnet.Snapshot{
 		Status: &tailnet.Status{
 			State: tailnet.StateRunning, Tailnet: "alice@example.com",
-			Self: tailnet.Device{ID: "roost", DNSName: roostHost, Online: true},
+			Self: tailnet.Device{ID: "bield", DNSName: bieldHost, Online: true},
 			Peers: []tailnet.Device{
 				{ID: "direct", DNSName: "direct.example.ts.net", Online: true, CurAddr: "203.0.113.2:41641"},
 				{ID: "relayed", DNSName: "relayed.example.ts.net", Online: true, PeerRelay: "203.0.113.9:7777:vni:1"},
@@ -231,7 +231,7 @@ func TestSnapshot_secrets(t *testing.T) {
 				findDevice(t, s, "direct").Path.Endpoint, findDevice(t, s, "relayed").Path.PeerRelay,
 				tt.tailnet, tt.ip, tt.errMsg, tt.endpoint, tt.relay)
 		}
-		if info := findDevice(t, s, "roost").Info; info == nil || info.Kernel != tt.kernel {
+		if info := findDevice(t, s, "bield").Info; info == nil || info.Kernel != tt.kernel {
 			t.Errorf("%s gets the hub's info %+v, want kernel %q", tt.name, info, tt.kernel)
 		}
 	}
@@ -242,7 +242,7 @@ func TestSnapshot_uplinkAndCollectors(t *testing.T) {
 	st := testStore(t)
 	now := time.Now()
 	snap := tailnet.Snapshot{
-		Status:   &tailnet.Status{State: tailnet.StateRunning, Self: tailnet.Device{ID: "roost", Online: true}},
+		Status:   &tailnet.Status{State: tailnet.StateRunning, Self: tailnet.Device{ID: "bield", Online: true}},
 		StatusAt: now,
 		Connectivity: &tailnet.Connectivity{
 			UDP: true, IPv6: true, PublicIPv6: netip.MustParseAddr("2001:db8::1"),

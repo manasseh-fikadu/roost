@@ -1,15 +1,15 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
-# Roost agent: sends a metrics heartbeat to the hub every INTERVAL seconds.
+# Bield agent: sends a metrics heartbeat to the hub every INTERVAL seconds.
 # Works on macOS (bash 3.2) and Linux. Needs only curl and standard system tools.
 set -u
 
 AGENT_VERSION="1.3.0"
-CONF="${ROOST_AGENT_CONF:-$HOME/.config/roost-agent/env}"
+CONF="${BIELD_AGENT_CONF:-$HOME/.config/bield-agent/env}"
 # shellcheck disable=SC1090
 [ -f "$CONF" ] && . "$CONF"
 : "${SERVER_URL:?SERVER_URL is not set (expected in $CONF)}"
-: "${SECRET:?SECRET is not set (expected in $CONF); enroll this machine again from the Agents page in Roost}"
+: "${SECRET:?SECRET is not set (expected in $CONF); enroll this machine again from the Agents page in Bield}"
 INTERVAL="${INTERVAL:-15}"
 OS="$(uname -s)"
 export PATH="$PATH:/usr/local/bin:/opt/homebrew/bin:/usr/sbin:/sbin"
@@ -368,10 +368,10 @@ send_heartbeat() {
   local out body msg
   STATUS=""
   build_payload
-  # The secret goes through stdin (-K -) so it never shows up in `ps`. Roost
-  # refuses POSTs without an X-Roost header, which pages on other sites can't send.
+  # The secret goes through stdin (-K -) so it never shows up in `ps`. Bield
+  # refuses POSTs without an X-Bield header, which pages on other sites can't send.
   out=$(printf 'header = "Authorization: Bearer %s"\n' "$SECRET" |
-    curl -sS -m 10 -K - -w '\n%{http_code}' -X POST -H 'Content-Type: application/json' -H 'X-Roost: agent' \
+    curl -sS -m 10 -K - -w '\n%{http_code}' -X POST -H 'Content-Type: application/json' -H 'X-Bield: agent' \
       --data-binary "$payload" "$SERVER_URL/api/agent/heartbeat") || {
     echo "$(date '+%Y-%m-%d %H:%M:%S') heartbeat failed: couldn't reach $SERVER_URL" >&2
     return 1
@@ -379,7 +379,7 @@ send_heartbeat() {
   STATUS=${out##*$'\n'}
   case "$STATUS" in 2??) return 0 ;; esac
   body=${out%$'\n'*}
-  # Roost's errors look like {"error":"..."}.
+  # Bield's errors look like {"error":"..."}.
   msg=$(printf '%s' "$body" | sed -n 's/^{"error":"\(.*\)"}$/\1/p')
   echo "$(date '+%Y-%m-%d %H:%M:%S') heartbeat failed with HTTP $STATUS: ${msg:-$body}" >&2
   return 1

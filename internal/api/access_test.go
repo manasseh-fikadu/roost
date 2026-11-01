@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // users returns each of a's users as "login role".
@@ -93,7 +93,7 @@ func TestAccess_errors(t *testing.T) {
 		{"unknown who can view", http.MethodPatch, "/api/access", `{"whoCanView": "everyone"}`, http.StatusBadRequest},
 		// Valid JSON, so only the size limit can refuse it.
 		{"too big", http.MethodPatch, "/api/access", `{"whoCanView": "tailnet"` + strings.Repeat(" ", 2<<20) + `}`, http.StatusBadRequest},
-		// Roost always keeps an admin.
+		// Bield always keeps an admin.
 		{"last admin to viewer", http.MethodPut, "/api/access/users/" + alice, `{"role": "viewer"}`, http.StatusConflict},
 		{"last admin removed", http.MethodDelete, "/api/access/users/Alice@Example.com", ``, http.StatusConflict},
 	}

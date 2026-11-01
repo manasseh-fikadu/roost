@@ -122,9 +122,9 @@ func (f *feed) stop() { f.finish("the stats were closed") }
 func (f *feed) run(ctx context.Context) {
 	body, err := f.h.client.StatsStream(ctx, f.id)
 	if err != nil {
-		// Viewers read the reason, and an error can say how Roost reaches
+		// Viewers read the reason, and an error can say how Bield reaches
 		// the machine.
-		f.finish("Roost couldn't read the container's stats")
+		f.finish("Bield couldn't read the container's stats")
 		return
 	}
 	defer func() { _ = body.Close() }()

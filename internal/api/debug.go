@@ -4,7 +4,7 @@ import (
 	"net/netip"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // The types in this file are the response to GET /api/debug/tailnet, which is

@@ -20,7 +20,7 @@
 	<div class="mt-4 mb-2 font-medium text-fg-muted">Uninstall</div>
 	<CodeLine command={s.uninstallCommand} />
 	<p class="mt-2 text-[12px] text-fg-subtle">
-		Run it on the machine. It also tells Roost to forget the agent.
+		Run it on the machine. It also tells Bield to forget the agent.
 	</p>
 {:catch err}
 	<p class="text-fg-subtle">

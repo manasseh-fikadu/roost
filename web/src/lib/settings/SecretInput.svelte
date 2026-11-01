@@ -1,5 +1,5 @@
 <!--
-	A field for a secret, such as a webhook's address or a password. Roost never
+	A field for a secret, such as a webhook's address or a password. Bield never
 	sends a saved secret back, so the field is empty and says one is saved:
 	leave it empty to keep it, type to replace it. An optional secret can also
 	be taken away.

@@ -80,7 +80,7 @@
 <Dialog
 	bind:open
 	title={channel ? `Edit ${channel.name}` : 'Add a channel'}
-	description="Roost sends a message here when an alert opens. You choose which alerts."
+	description="Bield sends a message here when an alert opens. You choose which alerts."
 	width="sm:max-w-xl"
 >
 	<form
@@ -129,7 +129,7 @@
 			>
 				<Input
 					bind:value={draft.topic}
-					placeholder="roost-alerts-k3x9q"
+					placeholder="bield-alerts-k3x9q"
 					autocomplete="off"
 					autocapitalize="off"
 					spellcheck={false}
@@ -255,7 +255,7 @@
 				<Field label="From">
 					<Input
 						bind:value={draft.from}
-						placeholder="Roost <roost@example.com>"
+						placeholder="Bield <bield@example.com>"
 						autocomplete="off"
 						autocapitalize="off"
 						spellcheck={false}
@@ -282,7 +282,7 @@
 					bind:cleared={draft.cleared.url}
 					saved={has('url')}
 					placeholder="https://example.com/hook"
-					hint="Roost posts JSON to it: the event, the alert and a text. The address can hold a token, so Roost keeps it secret."
+					hint="Bield posts JSON to it: the event, the alert and a text. The address can hold a token, so Bield keeps it secret."
 				/>
 			</div>
 			<div class="sm:col-span-2">

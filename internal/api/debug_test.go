@@ -9,16 +9,16 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/alerts"
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/checks"
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
-	"github.com/manasseh-fikadu/roost/internal/usage"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/alerts"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/checks"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/usage"
 )
 
 func TestNew_debugTailnet(t *testing.T) {
@@ -29,7 +29,7 @@ func TestNew_debugTailnet(t *testing.T) {
 		tn := tailnettest.New(tailnet.Status{
 			State:   tailnet.StateRunning,
 			Tailnet: "example.com",
-			Self:    tailnet.Device{ID: "roost", DNSName: "roost.example.ts.net", Online: true},
+			Self:    tailnet.Device{ID: "bield", DNSName: "bield.example.ts.net", Online: true},
 			Peers: []tailnet.Device{
 				{ID: "laptop", DNSName: "laptop.example.ts.net", OS: "macOS", IPs: []netip.Addr{laptop}, Owner: alice, Online: true},
 				{ID: "phone", DNSName: "phone.example.ts.net", Relay: "fra"},

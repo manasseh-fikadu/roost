@@ -14,18 +14,18 @@ import (
 // read. A handler that sets one of these itself, such as the file routes with
 // their own Content-Security-Policy, wins.
 //
-// Roost opens shells on every machine, so a page on another site that could
+// Bield opens shells on every machine, so a page on another site that could
 // frame the terminal, and click through it, is as bad as a bug in it.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "no-referrer")
-		// Roost's own pages may frame its files, such as a PDF. No one else may
+		// Bield's own pages may frame its files, such as a PDF. No one else may
 		// frame anything, and the web app overrides this to say no one at all.
 		h.Set("X-Frame-Options", "SAMEORIGIN")
 		h.Set("Content-Security-Policy", "frame-ancestors 'self'")
-		// Another site can't load a response of Roost's, even with no-cors.
+		// Another site can't load a response of Bield's, even with no-cors.
 		h.Set("Cross-Origin-Resource-Policy", "same-origin")
 		h.Set("Cross-Origin-Opener-Policy", "same-origin")
 		h.Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()")
@@ -42,7 +42,7 @@ var hasSrc = regexp.MustCompile(`(?i)(^|\s)src\s*=`)
 // uiPolicy works out the Content-Security-Policy of the web app's pages from
 // the page itself. SvelteKit starts the app with an inline script whose text
 // changes with every build, so the policy allows that script by its hash, and
-// no other: nothing in the page can run script that Roost didn't build, and
+// no other: nothing in the page can run script that Bield didn't build, and
 // no page can load more of it from another site, so a file's text or a
 // machine's hostname that reached the page as HTML would still be inert.
 //
@@ -90,7 +90,7 @@ type policy struct{ base string }
 var plainHost = regexp.MustCompile(`^[A-Za-z0-9.\-:\[\]]+$`)
 
 // header returns the policy for a page that was asked for at r.Host. The
-// page talks to Roost, and its terminal opens a WebSocket, which some
+// page talks to Bield, and its terminal opens a WebSocket, which some
 // browsers don't count as 'self'.
 func (p *policy) header(r *http.Request) string {
 	connect := "connect-src 'self'"

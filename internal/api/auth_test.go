@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 func getMe(t *testing.T, h http.Handler, req *http.Request) api.Me {
@@ -38,13 +38,13 @@ func TestMe(t *testing.T) {
 	}{
 		{"admin", laptopIP, api.Me{SignedIn: true, Login: alice, Name: alice, Device: "laptop.example.ts.net", Role: api.RoleAdmin}},
 		{"viewer", phoneIP, api.Me{SignedIn: true, Login: bob, Name: bob, Device: "phone.example.ts.net", Role: api.RoleViewer}},
-		// Only the listed users can view Roost, so carol can't.
+		// Only the listed users can view Bield, so carol can't.
 		{"no role", tabletIP, api.Me{SignedIn: true, Login: carol, Name: carol, Device: "tablet.example.ts.net"}},
 		{"tagged device", serverIP, api.Me{Reason: api.ReasonTaggedDevice}},
 		{"unknown address", strangerIP, api.Me{Reason: api.ReasonUnknownDevice}},
-		// In host mode, Roost's node is the machine Roost runs on. Its owner
+		// In host mode, Bield's node is the machine Bield runs on. Its owner
 		// is alice, but any process there could be asking.
-		{"Roost's own node", roostIP, api.Me{Reason: api.ReasonRoostMachine}},
+		{"Bield's own node", bieldIP, api.Me{Reason: api.ReasonBieldMachine}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -55,7 +55,7 @@ func TestMe(t *testing.T) {
 		})
 	}
 
-	// When anyone on the tailnet can view Roost, carol is a viewer, but
+	// When anyone on the tailnet can view Bield, carol is a viewer, but
 	// devices that belong to no one still aren't.
 	t.Run("anyone on the tailnet", func(t *testing.T) {
 		t.Parallel()
@@ -126,7 +126,7 @@ func TestMe_failures(t *testing.T) {
 		}
 	})
 
-	// If Roost can't tell what someone's role is, they have none, and Roost
+	// If Bield can't tell what someone's role is, they have none, and Bield
 	// says why, so the web app doesn't take it for a role taken away.
 	t.Run("role lookup fails", func(t *testing.T) {
 		t.Parallel()
@@ -154,7 +154,7 @@ func TestDebugTailnet_onlyAdmins(t *testing.T) {
 		tabletIP:   http.StatusForbidden,
 		serverIP:   http.StatusForbidden,
 		strangerIP: http.StatusForbidden,
-		roostIP:    http.StatusForbidden,
+		bieldIP:    http.StatusForbidden,
 	} {
 		rec := serve(h, newRequest(t, http.MethodGet, "/api/debug/tailnet", from))
 		if rec.Code != want {
@@ -166,21 +166,21 @@ func TestDebugTailnet_onlyAdmins(t *testing.T) {
 	}
 }
 
-// A page that rebinds its own name to Roost's address would otherwise talk to
-// Roost as the browser's device, with the page's own origin.
+// A page that rebinds its own name to Bield's address would otherwise talk to
+// Bield as the browser's device, with the page's own origin.
 func TestGuard_host(t *testing.T) {
 	t.Parallel()
 	h := api.New(withTailnet(t, testTailnet(), api.Options{}))
 	for host, want := range map[string]int{
-		roostHost:                  http.StatusOK,
-		roostHost + ":4700":        http.StatusOK,
-		roostHost + ".":            http.StatusOK,
-		"ROOST.Example.ts.net":     http.StatusOK,
-		"roost":                    http.StatusOK, // MagicDNS's short name
+		bieldHost:                  http.StatusOK,
+		bieldHost + ":4700":        http.StatusOK,
+		bieldHost + ".":            http.StatusOK,
+		"BIELD.Example.ts.net":     http.StatusOK,
+		"bield":                    http.StatusOK, // MagicDNS's short name
 		"100.64.0.1:4700":          http.StatusOK,
 		"[fd7a:115c:a1e0::1]:4700": http.StatusOK,
 		"attacker.example":         http.StatusMisdirectedRequest,
-		"roost.attacker.example":   http.StatusMisdirectedRequest,
+		"bield.attacker.example":   http.StatusMisdirectedRequest,
 		"laptop.example.ts.net":    http.StatusMisdirectedRequest,
 		"100.64.0.2":               http.StatusMisdirectedRequest,
 		"localhost:4700":           http.StatusMisdirectedRequest,
@@ -218,15 +218,15 @@ func TestGuard_webSocketOrigin(t *testing.T) {
 	t.Parallel()
 	h := api.New(withTailnet(t, testTailnet(), api.Options{}))
 	for origin, ok := range map[string]bool{
-		"http://" + roostHost:             true,
-		"https://" + roostHost:            false, // this request arrived without TLS
-		"http://" + roostHost + ":4700":   false,
+		"http://" + bieldHost:             true,
+		"https://" + bieldHost:            false, // this request arrived without TLS
+		"http://" + bieldHost + ":4700":   false,
 		"http://attacker.example":         false,
 		"http://laptop.example.ts.net":    false,
 		"null":                            false,
 		"":                                false,
-		"http://" + roostHost + "/x":      false,
-		"http://user@" + roostHost + "/x": false,
+		"http://" + bieldHost + "/x":      false,
+		"http://user@" + bieldHost + "/x": false,
 	} {
 		// HTTP/1.1 upgrades, and HTTP/2's extended CONNECT, which needs no
 		// CSRF header since browsers can't add one to a WebSocket.

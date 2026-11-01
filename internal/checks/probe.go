@@ -15,8 +15,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/manasseh-fikadu/roost/internal/netguard"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/netguard"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // The kinds of check an admin can set up.
@@ -34,7 +34,7 @@ const (
 const maxDetail = 300
 
 // userAgent is what an HTTP check says it is.
-const userAgent = "Roost-Check/1"
+const userAgent = "Bield-Check/1"
 
 // DialFunc connects to addr on network, as net.Dialer.DialContext does.
 type DialFunc func(ctx context.Context, network, addr string) (net.Conn, error)
@@ -81,7 +81,7 @@ func (p prober) run(ctx context.Context, c store.Check) Result {
 	case KindDNS:
 		r = p.dns(ctx, c)
 	default:
-		r = Result{Detail: "Roost doesn't know how to run a check of kind " + c.Kind}
+		r = Result{Detail: "Bield doesn't know how to run a check of kind " + c.Kind}
 	}
 	r.At = start
 	if !r.OK && errors.Is(ctx.Err(), context.DeadlineExceeded) {

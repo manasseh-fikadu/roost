@@ -1,6 +1,6 @@
 <!--
 	A button that removes a device's agent over SSH, after the admin confirms,
-	for the user Roost logs in as. The agent tells Roost to forget it, so the
+	for the user Bield logs in as. The agent tells Bield to forget it, so the
 	device stops showing one when it works. Only admins can use it.
 -->
 <script lang="ts">
@@ -11,7 +11,7 @@
 	import Dialog from '#lib/ui/Dialog.svelte';
 
 	interface Props {
-		/** A device that Roost can log in to. */
+		/** A device that Bield can log in to. */
 		device: Device;
 	}
 
@@ -51,11 +51,11 @@
 <Dialog
 	bind:open
 	title="Uninstall {device.name}'s agent?"
-	description="Roost logs in to {device.name} as {device.ssh?.user ??
+	description="Bield logs in to {device.name} as {device.ssh?.user ??
 		'its SSH user'} and removes the agent from that user's account."
 >
 	<p class="text-[13px] text-fg-muted">
-		The agent stops and tells Roost to forget it. If it was installed by another user, run the
+		The agent stops and tells Bield to forget it. If it was installed by another user, run the
 		uninstall command on the machine as that user instead.
 	</p>
 	{#if failed}

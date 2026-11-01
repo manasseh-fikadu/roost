@@ -1,5 +1,5 @@
 <!--
-	Which alerts Roost raises, and the thresholds that open them. The rules and
+	Which alerts Bield raises, and the thresholds that open them. The rules and
 	the thresholds are saved together, since the rules are what the thresholds
 	are for.
 -->
@@ -126,7 +126,7 @@
 
 <FormCard
 	title="Alert rules"
-	description="Roost raises an alert when a rule's condition is true. Turning a rule off hides it from the dashboard and resolves its open alerts."
+	description="Bield raises an alert when a rule's condition is true. Turning a rule off hides it from the dashboard and resolves its open alerts."
 	dirty={draft.dirty}
 	{saving}
 	{problem}

@@ -11,12 +11,12 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 func TestStore_MetricsHistory(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	start := time.UnixMilli(1_800_000_000_000).Truncate(5 * time.Minute)
 	row := func(device string, at time.Duration, cpu, mem *float64) store.MetricsRow {
 		return store.MetricsRow{DeviceID: device, At: start.Add(at), CPU: cpu, Mem: mem, NetRx: new(100.0), Temp: new(40.0)}
@@ -73,7 +73,7 @@ func bucketString(b store.MetricsBucket) string {
 
 func TestStore_Agents(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	at := time.UnixMilli(1_800_000_000_000)
 	for _, rec := range []store.AgentRecord{
 		{DeviceID: "phone", ReceivedAt: at, Report: []byte(`{"v":1}`)},
@@ -101,7 +101,7 @@ func TestStore_Agents(t *testing.T) {
 
 func TestStore_Usage(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	start := time.UnixMilli(1_800_000_000_000)
 	add := func(device string, at time.Duration, detail string) {
 		t.Helper()
@@ -156,7 +156,7 @@ func TestStore_prunesMetricsAndUsage(t *testing.T) {
 			day  = 24 * time.Hour
 			week = 7 * day
 		)
-		s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+		s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 		synctest.Wait()
 		now := time.Now()
 		err := s.AddMetrics(t.Context(), []store.MetricsRow{

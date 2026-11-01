@@ -1,5 +1,5 @@
--- Metrics and round-trip times of devices, summed up so Roost can keep them
--- for months. Raw samples last 48 hours. Roost folds them into 5-minute
+-- Metrics and round-trip times of devices, summed up so Bield can keep them
+-- for months. Raw samples last 48 hours. Bield folds them into 5-minute
 -- buckets, and those into hourly buckets, which package store's rollup.go does
 -- every few minutes. A bucket is complete when it's written, and it is
 -- written once its time is over.

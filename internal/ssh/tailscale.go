@@ -8,42 +8,42 @@ import (
 
 	gossh "golang.org/x/crypto/ssh"
 
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // Tailscale SSH is an SSH server inside tailscaled. It answers connections
 // to its machine's tailnet address on port 22, and lets in whoever the tailnet
 // policy says, with no key: a client that sends "none" as its authentication
 // is as good as one with a key, and x/crypto's client tries "none" first. The
-// policy has the last word: a rule can accept Roost, ask Roost to visit a URL
+// policy has the last word: a rule can accept Bield, ask Bield to visit a URL
 // first (action "check"), or not cover it at all. Tailscale SSH says which of
 // them it did in a banner before it hangs up or holds the login.
 
-// Method says how Roost logged in to a machine.
+// Method says how Bield logged in to a machine.
 type Method string
 
-// The ways Roost logs in.
+// The ways Bield logs in.
 const (
-	// MethodKey is a login with Roost's key, which an admin put in the
+	// MethodKey is a login with Bield's key, which an admin put in the
 	// machine's authorized_keys.
 	MethodKey Method = "key"
 	// MethodTailscale is a login to the machine's Tailscale SSH, which let
-	// Roost in without a key.
+	// Bield in without a key.
 	MethodTailscale Method = "tailscale"
 )
 
-// Refusal says why a machine's Tailscale SSH didn't let Roost in, when the
-// tailnet policy needs a change. Roost shows the rule to add.
+// Refusal says why a machine's Tailscale SSH didn't let Bield in, when the
+// tailnet policy needs a change. Bield shows the rule to add.
 type Refusal string
 
 // The refusals a policy can cause.
 const (
-	// RefusedCheck means the rule that covers Roost has action "check", which
-	// asks for a browser visit that Roost can't make.
+	// RefusedCheck means the rule that covers Bield has action "check", which
+	// asks for a browser visit that Bield can't make.
 	RefusedCheck Refusal = "check"
-	// RefusedNode means no rule lets Roost SSH to the machine.
+	// RefusedNode means no rule lets Bield SSH to the machine.
 	RefusedNode Refusal = "node"
-	// RefusedUser means a rule lets Roost in, but not as the user it asked
+	// RefusedUser means a rule lets Bield in, but not as the user it asked
 	// for.
 	RefusedUser Refusal = "user"
 )
@@ -56,7 +56,7 @@ func methodOf(c *gossh.Client) Method {
 	return MethodKey
 }
 
-// tailscaleRefusal works out why Tailscale SSH on a machine turned Roost
+// tailscaleRefusal works out why Tailscale SSH on a machine turned Bield
 // away from the banners it sent. msg says why for people, and is "" if none
 // of the banners came from Tailscale SSH. refusal is "" unless the policy
 // needs a change.
@@ -65,11 +65,11 @@ func tailscaleRefusal(name, user string, banners []string) (refusal Refusal, msg
 	switch {
 	case strings.Contains(text, "does not permit you to SSH as user"):
 		// Tailscale says the same when the machine has no such account.
-		return RefusedUser, fmt.Sprintf("Tailscale SSH on %s won't let Roost log in as %s: the tailnet policy doesn't allow that user, or the machine has no account for it", name, user)
+		return RefusedUser, fmt.Sprintf("Tailscale SSH on %s won't let Bield log in as %s: the tailnet policy doesn't allow that user, or the machine has no account for it", name, user)
 	case strings.Contains(text, "does not permit you to SSH to this node"):
-		return RefusedNode, "the tailnet policy doesn't let Roost use Tailscale SSH to log in to " + name
+		return RefusedNode, "the tailnet policy doesn't let Bield use Tailscale SSH to log in to " + name
 	case strings.Contains(text, "Tailscale SSH requires an additional check"):
-		return RefusedCheck, fmt.Sprintf("Tailscale SSH on %s wants a browser check before it lets Roost in, and Roost can't make one", name)
+		return RefusedCheck, fmt.Sprintf("Tailscale SSH on %s wants a browser check before it lets Bield in, and Bield can't make one", name)
 	}
 	// Anything else it says, such as that the user doesn't exist on the
 	// machine, is for the admin to read.
@@ -83,7 +83,7 @@ func tailscaleRefusal(name, user string, banners []string) (refusal Refusal, msg
 
 // PolicySnippet returns a rule for the "ssh" section of the tailnet policy
 // that lets src log in to dst as user, with no browser check. src is the
-// node Roost connects from, and dst the machine it logs in to.
+// node Bield connects from, and dst the machine it logs in to.
 func PolicySnippet(src, dst tailnet.Device, user string) string {
 	var b strings.Builder
 	b.WriteString("{\n  \"action\": \"accept\",\n")

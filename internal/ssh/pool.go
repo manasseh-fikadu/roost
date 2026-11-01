@@ -10,7 +10,7 @@ import (
 
 	gossh "golang.org/x/crypto/ssh"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // pooled is a machine's shared connection.
@@ -290,7 +290,7 @@ func (m *Manager) DialDocker(ctx context.Context, accessID string) (net.Conn, er
 }
 
 // A SocketError is the error for a Unix socket on a machine that sshd
-// wouldn't open: nothing listens on it, or the user Roost logs in as may not
+// wouldn't open: nothing listens on it, or the user Bield logs in as may not
 // use it.
 type SocketError struct {
 	Path string

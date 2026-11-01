@@ -3,24 +3,24 @@
 # that it comes up healthy as its non-root user, with the data volume writable.
 set -euo pipefail
 
-image=$(docker image ls --format '{{.Repository}}:{{.Tag}}' ghcr.io/manasseh-fikadu/roost | grep -- '-amd64$' | head -n 1)
-[ -n "$image" ] || { echo "no amd64 image of Roost was built" >&2; exit 1; }
+image=$(docker image ls --format '{{.Repository}}:{{.Tag}}' ghcr.io/manasseh-fikadu/bield | grep -- '-amd64$' | head -n 1)
+[ -n "$image" ] || { echo "no amd64 image of Bield was built" >&2; exit 1; }
 echo "Checking $image"
 
-docker volume create roost-check >/dev/null
-trap 'docker rm -f roost-check >/dev/null 2>&1 || true; docker volume rm roost-check >/dev/null 2>&1 || true' EXIT
-docker run -d --name roost-check -v roost-check:/data "$image" >/dev/null
+docker volume create bield-check >/dev/null
+trap 'docker rm -f bield-check >/dev/null 2>&1 || true; docker volume rm bield-check >/dev/null 2>&1 || true' EXIT
+docker run -d --name bield-check -v bield-check:/data "$image" >/dev/null
 
 for _ in $(seq 1 30); do
-  status=$(docker inspect --format '{{.State.Health.Status}}' roost-check)
+  status=$(docker inspect --format '{{.State.Health.Status}}' bield-check)
   if [ "$status" = healthy ]; then
     echo "The image is healthy."
     # A backup needs the database to exist and the volume to be writable.
-    docker exec roost-check /usr/local/bin/roost backup /data/backups/check.tar.gz
+    docker exec bield-check /usr/local/bin/bield backup /data/backups/check.tar.gz
     exit 0
   fi
   sleep 2
 done
 echo "The image didn't become healthy (it is $status):" >&2
-docker logs roost-check >&2
+docker logs bield-check >&2
 exit 1

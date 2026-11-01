@@ -50,8 +50,8 @@ func TestCast(t *testing.T) {
 				t.Errorf("machine %s has %d cores, %v GB of memory and %v GB of disk", m.host, m.cores, m.memGB, m.diskGB)
 			}
 		}
-		if ms[0].host != "roost" {
-			t.Errorf("the first machine is %s, want Roost's own", ms[0].host)
+		if ms[0].host != "bield" {
+			t.Errorf("the first machine is %s, want Bield's own", ms[0].host)
 		}
 	}
 }

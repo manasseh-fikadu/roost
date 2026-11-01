@@ -8,12 +8,12 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 func TestStore_Events(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 	at := time.UnixMilli(1_800_000_000_000)
 	if id, err := s.LastEventID(ctx); err != nil || id != 0 {
@@ -71,7 +71,7 @@ func TestStore_Events(t *testing.T) {
 
 func TestStore_KV(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	if _, ok, err := s.KV(t.Context(), "settings"); ok || err != nil {
 		t.Errorf("KV() of a missing key = %v, %v, want nothing", ok, err)
 	}
@@ -87,12 +87,12 @@ func TestStore_KV(t *testing.T) {
 
 func TestStore_alerts(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 	at := time.UnixMilli(1_800_000_000_000)
 	disk, err := s.AddAlert(ctx, store.Alert{
-		Key: "disk:hub", Source: "metrics", DeviceID: "roost", Severity: "warning",
-		Title: "Disk 86% full on roost", Detail: "12 GB left", OpenedAt: at, LastSeen: at,
+		Key: "disk:hub", Source: "metrics", DeviceID: "bield", Severity: "warning",
+		Title: "Disk 86% full on bield", Detail: "12 GB left", OpenedAt: at, LastSeen: at,
 	})
 	if err != nil {
 		t.Fatalf("AddAlert() error = %v", err)
@@ -108,7 +108,7 @@ func TestStore_alerts(t *testing.T) {
 		t.Error("AddAlert() of a second open alert for a condition didn't fail")
 	}
 
-	disk.Severity, disk.Title, disk.LastSeen = "critical", "Disk 96% full on roost", at.Add(time.Minute)
+	disk.Severity, disk.Title, disk.LastSeen = "critical", "Disk 96% full on bield", at.Add(time.Minute)
 	disk.AckedAt, disk.AckedBy = at.Add(2*time.Minute), "alice@example.com"
 	disk.SnoozedUntil, disk.SnoozedBy = at.Add(time.Hour), "bob@example.com"
 	if err := s.SaveAlert(ctx, disk); err != nil {
@@ -131,10 +131,10 @@ func TestStore_alerts(t *testing.T) {
 		t.Fatalf("OpenAlerts() = %+v, %v, want both alerts", open, err)
 	}
 	got := open[0]
-	if got.ID != disk.ID || got.Severity != "critical" || got.Title != "Disk 96% full on roost" || got.Detail != "12 GB left" ||
+	if got.ID != disk.ID || got.Severity != "critical" || got.Title != "Disk 96% full on bield" || got.Detail != "12 GB left" ||
 		!got.LastSeen.Equal(disk.LastSeen) || !got.AckedAt.Equal(disk.AckedAt) || got.AckedBy != "alice@example.com" ||
 		!got.SnoozedUntil.Equal(disk.SnoozedUntil) || got.SnoozedBy != "bob@example.com" || !got.ResolvedAt.IsZero() ||
-		got.DeviceID != "roost" || got.CheckID != "" {
+		got.DeviceID != "bield" || got.CheckID != "" {
 		t.Errorf("OpenAlerts()[0] = %+v, want the saved disk alert", got)
 	}
 	if len(got.Notes) != 2 || got.Notes[0].Text != "Cleaning up logs" || got.Notes[1].Author != "alice@example.com" {
@@ -173,7 +173,7 @@ func TestStore_prunesResolvedAlerts(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		const month = 30 * 24 * time.Hour
-		s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+		s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 		synctest.Wait()
 		now := time.Now()
 		for _, a := range []store.Alert{

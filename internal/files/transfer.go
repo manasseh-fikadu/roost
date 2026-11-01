@@ -20,7 +20,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
 )
 
 // ErrAborted is returned when a download failed after its headers were
@@ -28,9 +28,9 @@ import (
 var ErrAborted = errors.New("the transfer was cut short")
 
 // sandbox is the Content-Security-Policy of everything served from a
-// machine's files. Roost's origin can open shells on every machine, so
+// machine's files. Bield's origin can open shells on every machine, so
 // nothing served from it may run script: this runs none, even in an SVG
-// opened by itself. Only Roost's own pages may frame it.
+// opened by itself. Only Bield's own pages may frame it.
 const sandbox = "sandbox; default-src 'none'; img-src 'self' data: blob:; media-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'"
 
 // disposition returns a Content-Disposition with an ASCII name for old

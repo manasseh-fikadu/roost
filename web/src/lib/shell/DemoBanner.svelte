@@ -15,9 +15,9 @@
 		This is a demo with made-up machines. Terminals, files and changes to Docker are turned off.
 	</span>
 	<a
-		href="https://github.com/manasseh-fikadu/roost"
+		href="https://github.com/manasseh-fikadu/bield"
 		class="underline underline-offset-2 hover:text-fg"
 		target="_blank"
-		rel="noreferrer">Run Roost on your own tailnet</a
+		rel="noreferrer">Run Bield on your own tailnet</a
 	>
 </p>

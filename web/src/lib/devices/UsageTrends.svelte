@@ -56,7 +56,7 @@
 			<p class="text-[12px] text-fg-subtle">
 				One-minute averages. Click the chart to see that moment.
 				{#if range === '30d' || range === '90d'}
-					Roost keeps them for 7 days, so the older part is empty.
+					Bield keeps them for 7 days, so the older part is empty.
 				{/if}
 			</p>
 		</div>
@@ -68,7 +68,7 @@
 		<p
 			class="rounded-lg border border-line bg-canvas px-4 py-6 text-center text-[13px] text-fg-subtle"
 		>
-			Nothing recorded in this range yet. Roost stores a summary every minute.
+			Nothing recorded in this range yet. Bield stores a summary every minute.
 		</p>
 	{:else}
 		<ul class="mb-2 flex flex-wrap gap-x-4 gap-y-1">

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // A level is what a caller may do. Every route needs one, and a caller can
@@ -197,10 +197,10 @@ func (h *handler) checkMachine(req *http.Request, need level) (int, string) {
 			return http.StatusUnauthorized, unknownSecret
 		case err != nil:
 			h.log.Error("look up an agent's secret", "error", err)
-			return http.StatusServiceUnavailable, "Roost couldn't check this agent's secret"
+			return http.StatusServiceUnavailable, "Bield couldn't check this agent's secret"
 		case c.node != "" && node != c.node:
 			h.log.Warn("refused an agent's secret from another machine", "enrolled", node, "from", c.node)
-			return http.StatusForbidden, "this agent's secret belongs to another machine, so Roost refuses it from this one"
+			return http.StatusForbidden, "this agent's secret belongs to another machine, so Bield refuses it from this one"
 		}
 	case enrollCode:
 		if err := h.opts.Store.CheckEnrollmentCode(ctx, token, c.node, time.Now()); err != nil {
@@ -215,20 +215,20 @@ func (h *handler) checkMachine(req *http.Request, need level) (int, string) {
 	return 0, ""
 }
 
-// Why Roost refuses a request from a machine.
+// Why Bield refuses a request from a machine.
 const (
-	whoIsFailed   = "Roost couldn't ask Tailscale which machine this is"
-	unknownSecret = "Roost doesn't know this agent's secret, which an admin may have revoked; " +
-		"to report again, run a new install command from Add agent on Roost's Agents page"
+	whoIsFailed   = "Bield couldn't ask Tailscale which machine this is"
+	unknownSecret = "Bield doesn't know this agent's secret, which an admin may have revoked; " +
+		"to report again, run a new install command from Add agent on Bield's Agents page"
 )
 
 // codeDenial returns the status and message to refuse an enrollment code
 // with, for an error from the store.
 func (h *handler) codeDenial(err error) (int, string) {
-	const next = "get a new one from Add agent on Roost's Agents page"
+	const next = "get a new one from Add agent on Bield's Agents page"
 	switch {
 	case errors.Is(err, store.ErrUnknownCode):
-		return http.StatusUnauthorized, "Roost doesn't know the code in this install command: it expired a while ago, " +
+		return http.StatusUnauthorized, "Bield doesn't know the code in this install command: it expired a while ago, " +
 			"or an admin revoked the agent it enrolled; " + next
 	case errors.Is(err, store.ErrCodeExpired):
 		return http.StatusUnauthorized, "this install command expired, since each one works for an hour; " + next
@@ -236,7 +236,7 @@ func (h *handler) codeDenial(err error) (int, string) {
 		return http.StatusForbidden, "another machine used this install command, and each one works on one machine; " + next
 	default:
 		h.log.Error("check an enrollment code", "error", err)
-		return http.StatusServiceUnavailable, "Roost couldn't check the code in this install command"
+		return http.StatusServiceUnavailable, "Bield couldn't check the code in this install command"
 	}
 }
 
@@ -251,13 +251,13 @@ func denial(c caller, need level, method string) string {
 	var msg string
 	switch {
 	case need == viewers && c.who != nil:
-		return "you can't view Roost until one of its admins makes you a viewer"
+		return "you can't view Bield until one of its admins makes you a viewer"
 	case need == viewers:
-		msg = "only Roost's viewers can see this"
+		msg = "only Bield's viewers can see this"
 	case safeMethod(method):
-		msg = "only Roost's admins can see this"
+		msg = "only Bield's admins can see this"
 	default:
-		msg = "only Roost's admins can do this"
+		msg = "only Bield's admins can do this"
 	}
 	if c.who == nil {
 		msg += ", and Tailscale didn't say who you are"

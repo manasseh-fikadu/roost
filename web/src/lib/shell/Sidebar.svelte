@@ -1,4 +1,4 @@
-<!-- The sidebar: Roost's name, the pages the caller can open, and how the hub's collectors are doing. -->
+<!-- The sidebar: Bield's name, the pages the caller can open, and how the hub's collectors are doing. -->
 <script lang="ts">
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';

@@ -9,13 +9,13 @@ import (
 
 	gossh "golang.org/x/crypto/ssh"
 
-	"github.com/manasseh-fikadu/roost/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
 )
 
 func TestLoadKey(t *testing.T) {
 	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "ssh")
-	key, err := ssh.LoadKey(dir, "roost@hub")
+	key, err := ssh.LoadKey(dir, "bield@hub")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,8 +23,8 @@ func TestLoadKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("public key %q: %v", key.PublicKey(), err)
 	}
-	if pub.Type() != gossh.KeyAlgoED25519 || !strings.HasSuffix(key.PublicKey(), " roost@hub") {
-		t.Errorf("public key = %q, want an ed25519 key named roost@hub", key.PublicKey())
+	if pub.Type() != gossh.KeyAlgoED25519 || !strings.HasSuffix(key.PublicKey(), " bield@hub") {
+		t.Errorf("public key = %q, want an ed25519 key named bield@hub", key.PublicKey())
 	}
 	for path, want := range map[string]os.FileMode{
 		dir: 0o700, filepath.Join(dir, "id_ed25519"): 0o600, filepath.Join(dir, "id_ed25519.pub"): 0o644,
@@ -62,25 +62,25 @@ func TestLoadKey(t *testing.T) {
 func TestLoadKey_withoutPublicKey(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	key, err := ssh.LoadKey(dir, "roost@hub")
+	key, err := ssh.LoadKey(dir, "bield@hub")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(dir, "id_ed25519.pub")); err != nil {
 		t.Fatal(err)
 	}
-	again, err := ssh.LoadKey(dir, "roost@hub")
+	again, err := ssh.LoadKey(dir, "bield@hub")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want, _, _ := strings.Cut(key.PublicKey(), " roost"); again.PublicKey() != want {
+	if want, _, _ := strings.Cut(key.PublicKey(), " bield"); again.PublicKey() != want {
 		t.Errorf("public key = %q, want %q without its comment", again.PublicKey(), want)
 	}
 }
 
 func TestAuthorizedKey(t *testing.T) {
 	t.Parallel()
-	key, err := ssh.LoadKey(t.TempDir(), "roost@hub")
+	key, err := ssh.LoadKey(t.TempDir(), "bield@hub")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,7 +108,7 @@ func TestAuthorizedKey(t *testing.T) {
 func TestAuthorizeHere(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
-	key, err := ssh.LoadKey(t.TempDir(), "roost@hub")
+	key, err := ssh.LoadKey(t.TempDir(), "bield@hub")
 	if err != nil {
 		t.Fatal(err)
 	}

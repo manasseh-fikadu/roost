@@ -1,29 +1,29 @@
-# Roost as its own machine on your tailnet (embedded mode), the way to run it
+# Bield as its own machine on your tailnet (embedded mode), the way to run it
 # in Docker unless this machine already runs Tailscale. See docs/docker.md.
 #
 #   docker compose up -d
-#   docker compose logs roost     # the link to log Roost in to Tailscale
+#   docker compose logs bield     # the link to log Bield in to Tailscale
 #
 # To skip the login link, put an auth key in a .env file next to this one:
 #   TS_AUTHKEY=tskey-auth-...
-# Roost only uses it the first time it starts. It also reads ROOST_ADMINS (see
-# docs/tailscale.md#admins-and-viewers) and ROOST_HOSTNAME from there. For a
-# Headscale server (docs/headscale.md), set ROOST_CONTROL_URL to its address too.
+# Bield only uses it the first time it starts. It also reads BIELD_ADMINS (see
+# docs/tailscale.md#admins-and-viewers) and BIELD_HOSTNAME from there. For a
+# Headscale server (docs/headscale.md), set BIELD_CONTROL_URL to its address too.
 services:
-  roost:
-    image: ghcr.io/manasseh-fikadu/roost:latest
+  bield:
+    image: ghcr.io/manasseh-fikadu/bield:latest
     restart: unless-stopped
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:-}
-      ROOST_ADMINS: ${ROOST_ADMINS:-}
-      ROOST_HOSTNAME: ${ROOST_HOSTNAME:-roost}
-      ROOST_CONTROL_URL: ${ROOST_CONTROL_URL:-}
+      BIELD_ADMINS: ${BIELD_ADMINS:-}
+      BIELD_HOSTNAME: ${BIELD_HOSTNAME:-bield}
+      BIELD_CONTROL_URL: ${BIELD_CONTROL_URL:-}
     volumes:
-      # Roost's database, and its Tailscale node and SSH key.
-      - roost-data:/data
-      # Uncomment to manage this machine's containers from Roost. This isn't
+      # Bield's database, and its Tailscale node and SSH key.
+      - bield-data:/data
+      # Uncomment to manage this machine's containers from Bield. This isn't
       # read-only in effect, whatever the :ro says: whoever can use the Docker
-      # API can start a container that owns this machine, and Roost's admins can
+      # API can start a container that owns this machine, and Bield's admins can
       # use it. The container's user needs the socket's group too, so give
       # `stat -c %g /var/run/docker.sock` in group_add.
       # - /var/run/docker.sock:/var/run/docker.sock
@@ -33,4 +33,4 @@ services:
     # docs/docker.md.
 
 volumes:
-  roost-data:
+  bield-data:

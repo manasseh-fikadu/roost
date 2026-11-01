@@ -1,6 +1,6 @@
 <!--
-	Who can use Roost: the people with a role, who else can view it, and how
-	Roost joins the tailnet, which is only shown. Changes here apply at once,
+	Who can use Bield: the people with a role, who else can view it, and how
+	Bield joins the tailnet, which is only shown. Changes here apply at once,
 	each as its own request, and every answer is the whole list of users, which
 	replaces what's shown.
 -->
@@ -38,7 +38,7 @@
 	import ErrorState from '#lib/ui/ErrorState.svelte';
 
 	interface Props {
-		/** For how Roost joins the tailnet. */
+		/** For how Bield joins the tailnet. */
 		view: SettingsView;
 	}
 
@@ -401,7 +401,7 @@
 			{:else}
 				<div class="p-4">
 					<RadioGroup.Root
-						aria-label="Who can view Roost"
+						aria-label="Who can view Bield"
 						disabled={pendingWho !== null}
 						class="space-y-2"
 						bind:value={() => whoValue, (v) => void pickWho(v as WhoCanView)}
@@ -431,7 +431,7 @@
 		</Card>
 	{/if}
 
-	<Card title="Tailscale" description="How Roost joins your tailnet.">
+	<Card title="Tailscale" description="How Bield joins your tailnet.">
 		<dl>
 			<DataRow label="Mode"
 				>{view.tailscale === TailscaleModeEmbedded ? 'Embedded' : 'Host'}</DataRow
@@ -439,11 +439,11 @@
 		</dl>
 		<p class="px-4 py-3 text-[13px] text-fg-subtle">
 			{view.tailscale === TailscaleModeEmbedded
-				? "Roost runs its own Tailscale node, so it's a machine of its own on your tailnet."
-				: 'Roost uses the Tailscale already running on its machine.'}
-			It's set when Roost starts, with
+				? "Bield runs its own Tailscale node, so it's a machine of its own on your tailnet."
+				: 'Bield uses the Tailscale already running on its machine.'}
+			It's set when Bield starts, with
 			<code class="font-mono text-[12px] text-fg-muted">--tailscale</code> or
-			<code class="font-mono text-[12px] text-fg-muted">ROOST_TAILSCALE</code>, and can't be changed
+			<code class="font-mono text-[12px] text-fg-muted">BIELD_TAILSCALE</code>, and can't be changed
 			here.
 		</p>
 	</Card>
@@ -462,9 +462,9 @@
 		{:else}
 			<p>
 				{#if access?.whoCanView === WhoCanViewTailnet}
-					They can still view Roost as a viewer, because anyone on the tailnet can.
+					They can still view Bield as a viewer, because anyone on the tailnet can.
 				{:else}
-					They won't be able to view Roost any more.
+					They won't be able to view Bield any more.
 				{/if}
 			</p>
 			{#if removingMyself}

@@ -76,7 +76,7 @@ export const filesApi = {
 				body: text
 			});
 		} catch {
-			throw new ApiError(0, "Couldn't reach Roost");
+			throw new ApiError(0, "Couldn't reach Bield");
 		}
 		return readJson<FileEntry>(res);
 	},
@@ -125,7 +125,7 @@ export async function fetchRaw(
 		if (err instanceof Error && err.name === 'AbortError') {
 			throw err;
 		}
-		throw new ApiError(0, "Couldn't reach Roost");
+		throw new ApiError(0, "Couldn't reach Bield");
 	}
 	if (!res.ok && res.status !== 206) {
 		return readJson(res);
@@ -194,7 +194,7 @@ export function uploadFile(
 				reject(new ApiError(xhr.status, body.error ?? `${xhr.status} ${xhr.statusText}`));
 			}
 		};
-		xhr.onerror = () => reject(new ApiError(0, 'The connection to Roost dropped'));
+		xhr.onerror = () => reject(new ApiError(0, 'The connection to Bield dropped'));
 		const abort = () => xhr.abort();
 		xhr.onabort = () => reject(new DOMException('Upload canceled', 'AbortError'));
 		if (opts.signal.aborted) {

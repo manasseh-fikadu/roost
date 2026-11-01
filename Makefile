@@ -1,4 +1,4 @@
-# Roost build and development tasks. Run `make help` for the list.
+# Bield build and development tasks. Run `make help` for the list.
 
 GO      ?= go
 BUN     ?= bun
@@ -10,9 +10,9 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 .DEFAULT_GOAL := help
 .PHONY: help build web dev dev-api dev-web demo demo-api test e2e screenshots bench load lint types clean
 
-## build: build ./roost with the web UI embedded
+## build: build ./bield with the web UI embedded
 build: web
-	$(GO) build -tags ui -trimpath -ldflags '$(LDFLAGS)' -o roost ./cmd/roost
+	$(GO) build -tags ui -trimpath -ldflags '$(LDFLAGS)' -o bield ./cmd/bield
 
 ## web: build the web UI into web/build
 web: web/node_modules
@@ -23,17 +23,17 @@ dev: web/node_modules
 	@$(MAKE) --no-print-directory -j2 dev-api dev-web
 
 dev-api:
-	$(GO) run ./cmd/roost serve --dev-ui http://127.0.0.1:$(VITE_PORT)
+	$(GO) run ./cmd/bield serve --dev-ui http://127.0.0.1:$(VITE_PORT)
 
 dev-web:
 	cd web && $(BUN) run dev --port $(VITE_PORT)
 
-## demo: run Roost against a made-up tailnet, with the web UI from Vite
+## demo: run Bield against a made-up tailnet, with the web UI from Vite
 demo: web/node_modules
 	@$(MAKE) --no-print-directory -j2 demo-api dev-web
 
 demo-api:
-	$(GO) run ./cmd/roost serve --demo --dev-ui http://127.0.0.1:$(VITE_PORT)
+	$(GO) run ./cmd/bield serve --demo --dev-ui http://127.0.0.1:$(VITE_PORT)
 
 ## test: run the Go and web tests, and type-check the web app
 test: web/node_modules
@@ -53,9 +53,9 @@ screenshots: web/node_modules
 bench:
 	$(GO) test ./internal/store ./internal/usage -run '^$$' -bench . -benchmem
 
-## load: run Roost against a demo of 200 devices and say what it costs (takes minutes)
+## load: run Bield against a demo of 200 devices and say what it costs (takes minutes)
 load:
-	ROOST_LOAD_DAYS=$${ROOST_LOAD_DAYS:-7} $(GO) test -tags load -run TestLoad -v -count=1 -timeout 40m ./cmd/roost
+	BIELD_LOAD_DAYS=$${BIELD_LOAD_DAYS:-7} $(GO) test -tags load -run TestLoad -v -count=1 -timeout 40m ./cmd/bield
 
 ## lint: run golangci-lint, shellcheck and prettier
 lint: web/node_modules
@@ -69,7 +69,7 @@ types:
 
 ## clean: remove build output
 clean:
-	rm -rf roost web/build web/.svelte-kit
+	rm -rf bield web/build web/.svelte-kit
 
 web/node_modules: web/package.json web/bun.lock
 	cd web && $(BUN) install --frozen-lockfile

@@ -1,5 +1,5 @@
 # Build output (web/.gitignore covers the web app's)
-/roost
+/bield
 /dist/
 
 # Local data

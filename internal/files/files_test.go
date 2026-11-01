@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/files"
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/ssh/sshtest"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/files"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/ssh/sshtest"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // machine is a Linux laptop whose sshd serves a folder of the test machine
@@ -30,7 +30,7 @@ func newMachine(t *testing.T, shell string) *machine {
 	if err != nil {
 		t.Fatal(err)
 	}
-	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "roost.db"), store.Options{})
+	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "bield.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -41,7 +41,7 @@ func newMachine(t *testing.T, shell string) *machine {
 	t.Cleanup(laptop.Close)
 	status := tailnet.Status{
 		State: tailnet.StateRunning,
-		Self:  tailnet.Device{ID: "roost", DNSName: "roost.example.ts.net", OS: "linux", Online: true},
+		Self:  tailnet.Device{ID: "bield", DNSName: "bield.example.ts.net", OS: "linux", Online: true},
 		Peers: []tailnet.Device{{ID: "laptop", HostName: "laptop", OS: "linux", Online: true, IPs: addrs("100.64.0.2")}},
 	}
 	mgr := ssh.NewManager(ssh.Options{
@@ -109,6 +109,6 @@ func shellPath(t *testing.T, shell string) string {
 	return p
 }
 
-// shells are the login shells a user may have, which sshd runs Roost's
+// shells are the login shells a user may have, which sshd runs Bield's
 // commands with. The tests use those on the machine.
 var shells = []string{"sh", "dash", "bash", "zsh", "fish"}

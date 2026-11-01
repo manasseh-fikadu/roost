@@ -18,15 +18,15 @@ import (
 	"github.com/coder/websocket"
 	gossh "golang.org/x/crypto/ssh"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/ssh/sshtest"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/ssh/sshtest"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
 )
 
 // sshEnv is the API on the test tailnet, where alice's laptop is a Mac
-// with a fake sshd that has Roost's key in its authorized_keys.
+// with a fake sshd that has Bield's key in its authorized_keys.
 type sshEnv struct {
 	tn   *tailnettest.Tailnet
 	st   *store.Store
@@ -174,13 +174,13 @@ func TestSSH_setup(t *testing.T) {
 	if got.AuthorizedKey != want || got.Command != ssh.SetupCommand(want) || got.HubUser != "" {
 		t.Errorf("GET = %+v, want the key %q for a peer", got, want)
 	}
-	// On the machine Roost runs on, Roost can add its key for its own user.
-	rec = serve(e.h, newRequest(t, http.MethodGet, "/api/devices/roost/ssh", laptopIP))
+	// On the machine Bield runs on, Bield can add its key for its own user.
+	rec = serve(e.h, newRequest(t, http.MethodGet, "/api/devices/bield/ssh", laptopIP))
 	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil {
 		t.Fatalf("GET on the hub = %d %s, want 200", rec.Code, rec.Body)
 	}
 	if !strings.HasPrefix(got.AuthorizedKey, `from="127.0.0.1,::1,100.64.0.1,`) || got.HubUser == "" {
-		t.Errorf("GET on the hub = %+v, want the loopback addresses too, and Roost's user", got)
+		t.Errorf("GET on the hub = %+v, want the loopback addresses too, and Bield's user", got)
 	}
 	if rec := serve(e.h, newRequest(t, http.MethodGet, "/api/devices/laptop/ssh", phoneIP)); rec.Code != http.StatusForbidden {
 		t.Errorf("GET as a viewer = %d, want 403", rec.Code)
@@ -196,7 +196,7 @@ func TestSSH_snapshot(t *testing.T) {
 		id   string
 		want *api.DeviceSSH
 	}{
-		{"roost", &api.DeviceSSH{State: api.SSHStateNotSetUp, Hub: true}},
+		{"bield", &api.DeviceSSH{State: api.SSHStateNotSetUp, Hub: true}},
 		{"laptop", &api.DeviceSSH{State: api.SSHStateUnchecked, User: "alice", Port: 22}},
 		// Tailscale doesn't say what the server runs, and phones have no sshd.
 		{"server", nil},
@@ -407,7 +407,7 @@ func dialTerminal(t *testing.T, e *sshEnv, from netip.Addr, query, origin string
 	client := e.tn.Client(from)
 	t.Cleanup(client.CloseIdleConnections)
 	//nolint:bodyclose // The WebSocket owns the response's body.
-	conn, res, err := websocket.Dial(t.Context(), "ws://"+roostHost+"/api/devices/laptop/terminal"+query, &websocket.DialOptions{
+	conn, res, err := websocket.Dial(t.Context(), "ws://"+bieldHost+"/api/devices/laptop/terminal"+query, &websocket.DialOptions{
 		HTTPClient: client, HTTPHeader: http.Header{"Origin": {origin}},
 	})
 	if err != nil {
@@ -502,7 +502,7 @@ func (c *wsClient) ended(t *testing.T) websocket.StatusCode {
 	return c.closed
 }
 
-const roostOrigin = "http://" + roostHost
+const bieldOrigin = "http://" + bieldHost
 
 // openStore opens a test store in a synctest bubble.
 func openStore(t *testing.T) *store.Store {
@@ -546,7 +546,7 @@ func TestTerminal(t *testing.T) {
 			return 0
 		})
 
-		c, err := dialTerminal(t, e, laptopIP, "?session=web-1&cols=100&rows=30", roostOrigin)
+		c, err := dialTerminal(t, e, laptopIP, "?session=web-1&cols=100&rows=30", bieldOrigin)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -605,7 +605,7 @@ func TestTerminal_connectionDropped(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newSSHEnv(t, openStore(t), nil)
 		e.setUp(t)
-		c, err := dialTerminal(t, e, laptopIP, "?session=web-1", roostOrigin)
+		c, err := dialTerminal(t, e, laptopIP, "?session=web-1", bieldOrigin)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -639,7 +639,7 @@ func TestTerminal_window(t *testing.T) {
 			}
 			return 0
 		})
-		c, err := dialTerminal(t, e, laptopIP, "", roostOrigin)
+		c, err := dialTerminal(t, e, laptopIP, "", bieldOrigin)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -668,7 +668,7 @@ func TestTerminal_refused(t *testing.T) {
 			origin string
 			want   int
 		}{
-			{"viewer", phoneIP, roostOrigin, http.StatusForbidden},
+			{"viewer", phoneIP, bieldOrigin, http.StatusForbidden},
 			{"another site", laptopIP, "http://evil.example", http.StatusForbidden},
 		} {
 			_, err := dialTerminal(t, e, tt.from, "", tt.origin)
@@ -695,7 +695,7 @@ func TestTerminal_errors(t *testing.T) {
 				if tt.setUp {
 					e.setUp(t)
 				}
-				c, err := dialTerminal(t, e, laptopIP, tt.query, roostOrigin)
+				c, err := dialTerminal(t, e, laptopIP, tt.query, bieldOrigin)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -719,7 +719,7 @@ func TestTerminal_shutdown(t *testing.T) {
 		stopping := make(chan struct{})
 		e := newSSHEnv(t, openStore(t), stopping)
 		e.setUp(t)
-		c, err := dialTerminal(t, e, laptopIP, "", roostOrigin)
+		c, err := dialTerminal(t, e, laptopIP, "", bieldOrigin)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -736,7 +736,7 @@ func TestTerminal_pings(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newSSHEnv(t, openStore(t), nil)
 		e.setUp(t)
-		c, err := dialTerminal(t, e, laptopIP, "", roostOrigin)
+		c, err := dialTerminal(t, e, laptopIP, "", bieldOrigin)
 		if err != nil {
 			t.Fatal(err)
 		}

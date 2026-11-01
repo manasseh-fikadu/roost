@@ -1,5 +1,5 @@
 <!--
-	The systemd units on Roost's machine that Roost watches, picked from the
+	The systemd units on Bield's machine that Bield watches, picked from the
 	units there are. The picks are a draft until Save. A unit the machine
 	doesn't have can still be watched, so a list that names one stays right
 	before the unit is installed.
@@ -157,7 +157,7 @@
 
 <FormCard
 	title="Watched units"
-	description="Roost shows these units on the hub's page and alerts when one stops. Failed units always show."
+	description="Bield shows these units on the hub's page and alerts when one stops. Failed units always show."
 	dirty={draft.dirty}
 	{saving}
 	onsave={save}

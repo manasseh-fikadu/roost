@@ -1,6 +1,6 @@
-// Package systemd watches systemd units on the machine Roost runs on: the
+// Package systemd watches systemd units on the machine Bield runs on: the
 // ones an admin watches, and every unit that failed, both the system's and
-// those of the user Roost runs as.
+// those of the user Bield runs as.
 package systemd
 
 import (
@@ -36,11 +36,11 @@ type Scope string
 const (
 	// System units run for the whole machine.
 	System Scope = "system"
-	// User units run for the user Roost runs as.
+	// User units run for the user Bield runs as.
 	User Scope = "user"
 )
 
-// ValidName reports whether name can be the name of a unit that Roost asks
+// ValidName reports whether name can be the name of a unit that Bield asks
 // systemd about, such as "ssh.service" or "getty@tty1.service": systemd's own
 // characters, and not a template such as "getty@.service". systemctl fails
 // for the whole list if one name isn't valid.
@@ -125,7 +125,7 @@ type Options struct {
 	Logger    *slog.Logger
 }
 
-// Available reports whether this machine runs systemd, as far as Roost can
+// Available reports whether this machine runs systemd, as far as Bield can
 // tell.
 func Available() bool {
 	if runtime.GOOS != "linux" {
@@ -138,7 +138,7 @@ func Available() bool {
 	return err == nil
 }
 
-// HasUserScope reports whether the user Roost runs as has a systemd user
+// HasUserScope reports whether the user Bield runs as has a systemd user
 // session to ask about. Root's isn't asked about, and neither is a system
 // account's without one.
 func HasUserScope() bool {
@@ -149,7 +149,7 @@ func HasUserScope() bool {
 	if dir == "" {
 		return false
 	}
-	_, err := os.Stat(filepath.Join(dir, "bus")) //nolint:gosec // G703: it's Roost's own environment.
+	_, err := os.Stat(filepath.Join(dir, "bus")) //nolint:gosec // G703: it's Bield's own environment.
 	return err == nil
 }
 

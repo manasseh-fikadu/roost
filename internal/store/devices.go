@@ -14,7 +14,7 @@ type DeviceSettings struct {
 	// it's "".
 	DisplayName string
 	// Kind is what sort of machine the device is, such as "laptop", or "" to
-	// let Roost guess.
+	// let Bield guess.
 	Kind string
 	// AlertOffline says whether to alert when the device goes offline, or is
 	// nil for the default.

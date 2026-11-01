@@ -11,7 +11,7 @@ import (
 
 	"github.com/coder/websocket"
 
-	"github.com/manasseh-fikadu/roost/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
 )
 
 const (
@@ -27,7 +27,7 @@ const (
 )
 
 // terminal answers GET /api/devices/{id}/terminal, a WebSocket to a shell
-// on the device. guard has checked that it comes from one of Roost's own
+// on the device. guard has checked that it comes from one of Bield's own
 // pages. Once the WebSocket is open, a shell that can't start is an error
 // message on it, which the browser can show, rather than an HTTP status,
 // which it can't read.
@@ -71,9 +71,9 @@ func terminalError(err error) string {
 	var ce *ssh.ConnectError
 	switch {
 	case errors.As(err, &ce):
-		return "Roost couldn't log in: " + ce.Msg
+		return "Bield couldn't log in: " + ce.Msg
 	case errors.Is(err, context.DeadlineExceeded):
-		return "Roost timed out starting the shell"
+		return "Bield timed out starting the shell"
 	default:
 		return err.Error()
 	}
@@ -131,7 +131,7 @@ func bridge(ctx context.Context, conn *websocket.Conn, term *ssh.Terminal, stopp
 			case <-ctx.Done():
 				return
 			case <-stopping:
-				_ = conn.Close(websocket.StatusGoingAway, "Roost is shutting down")
+				_ = conn.Close(websocket.StatusGoingAway, "Bield is shutting down")
 				return
 			case <-t.C:
 			}

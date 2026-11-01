@@ -31,7 +31,7 @@ func TestEventWriter(t *testing.T) {
 	t.Parallel()
 	f := &Feed{}
 	var events []*event
-	for _, data := range []any{map[string]int{"n": 1}, strings.Repeat("roost ", 2000), map[string]int{"n": 3}} {
+	for _, data := range []any{map[string]int{"n": 1}, strings.Repeat("bield ", 2000), map[string]int{"n": 3}} {
 		ev, err := f.newEvent("snapshot", data)
 		if err != nil {
 			t.Fatal(err)

@@ -12,8 +12,8 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // A flakyStore can't record what channels were told while fail is set.
@@ -67,7 +67,7 @@ func (f senderFunc) Send(ctx context.Context, m Message) error { return f(ctx, m
 
 func newRig(t *testing.T, appURL string) *rig {
 	t.Helper()
-	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "roost.db"), store.Options{})
+	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "bield.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,7 +215,7 @@ func wantLines(t *testing.T, what string, got []string, want ...string) {
 func TestDispatcher_opensEscalatesResolves(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		r := newRig(t, "https://roost.example.ts.net/")
+		r := newRig(t, "https://bield.example.ts.net/")
 		r.channel("Phone", "warning", true)
 		r.channel("Pager", "critical", false)
 
@@ -257,7 +257,7 @@ func TestDispatcher_opensEscalatesResolves(t *testing.T) {
 func TestDispatcher_message(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		r := newRig(t, "https://roost.example.ts.net/")
+		r := newRig(t, "https://bield.example.ts.net/")
 		r.channel("Phone", "info", true)
 		a := r.alert("disk:laptop", "warning", "Disk 90% full")
 		r.pass()
@@ -272,10 +272,10 @@ func TestDispatcher_message(t *testing.T) {
 			t.Fatalf("sent %d messages, want 2", len(sent))
 		}
 		opened, resolved := sent[0], sent[1]
-		if opened.URL != "https://roost.example.ts.net/alerts?alert=1" {
+		if opened.URL != "https://bield.example.ts.net/alerts?alert=1" {
 			t.Errorf("URL = %q, want a link to the alert on the app's address, without a double slash", opened.URL)
 		}
-		if opened.Instance != "Roost" || opened.Severity != "warning" || opened.Detail != "details" || opened.AlertID != a.ID {
+		if opened.Instance != "Bield" || opened.Severity != "warning" || opened.Detail != "details" || opened.AlertID != a.ID {
 			t.Errorf("opened = %+v", opened.Message)
 		}
 		if resolved.Event != Resolved || resolved.ResolvedAt.IsZero() || resolved.Facts() != "Resolved after 1h" {
@@ -283,13 +283,13 @@ func TestDispatcher_message(t *testing.T) {
 		}
 
 		// A public URL, if there is one, is what links start with.
-		r.settings(func(s *settings.Settings) { s.General.PublicURL, s.General.Name = "https://roost.example.com", "Lab" })
+		r.settings(func(s *settings.Settings) { s.General.PublicURL, s.General.Name = "https://bield.example.com", "Lab" })
 		r.alert("cpu:laptop", "warning", "CPU busy")
 		r.pass()
 		r.mu.Lock()
 		last := r.sent[len(r.sent)-1]
 		r.mu.Unlock()
-		if last.URL != "https://roost.example.com/alerts?alert=2" || last.Instance != "Lab" {
+		if last.URL != "https://bield.example.com/alerts?alert=2" || last.Instance != "Lab" {
 			t.Errorf("URL = %q, instance %q, want the public URL and the name", last.URL, last.Instance)
 		}
 
@@ -632,7 +632,7 @@ func TestDispatcher_Test_oneAtATime(t *testing.T) {
 func TestDispatcher_Test(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		r := newRig(t, "https://roost.example.ts.net")
+		r := newRig(t, "https://bield.example.ts.net")
 		ch := r.channel("Phone", "critical", true)
 		dl := r.d.Test(t.Context(), ch, "alice@example.com")
 		if !dl.OK || dl.Event != Test {
@@ -641,8 +641,8 @@ func TestDispatcher_Test(t *testing.T) {
 		r.mu.Lock()
 		sent := slices.Clone(r.sent)
 		r.mu.Unlock()
-		if len(sent) != 1 || sent[0].Event != Test || sent[0].AlertID != 0 || sent[0].Instance != "Roost" ||
-			sent[0].URL != "https://roost.example.ts.net/settings?tab=notifications" {
+		if len(sent) != 1 || sent[0].Event != Test || sent[0].AlertID != 0 || sent[0].Instance != "Bield" ||
+			sent[0].URL != "https://bield.example.ts.net/settings?tab=notifications" {
 			t.Errorf("sent = %+v, want one test message", sent)
 		}
 		if last, ok := r.d.Last(ch.ID); !ok || !last.OK {

@@ -1,5 +1,5 @@
 // The upload queue, shared by the file manager and its panel. It lives outside the page, so
-// uploads go on while you browse other folders, or other pages of Roost.
+// uploads go on while you browse other folders, or other pages of Bield.
 
 import type { ConflictMode } from '#lib/api/types.js';
 import { errorOf, uploadFile } from './api.js';

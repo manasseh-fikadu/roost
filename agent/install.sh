@@ -1,6 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
-# Installs the Roost agent for the current user: a LaunchAgent on macOS, and
+# Installs the Bield agent for the current user: a LaunchAgent on macOS, and
 # a systemd user service on Linux. No root needed. The hub serves this script
 # only for a valid enrollment code, which Add agent on its Agents page makes.
 set -euo pipefail
@@ -14,33 +14,33 @@ __LAYOUT__
 
 command -v curl >/dev/null || { echo "curl is required" >&2; exit 1; }
 
-# The code goes through stdin (-K -), so it doesn't show up in `ps`. Roost
-# refuses POSTs without an X-Roost header.
+# The code goes through stdin (-K -), so it doesn't show up in `ps`. Bield
+# refuses POSTs without an X-Bield header.
 echo "Enrolling this machine with $SERVER_URL ..."
 out=$(printf 'header = "Authorization: Bearer %s"\n' "$CODE" |
-  curl -sS -m 30 -K - -w '\n%{http_code}' -X POST -H 'X-Roost: agent' "$SERVER_URL/api/agent/enroll") || {
+  curl -sS -m 30 -K - -w '\n%{http_code}' -X POST -H 'X-Bield: agent' "$SERVER_URL/api/agent/enroll") || {
   echo "Couldn't reach $SERVER_URL." >&2
   exit 1
 }
 status=${out##*$'\n'}
 body=${out%$'\n'*}
 if [ "$status" != 200 ]; then
-  # Roost's errors look like {"error":"..."}.
+  # Bield's errors look like {"error":"..."}.
   msg=$(printf '%s' "$body" | sed -n 's/^{"error":"\(.*\)"}$/\1/p')
-  echo "Roost didn't enroll this machine (HTTP $status): ${msg:-$body}" >&2
+  echo "Bield didn't enroll this machine (HTTP $status): ${msg:-$body}" >&2
   exit 1
 fi
 SECRET=$(printf '%s' "$body" | sed -n 's/^{"secret":"\([A-Z2-7]*\)"}$/\1/p')
 if [ -z "$SECRET" ]; then
-  echo "Roost's answer has no secret in it: $body" >&2
+  echo "Bield's answer has no secret in it: $body" >&2
   exit 1
 fi
 
 mkdir -p "$BIN_DIR" "$CONF_DIR"
 chmod 700 "$CONF_DIR"
-cat > "$BIN_DIR/agent.sh" <<'ROOST_AGENT_EOF'
+cat > "$BIN_DIR/agent.sh" <<'BIELD_AGENT_EOF'
 __AGENT_SCRIPT__
-ROOST_AGENT_EOF
+BIELD_AGENT_EOF
 chmod 755 "$BIN_DIR/agent.sh"
 
 # Only this user can read the secret. A new file gets mode 0600, and the
@@ -54,7 +54,7 @@ mv -f "$CONF_DIR/env.new" "$CONF_DIR/env"
 
 echo "Sending the first heartbeat ..."
 if ! /bin/bash "$BIN_DIR/agent.sh" --once; then
-  echo "The first heartbeat failed, so the agent isn't running. Fix what it says above, and run the install command again: it works on this machine until an hour after Roost made it." >&2
+  echo "The first heartbeat failed, so the agent isn't running. Fix what it says above, and run the install command again: it works on this machine until an hour after Bield made it." >&2
   exit 1
 fi
 
@@ -87,7 +87,7 @@ else
   mkdir -p "$UNIT_DIR"
   cat > "$UNIT" <<EOF
 [Unit]
-Description=Roost agent (heartbeats to $SERVER_URL)
+Description=Bield agent (heartbeats to $SERVER_URL)
 After=network-online.target
 
 [Service]

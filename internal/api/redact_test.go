@@ -7,21 +7,21 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/api"
 )
 
 type envVar struct {
 	Key   string `json:"key"`
-	Value string `json:"value" roost:"secret"`
+	Value string `json:"value" bield:"secret"`
 }
 
 type Labels struct {
-	Token string `json:"token" roost:"secret"`
+	Token string `json:"token" bield:"secret"`
 }
 
 type process struct {
 	PID     int     `json:"pid"`
-	Command *string `json:"command" roost:"secret"`
+	Command *string `json:"command" bield:"secret"`
 }
 
 type container struct {
@@ -121,7 +121,7 @@ func TestRedact_noSecrets(t *testing.T) {
 func TestRedact_recursive(t *testing.T) {
 	t.Parallel()
 	type node struct {
-		Secret string `roost:"secret"`
+		Secret string `bield:"secret"`
 		Next   *node
 	}
 	list := &node{Secret: "a", Next: &node{Secret: "b", Next: &node{Secret: "c"}}}
@@ -135,7 +135,7 @@ func TestRedact_recursive(t *testing.T) {
 }
 
 type hidden struct {
-	Token string `json:"token" roost:"secret"`
+	Token string `json:"token" bield:"secret"`
 }
 
 // JSON encodes the fields of an embedded struct even if its type isn't

@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 const (
@@ -21,7 +21,7 @@ const (
 // A Target is a machine whose containers a Sampler records.
 type Target struct {
 	// ID is the ID the machine's history is kept under: store.HubID for the
-	// machine Roost runs on, and otherwise the device's.
+	// machine Bield runs on, and otherwise the device's.
 	ID   string
 	Host *Host
 }

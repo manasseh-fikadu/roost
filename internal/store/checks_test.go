@@ -10,12 +10,12 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 func TestStore_defaultChecks(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	got, err := s.Checks(t.Context())
 	if err != nil {
 		t.Fatalf("Checks() error = %v", err)
@@ -43,7 +43,7 @@ func TestStore_defaultChecks(t *testing.T) {
 
 func TestStore_Checks(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 	created := time.UnixMilli(1_800_000_000_000)
 	c, err := s.AddCheck(ctx, store.Check{
@@ -103,7 +103,7 @@ func checksByID(t *testing.T, s *store.Store) map[string]store.Check {
 
 func TestStore_checkResults(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 	start := time.UnixMilli(1_800_000_000_000).Truncate(5 * time.Minute)
 	api := addCheck(t, s, "API")
@@ -179,7 +179,7 @@ func addCheck(t *testing.T, s *store.Store, name string) string {
 
 func TestStore_RecentPingsAndTallies(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 	start := time.UnixMilli(1_800_000_000_000)
 	api := addCheck(t, s, "API")
@@ -239,7 +239,7 @@ func tallies(ts []store.Tally, start time.Time) []string {
 
 func TestStore_HealthHistory(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	start := time.UnixMilli(1_800_000_000_000).Truncate(5 * time.Minute)
 	for _, h := range []store.HealthSample{
 		{At: start.Add(-time.Minute), Score: 0},
@@ -274,7 +274,7 @@ func TestStore_prunesCheckResultsAndHealth(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		const week = 7 * 24 * time.Hour
-		s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+		s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 		synctest.Wait()
 		now := time.Now()
 		id := addCheck(t, s, "API")

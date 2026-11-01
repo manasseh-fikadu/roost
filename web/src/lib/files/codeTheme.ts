@@ -1,4 +1,4 @@
-// How the editor looks: Roost's colors over CodeMirror's One Dark syntax colors. It reads the
+// How the editor looks: Bield's colors over CodeMirror's One Dark syntax colors. It reads the
 // theme's CSS variables (layout.css), so the editor follows the rest of the page.
 
 import { EditorView } from '@codemirror/view';

@@ -13,7 +13,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // entry is a file in an archive.
@@ -74,7 +74,7 @@ func writeFile(t *testing.T, path, body string) {
 func TestBackup(t *testing.T) {
 	t.Parallel()
 	data := filepath.Join(t.TempDir(), "data")
-	// Roost is running: the store stays open, and its -wal file exists.
+	// Bield is running: the store stays open, and its -wal file exists.
 	st, err := store.Open(t.Context(), filepath.Join(data, dbName), store.Options{NoPrune: true})
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +108,7 @@ func TestBackup(t *testing.T) {
 		names = append(names, name)
 	}
 	slices.Sort(names)
-	want := []string{"roost.db", "ssh/", "ssh/id_ed25519", "tailscale/", "tailscale/certs/", "tailscale/certs/cert.pem", "tailscale/tailscaled.state"}
+	want := []string{"bield.db", "ssh/", "ssh/id_ed25519", "tailscale/", "tailscale/certs/", "tailscale/certs/cert.pem", "tailscale/tailscaled.state"}
 	if !slices.Equal(names, want) {
 		t.Errorf("archive has %q, want %q", names, want)
 	}
@@ -159,7 +159,7 @@ func TestBackup_standardOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".roost-backup") {
+		if strings.HasPrefix(e.Name(), ".bield-backup") {
 			t.Errorf("backup left %s behind", e.Name())
 		}
 	}
@@ -173,7 +173,7 @@ func TestBackup_makesItsDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = st.Close() }()
-	out := filepath.Join(data, "backups", "roost.tar.gz")
+	out := filepath.Join(data, "backups", "bield.tar.gz")
 
 	if err := run(t.Context(), []string{"backup", "--data-dir", data, out}, io.Discard, io.Discard); err != nil {
 		t.Fatalf("backup error = %v, want none", err)
@@ -236,7 +236,7 @@ func TestBackup_failures(t *testing.T) {
 
 		err := run(t.Context(), []string{"backup", "a", "b"}, io.Discard, &stderr)
 
-		if !errors.Is(err, errUsage) || !strings.Contains(stderr.String(), "Usage: roost backup") {
+		if !errors.Is(err, errUsage) || !strings.Contains(stderr.String(), "Usage: bield backup") {
 			t.Errorf("backup a b: error = %v, stderr = %q, want usage", err, stderr.String())
 		}
 	})
@@ -258,7 +258,7 @@ func TestBackup_insideTheDataDirectory(t *testing.T) {
 	}
 
 	for name := range readArchiveFile(t, out) {
-		if strings.Contains(name, "saved") || strings.Contains(name, ".roost-backup") {
+		if strings.Contains(name, "saved") || strings.Contains(name, ".bield-backup") {
 			t.Errorf("archive contains %s, which is the backup itself", name)
 		}
 	}
@@ -268,7 +268,7 @@ func TestBackup_insideTheDataDirectory(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if strings.HasPrefix(e.Name(), ".roost-backup") {
+		if strings.HasPrefix(e.Name(), ".bield-backup") {
 			t.Errorf("backup left %s behind", e.Name())
 		}
 	}

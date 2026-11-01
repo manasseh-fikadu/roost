@@ -6,14 +6,14 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/ssh/sshtest"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/ssh/sshtest"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 func TestManager_tailscaleSSH(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		// Roost's key isn't on the laptop, which needs none.
+		// Bield's key isn't on the laptop, which needs none.
 		e := newEnv(t, envOptions{noRun: true, unauthorized: true})
 		e.laptop.TailscaleSSH(sshtest.PolicyAccept)
 		ok(e.laptop)
@@ -46,7 +46,7 @@ func TestManager_keyMethod(t *testing.T) {
 			t.Fatal(err)
 		}
 		if a.State != ssh.StateOK || a.Method != ssh.MethodKey {
-			t.Errorf("Check = %+v, want ok with Roost's key", a)
+			t.Errorf("Check = %+v, want ok with Bield's key", a)
 		}
 	})
 }
@@ -62,24 +62,24 @@ func TestManager_tailscaleSSHRefusals(t *testing.T) {
 			name:    "check",
 			policy:  sshtest.PolicyCheck,
 			refusal: ssh.RefusedCheck,
-			want:    "Tailscale SSH on laptop wants a browser check before it lets Roost in, and Roost can't make one",
+			want:    "Tailscale SSH on laptop wants a browser check before it lets Bield in, and Bield can't make one",
 		},
 		{
 			name:    "no rule for the machine",
 			policy:  sshtest.PolicyDenyNode,
 			refusal: ssh.RefusedNode,
-			want:    "the tailnet policy doesn't let Roost use Tailscale SSH to log in to laptop",
+			want:    "the tailnet policy doesn't let Bield use Tailscale SSH to log in to laptop",
 		},
 		{
 			name:    "no rule for the user",
 			policy:  sshtest.PolicyDenyUser,
 			refusal: ssh.RefusedUser,
-			want:    "Tailscale SSH on laptop won't let Roost log in as alice: the tailnet policy doesn't allow that user, or the machine has no account for it",
+			want:    "Tailscale SSH on laptop won't let Bield log in as alice: the tailnet policy doesn't allow that user, or the machine has no account for it",
 		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				// Roost's key is on the laptop, but Tailscale SSH answers first.
+				// Bield's key is on the laptop, but Tailscale SSH answers first.
 				e := newEnv(t, envOptions{noRun: true})
 				e.laptop.TailscaleSSH(tt.policy)
 				e.setUp(t, "laptop", "alice")
@@ -98,7 +98,7 @@ func TestManager_tailscaleSSHRefusals(t *testing.T) {
 	}
 }
 
-// A policy change that lets Roost in clears the refusal.
+// A policy change that lets Bield in clears the refusal.
 func TestManager_tailscaleSSHRefusalClears(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		e := newEnv(t, envOptions{noRun: true})
@@ -122,8 +122,8 @@ func TestManager_tailscaleSSHRefusalClears(t *testing.T) {
 }
 
 func TestPolicySnippet(t *testing.T) {
-	roost := tailnet.Device{ID: "roost", Owner: "alice@example.com"}
-	tagged := tailnet.Device{ID: "roost", Tags: []string{"tag:roost", "tag:other"}}
+	bield := tailnet.Device{ID: "bield", Owner: "alice@example.com"}
+	tagged := tailnet.Device{ID: "bield", Tags: []string{"tag:bield", "tag:other"}}
 	for _, tt := range []struct {
 		name     string
 		src, dst tailnet.Device
@@ -131,8 +131,8 @@ func TestPolicySnippet(t *testing.T) {
 		want     string
 	}{
 		{
-			name: "Roost and the machine belong to one user",
-			src:  roost,
+			name: "Bield and the machine belong to one user",
+			src:  bield,
 			dst:  tailnet.Device{HostName: "laptop", Owner: "alice@example.com"},
 			user: "alice",
 			want: `{
@@ -146,7 +146,7 @@ func TestPolicySnippet(t *testing.T) {
 			// Headscale's user without an email is a name, and a policy
 			// refers to it as name@.
 			name: "a user with no @ in their login",
-			src:  tailnet.Device{ID: "roost", Owner: "alice"},
+			src:  tailnet.Device{ID: "bield", Owner: "alice"},
 			dst:  tailnet.Device{HostName: "laptop", Owner: "alice"},
 			user: "alice",
 			want: `{
@@ -158,7 +158,7 @@ func TestPolicySnippet(t *testing.T) {
 		},
 		{
 			name: "a tagged machine",
-			src:  roost,
+			src:  bield,
 			dst:  tailnet.Device{HostName: "web", Tags: []string{"tag:server"}},
 			user: "deploy",
 			want: `{
@@ -169,13 +169,13 @@ func TestPolicySnippet(t *testing.T) {
 }`,
 		},
 		{
-			name: "a tagged Roost",
+			name: "a tagged Bield",
 			src:  tagged,
 			dst:  tailnet.Device{HostName: "web", Tags: []string{"tag:server"}},
 			user: "deploy",
 			want: `{
   "action": "accept",
-  "src": ["tag:roost"],
+  "src": ["tag:bield"],
   "dst": ["tag:server"],
   "users": ["deploy"]
 }`,
@@ -187,7 +187,7 @@ func TestPolicySnippet(t *testing.T) {
 			user: "alice",
 			want: `{
   "action": "accept",
-  "src": ["tag:roost"],
+  "src": ["tag:bield"],
   // Tailscale SSH rules can only name a machine by its tag here.
   // Tag laptop and use its tag.
   "dst": ["tag:servers"],

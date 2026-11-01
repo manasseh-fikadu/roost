@@ -53,7 +53,7 @@ func (s *Store) Agents(ctx context.Context) ([]AgentRecord, error) {
 	return out, nil
 }
 
-// ErrNoAgent means a device has no agent that Roost knows of.
+// ErrNoAgent means a device has no agent that Bield knows of.
 var ErrNoAgent = errors.New("no agent has reported from this device")
 
 // ForgetAgent deletes the latest report of a device's agent. It returns

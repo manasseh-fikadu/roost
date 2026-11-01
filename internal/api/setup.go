@@ -13,14 +13,14 @@ import (
 
 	"github.com/skip2/go-qrcode"
 
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // SetupOptions configures Setup.
 type SetupOptions struct {
 	// Tailnet is the embedded node to log in.
 	Tailnet tailnet.Tailnet
-	// AppURL returns the app's URL on the tailnet once Roost serves it there,
+	// AppURL returns the app's URL on the tailnet once Bield serves it there,
 	// or "" until then.
 	AppURL func() string
 	// Logger receives errors that can't be shown on the page. Nil discards
@@ -29,11 +29,11 @@ type SetupOptions struct {
 }
 
 // Setup returns the handler for the first-run page, which embedded mode
-// serves on a local address. Until Roost is on the tailnet, the page shows the
-// Tailscale login link and a QR code of it; after that, a link to Roost on the
+// serves on a local address. Until Bield is on the tailnet, the page shows the
+// Tailscale login link and a QR code of it; after that, a link to Bield on the
 // tailnet. It serves nothing else, so the local address can't reach the app.
 //
-// Whoever opens the login link decides which tailnet Roost joins, so the page
+// Whoever opens the login link decides which tailnet Bield joins, so the page
 // only answers requests addressed to localhost or an IP address. A web page
 // can't read it by pointing its own domain at 127.0.0.1 (DNS rebinding).
 func Setup(opts SetupOptions) http.Handler {
@@ -122,7 +122,7 @@ func (p setupPage) ControlHost() string {
 	return p.ControlURL
 }
 
-// Running reports whether Roost is on the tailnet and serving.
+// Running reports whether Bield is on the tailnet and serving.
 func (p setupPage) Running() bool { return p.State == tailnet.StateRunning && p.AppURL != "" }
 
 // qrSVG draws text as a QR code in SVG.
@@ -156,7 +156,7 @@ var setupTemplate = template.Must(template.New("setup").Parse(`<!doctype html>
 {{- if not .Running}}
 <meta http-equiv="refresh" content="3">
 {{- end}}
-<title>Set up Roost</title>
+<title>Set up Bield</title>
 <style>
 :root { color-scheme: light dark; font-family: system-ui, sans-serif; line-height: 1.5; }
 body { margin: 0; min-height: 100dvh; display: grid; place-items: center; background: Canvas; color: CanvasText; }
@@ -174,28 +174,28 @@ code { font-size: .875em; }
 <body>
 <main>
 {{- if .Error}}
-<h1>Roost can't reach Tailscale</h1>
+<h1>Bield can't reach Tailscale</h1>
 <p>{{.Error}}</p>
 <p class="muted">This page tries again every few seconds.</p>
 {{- else if .Running}}
-<h1>Roost is on your tailnet</h1>
+<h1>Bield is on your tailnet</h1>
 <p>Open it from any device on your tailnet.</p>
-<p><a class="button" href="{{.AppURL}}">Open Roost</a></p>
+<p><a class="button" href="{{.AppURL}}">Open Bield</a></p>
 <p class="muted">{{.AppURL}}</p>
 {{- else if .LoginURL}}
-<h1>Add Roost to your tailnet</h1>
+<h1>Add Bield to your tailnet</h1>
 {{- if .ControlURL}}
-<p>Log in to your control server, <code>{{.ControlHost}}</code>, to add Roost to your tailnet as a new machine. A Headscale server shows the <code>headscale</code> command that approves it.</p>
+<p>Log in to your control server, <code>{{.ControlHost}}</code>, to add Bield to your tailnet as a new machine. A Headscale server shows the <code>headscale</code> command that approves it.</p>
 <p><a class="button" href="{{.LoginURL}}" target="_blank" rel="noopener noreferrer">Log in</a></p>
 {{- else}}
-<p>Log in to Tailscale to add Roost to your tailnet as a new machine.</p>
+<p>Log in to Tailscale to add Bield to your tailnet as a new machine.</p>
 <p><a class="button" href="{{.LoginURL}}" target="_blank" rel="noopener noreferrer">Log in to Tailscale</a></p>
 {{- end}}
 {{- if .QR}}
 <div class="qr">{{.QR}}</div>
 <p class="muted">Or scan the code to log in on your phone.</p>
 {{- end}}
-<p class="muted">To skip this step, restart Roost with <code>TS_AUTHKEY</code> set to an auth key{{if .ControlURL}}, which <code>headscale preauthkeys create</code> makes{{end}}.</p>
+<p class="muted">To skip this step, restart Bield with <code>TS_AUTHKEY</code> set to an auth key{{if .ControlURL}}, which <code>headscale preauthkeys create</code> makes{{end}}.</p>
 {{- else}}
 <h1>Connecting to Tailscale…</h1>
 <p class="muted">{{with .State}}Tailscale is {{.}}. {{end}}This page updates by itself.</p>

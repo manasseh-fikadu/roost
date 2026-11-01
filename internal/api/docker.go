@@ -15,9 +15,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 const (
@@ -31,7 +31,7 @@ const (
 	defaultTail = 500
 	// maxTail is the most lines a log can start with.
 	maxTail = 100_000
-	// logReadSize is how much of a container's logs Roost reads at once.
+	// logReadSize is how much of a container's logs Bield reads at once.
 	logReadSize = 32 << 10
 	// diskWait and volumeWait are how long a page waits for the daemon to
 	// measure its disk use before it shows what it has.
@@ -62,9 +62,9 @@ func (h *handler) dockerOf(w http.ResponseWriter, r *http.Request) *dockerTarget
 		var why string
 		switch {
 		case !ok:
-			why = "SSH access isn't set up for " + name + ", so Roost can't reach its Docker"
+			why = "SSH access isn't set up for " + name + ", so Bield can't reach its Docker"
 		case a.DockerSocket == "":
-			why = "Roost found no Docker socket on " + name + "; if it has Docker, check the machine again on its page"
+			why = "Bield found no Docker socket on " + name + "; if it has Docker, check the machine again on its page"
 		}
 		if why != "" {
 			if callerOf(r).level < admins {
@@ -76,7 +76,7 @@ func (h *handler) dockerOf(w http.ResponseWriter, r *http.Request) *dockerTarget
 	}
 	host, err := h.opts.Docker.Host(hid)
 	if errors.Is(err, docker.ErrNoDocker) {
-		why := "Roost finds no Docker socket on the machine it runs on"
+		why := "Bield finds no Docker socket on the machine it runs on"
 		if callerOf(r).level < admins {
 			why = cantReachDevice
 		}
@@ -129,15 +129,15 @@ func (h *handler) logDockerRead(r *http.Request, t *dockerTarget, cid, what stri
 	h.logAction(r, EventKindContainer, t.deviceID, what+" "+printable(name)+" on "+h.deviceName(r, t.deviceID))
 }
 
-// Said to someone who may not know how Roost reaches a machine: its SSH user
+// Said to someone who may not know how Bield reaches a machine: its SSH user
 // and port, its Docker socket, or what Docker itself says went wrong.
 const (
-	cantReach       = "Roost can't reach Docker on this machine right now"
-	cantReachDevice = "Roost can't reach this machine's Docker"
+	cantReach       = "Bield can't reach Docker on this machine right now"
+	cantReachDevice = "Bield can't reach this machine's Docker"
 )
 
 // dockerStatus returns the HTTP status and message for an error from Docker,
-// or from reaching it. An error about how Roost reaches the machine says
+// or from reaching it. An error about how Bield reaches the machine says
 // where, and as what user, so only admins get its words: Device.SSH is for
 // admins too. Everyone gets what Docker says of a request that was wrong, such
 // as a container that isn't there.

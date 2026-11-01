@@ -25,7 +25,7 @@ type Payload struct {
 	Detail   string `json:"detail"`
 	// Alert is the alert the message is about. It's nil for a test.
 	Alert *PayloadAlert `json:"alert,omitempty"`
-	// Instance is what Roost is called.
+	// Instance is what Bield is called.
 	Instance string `json:"instance"`
 	At       string `json:"at"`
 }
@@ -35,7 +35,7 @@ type PayloadAlert struct {
 	ID         int64   `json:"id"`
 	OpenedAt   string  `json:"openedAt"`
 	ResolvedAt *string `json:"resolvedAt"`
-	// URL is where the alert is in Roost, or "" if Roost doesn't know its
+	// URL is where the alert is in Bield, or "" if Bield doesn't know its
 	// own address.
 	URL string `json:"url"`
 }

@@ -88,7 +88,7 @@ func (e email) Send(ctx context.Context, m Message) error {
 	defer func() { _ = c.Close() }()
 	if e.cfg.Security == "" || e.cfg.Security == StartTLS {
 		if ok, _ := c.Extension("STARTTLS"); !ok {
-			return errors.New("the mail server doesn't offer STARTTLS, so Roost won't send mail or a password to it in the clear")
+			return errors.New("the mail server doesn't offer STARTTLS, so Bield won't send mail or a password to it in the clear")
 		}
 		if err := c.StartTLS(tlsConfig); err != nil {
 			return err
@@ -127,7 +127,7 @@ func (e email) Send(ctx context.Context, m Message) error {
 func (e email) build(m Message, from *mail.Address, to []string) ([]byte, error) {
 	var id [12]byte
 	_, _ = rand.Read(id[:]) // crypto/rand never fails
-	domain := "roost.invalid"
+	domain := "bield.invalid"
 	if _, host, ok := strings.Cut(from.Address, "@"); ok && host != "" {
 		domain = host
 	}

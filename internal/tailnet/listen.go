@@ -18,7 +18,7 @@ import (
 const certTimeout = 2 * time.Minute
 
 // tlsListener serves TLS on ln with the certificates that getCert returns. It
-// offers HTTP/2, so the browser can keep many event streams open to Roost:
+// offers HTTP/2, so the browser can keep many event streams open to Bield:
 // net/http only speaks HTTP/2 on a TLS listener it didn't make itself if the
 // listener offers it.
 func tlsListener(ln net.Listener, getCert func(*tls.ClientHelloInfo) (*tls.Certificate, error)) net.Listener {
@@ -46,16 +46,16 @@ func certDomain(st *ipnstate.Status) (string, bool) {
 	return st.CertDomains[0], true
 }
 
-// noHTTPSMessage says why Roost serves plain HTTP when the tailnet has no
+// noHTTPSMessage says why Bield serves plain HTTP when the tailnet has no
 // HTTPS certificates, and what to do about it. controlURL is the control
 // server if it isn't Tailscale's.
 func noHTTPSMessage(controlURL string) string {
 	if controlURL != "" {
 		// Headscale doesn't make certificates for tailnet names.
-		return "this tailnet's control server gives Roost no HTTPS certificate, as Headscale doesn't, " +
-			"so Roost is served over plain HTTP, which WireGuard still encrypts"
+		return "this tailnet's control server gives Bield no HTTPS certificate, as Headscale doesn't, " +
+			"so Bield is served over plain HTTP, which WireGuard still encrypts"
 	}
-	return "HTTPS is off for this tailnet, so Roost is served over plain HTTP; " +
+	return "HTTPS is off for this tailnet, so Bield is served over plain HTTP; " +
 		"turn on MagicDNS and HTTPS certificates in the Tailscale admin console to fix it"
 }
 
