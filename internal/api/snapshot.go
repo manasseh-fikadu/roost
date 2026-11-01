@@ -24,6 +24,8 @@ import (
 // sources is what a Snapshot is built from.
 type sources struct {
 	version string
+	// demo says the tailnet is made up.
+	demo    bool
 	tailnet tailnet.Snapshot
 	// host is what Roost measured of its own machine, or nil if it can't.
 	host *hostmetrics.Reading
@@ -70,7 +72,7 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 		GeneratedAt: now,
 		Hub: Hub{
 			Name: src.global.General.Name, SetupDone: src.global.General.SetupDone, Version: src.version,
-			Thresholds: Thresholds(src.global.Thresholds),
+			Thresholds: Thresholds(src.global.Thresholds), Demo: src.demo,
 		},
 		Collectors: []Collector{newCollector("Tailscale status", s.StatusAt, s.StatusErr)},
 		Uplink:     newUplink(s),

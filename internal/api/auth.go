@@ -75,7 +75,7 @@ func (h *handler) guard(next http.Handler) http.Handler {
 			return
 		}
 		self := snap.Status.Self
-		if !ownHost(self, r.Host) {
+		if !h.opts.Demo && !ownHost(self, r.Host) {
 			h.deny(w, r, http.StatusMisdirectedRequest, "Roost only answers to its own name on the tailnet")
 			return
 		}

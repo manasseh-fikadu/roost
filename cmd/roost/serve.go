@@ -24,6 +24,7 @@ import (
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/checks"
 	"github.com/manasseh-fikadu/roost/internal/config"
+	"github.com/manasseh-fikadu/roost/internal/demo"
 	"github.com/manasseh-fikadu/roost/internal/docker"
 	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
 	"github.com/manasseh-fikadu/roost/internal/notify"
@@ -47,6 +48,16 @@ func serve(ctx context.Context, args []string, stderr io.Writer) error {
 	if err != nil {
 		return err
 	}
+	if cfg.Demo {
+		// A demo keeps nothing, and never touches the data of a Roost that
+		// is run for real.
+		dir, err := os.MkdirTemp("", "roost-demo-")
+		if err != nil {
+			return fmt.Errorf("make a directory for the demo: %w", err)
+		}
+		defer func() { _ = os.RemoveAll(dir) }()
+		cfg.DataDir = dir
+	}
 	return runServe(ctx, cfg, stderr, openNode)
 }
 
@@ -65,7 +76,8 @@ func openNode(ctx context.Context, cfg config.Config, logger *slog.Logger) (tail
 
 // runServe runs the hub until ctx ends. The app is only served on the tailnet.
 // In embedded mode, the setup page is also served on cfg.SetupListen, so
-// someone can log the node in.
+// someone can log the node in. A demo (cfg.Demo) runs against a made-up tailnet
+// instead, and serves the app on cfg.DemoListen.
 func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open openNodeFunc) (err error) {
 	logger := slog.New(slog.NewTextHandler(stderr, nil))
 	devUI, err := devUIURL(cfg.DevUI)
@@ -86,8 +98,16 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 
 	// Listen for the setup page before starting the node, so a bad address
 	// fails at once.
+	var world *demo.Demo
+	if cfg.Demo {
+		world = demo.New(demo.Options{Devices: cfg.DemoDevices, Listen: cfg.DemoListen, Logger: logger})
+		defer world.Close()
+		open = func(context.Context, config.Config, *slog.Logger) (tailnet.Node, error) { return world.Node(), nil }
+		logger.Info("running a demo, with a made-up tailnet and data that goes away when Roost stops",
+			"devices", cfg.DemoDevices, "history_days", cfg.DemoDays)
+	}
 	var setupLn net.Listener
-	if cfg.Tailscale == config.Embedded {
+	if cfg.Tailscale == config.Embedded && !cfg.Demo {
 		var lc net.ListenConfig
 		if setupLn, err = lc.Listen(ctx, "tcp", cfg.SetupListen); err != nil {
 			return fmt.Errorf("listen on %s: %w", cfg.SetupListen, err)
@@ -157,6 +177,11 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		return errors.Join(fmt.Errorf("listen on the tailnet: %w", res.err), srvs.stop(ctx))
 	}
 
+	if world != nil {
+		if err := world.Seed(ctx, st, time.Duration(cfg.DemoDays*float64(24*time.Hour))); err != nil {
+			return errors.Join(err, res.ln.Close(), srvs.stop(ctx))
+		}
+	}
 	if err := addFirstAdmins(ctx, st, node, cfg.Admins, logger); err != nil {
 		return errors.Join(err, res.ln.Close(), srvs.stop(ctx))
 	}
@@ -174,7 +199,11 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	wg.Go(func() { recorder.Run(ctx) })
 	// Checks dial through the node, which reaches the tailnet's addresses
 	// and names as well as the internet.
-	runner := checks.NewRunner(st, checks.Options{Dial: node.Dial, Logger: logger})
+	checkOpts := checks.Options{Dial: node.Dial, Logger: logger}
+	if world != nil {
+		checkOpts.Lookup = world.Lookup
+	}
+	runner := checks.NewRunner(st, checkOpts)
 	if err := runner.Load(ctx); err != nil {
 		return errors.Join(fmt.Errorf("load the checks: %w", err), res.ln.Close(), srvs.stop(ctx))
 	}
@@ -188,19 +217,31 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	wg.Go(func() { poller.Run(ctx) })
 	// SSH reaches peers through the node, and the machine Roost runs on
 	// through its loopback address.
-	remote := ssh.NewManager(ssh.Options{
+	sshOpts := ssh.Options{
 		KeyDir:   filepath.Join(cfg.DataDir, "ssh"),
 		Store:    st,
 		Tailnet:  poller.Snapshot,
 		Dial:     node.Dial,
 		HostMode: cfg.Tailscale == config.Host,
 		Logger:   logger,
-	})
+	}
+	if world != nil {
+		sshOpts.DialLocal, sshOpts.HostMode = world.DialLocal, true
+	}
+	remote := ssh.NewManager(sshOpts)
 	if err := remote.Load(ctx); err != nil {
 		return errors.Join(fmt.Errorf("load SSH access: %w", err), res.ln.Close(), srvs.stop(ctx))
 	}
+	if world != nil {
+		key, err := remote.Key()
+		if err != nil {
+			return errors.Join(fmt.Errorf("make Roost's SSH key: %w", err), res.ln.Close(), srvs.stop(ctx))
+		}
+		world.AuthorizeSSH(key.PublicKey())
+	}
 	feedOpts := api.FeedOptions{
 		Version:        buildVersion(),
+		Demo:           world != nil,
 		Tailnet:        poller.Snapshot,
 		TailnetChanged: poller.Changes(),
 		Agents:         registry,
@@ -212,7 +253,15 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		Settings:       prefs,
 		Logger:         logger,
 	}
-	if hostmetrics.Supported {
+	switch {
+	case world != nil:
+		// The machine Roost pretends to run on is measured by the demo.
+		host := world.Host()
+		host.SetWindow(cpuWindow)
+		wg.Go(func() { world.Run(ctx) })
+		wg.Go(func() { world.Report(ctx, demo.Sinks{Agents: registry, Usage: recorder}) })
+		feedOpts.Host, feedOpts.HostChanged = host.Reading, host.Changes()
+	case hostmetrics.Supported:
 		// Tests build a Config by hand, without the default.
 		hostRoot := cmp.Or(cfg.HostRoot, config.DefaultHostRoot)
 		host := hostmetrics.NewCollector(hostmetrics.Local(hostRoot), logger)
@@ -225,8 +274,15 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		})
 	}
 	var localDocker *docker.Client
-	if socket, ok := docker.Socket(); ok {
+	switch socket, ok := docker.Socket(); {
+	case world != nil:
+		if dial := world.HubDocker(); dial != nil {
+			localDocker = docker.NewClient(dial)
+		}
+	case ok:
 		localDocker = docker.NewClient(docker.SocketDialer(socket))
+	}
+	if localDocker != nil {
 		containers := docker.NewCollector(localDocker, logger)
 		wg.Go(func() { containers.Run(ctx) })
 		feedOpts.Docker, feedOpts.DockerChanged = containers.Reading, containers.Changes()
@@ -242,12 +298,17 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 	})
 	wg.Go(func() { sampler.Run(ctx) })
 	var units *systemd.Collector
-	if systemd.Available() {
-		units = systemd.NewCollector(systemd.Options{
-			UserScope: systemd.HasUserScope(),
-			Watched:   func() []string { return prefs.Get(ctx).WatchedUnits },
-			Logger:    logger,
-		})
+	if world != nil || systemd.Available() {
+		unitOpts := systemd.Options{
+			Watched: func() []string { return prefs.Get(ctx).WatchedUnits },
+			Logger:  logger,
+		}
+		if world != nil {
+			unitOpts.Run = world.Systemctl
+		} else {
+			unitOpts.UserScope = systemd.HasUserScope()
+		}
+		units = systemd.NewCollector(unitOpts)
 		wg.Go(func() { units.Run(ctx) })
 		feedOpts.Systemd, feedOpts.SystemdChanged = units.Reading, units.Changes()
 	}
@@ -293,6 +354,7 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		Systemd:  units,
 		// config.Parse has checked it.
 		Tailscale: api.TailscaleMode(cfg.Tailscale),
+		Demo:      world != nil,
 		AppURL:    res.url,
 		Stopping:  stopping,
 		Logger:    logger,

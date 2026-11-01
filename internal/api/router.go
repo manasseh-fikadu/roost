@@ -135,6 +135,9 @@ func (rt *router) anyMethod(pattern string, need level, next http.Handler) {
 
 func (rt *router) add(r route, next http.Handler) {
 	rt.routes = append(rt.routes, r)
+	if notice := demoNotice(r.pattern); notice != "" && rt.h.opts.Demo {
+		next = rt.h.refuseInDemo(notice)
+	}
 	rt.mux.Handle(r.pattern, rt.h.allow(r, next))
 }
 
