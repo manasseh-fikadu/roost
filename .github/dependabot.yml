@@ -39,3 +39,13 @@ updates:
     groups:
       actions:
         patterns: ["*"]
+
+  # The Dockerfile's base image, which is pinned by digest.
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: chore
