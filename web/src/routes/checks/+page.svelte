@@ -1,8 +1,10 @@
 <script lang="ts">
 	import HeartPulse from '@lucide/svelte/icons/heart-pulse';
 	import Plus from '@lucide/svelte/icons/plus';
+	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import { isAdmin } from '#lib/access.js';
 	import AdminOnly from '#lib/AdminOnly.svelte';
 	import { deleteCheck } from '#lib/api/client.js';
 	import type { Check } from '#lib/api/types.js';
@@ -72,6 +74,18 @@
 		editing = c;
 		editOpen = true;
 	}
+
+	// A link to ?new, such as the command palette's "Add a check", opens the form once.
+	$effect(() => {
+		if (page.url.searchParams.has('new')) {
+			untrack(() => {
+				if (isAdmin(page.data.me)) {
+					edit(null);
+				}
+				setParam('new', null);
+			});
+		}
+	});
 
 	function remove(c: Check) {
 		deleteWithUndo({
