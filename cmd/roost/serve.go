@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -212,11 +213,13 @@ func runServe(ctx context.Context, cfg config.Config, stderr io.Writer, open ope
 		Logger:         logger,
 	}
 	if hostmetrics.Supported {
-		host := hostmetrics.NewCollector(hostmetrics.Local(), logger)
+		// Tests build a Config by hand, without the default.
+		hostRoot := cmp.Or(cfg.HostRoot, config.DefaultHostRoot)
+		host := hostmetrics.NewCollector(hostmetrics.Local(hostRoot), logger)
 		host.SetWindow(cpuWindow)
 		wg.Go(func() { host.Run(ctx) })
 		feedOpts.Host, feedOpts.HostChanged = host.Reading, host.Changes()
-		sampler := usage.NewSampler(os.DirFS("/"))
+		sampler := usage.NewSampler(os.DirFS(hostRoot))
 		wg.Go(func() {
 			sampler.Run(ctx, logger, func(s usage.Sample) { recorder.Record(ctx, store.HubID, s) })
 		})
