@@ -100,7 +100,7 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 		out.Health = newHealthScore(out.Checks)
 		return out, nil
 	}
-	out.Hub.DNSName, out.Hub.Tailnet = st.Self.DNSName, st.Tailnet
+	out.Hub.DNSName, out.Hub.Tailnet, out.Hub.ControlURL = st.Self.DNSName, st.Tailnet, st.ControlURL
 	devices := append([]tailnet.Device{st.Self}, st.Peers...)
 	// An agent enrolls from its machine's node, and its reports are kept
 	// under the machine's history ID. The machine Roost runs on can have two

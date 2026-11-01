@@ -407,6 +407,10 @@ type Hub struct {
 	// Tailnet is the tailnet's name, such as example.com. Only admins get
 	// it: a personal tailnet is named after its owner's email address.
 	Tailnet string `json:"tailnet" roost:"secret"`
+	// ControlURL is the control server the tailnet is on when it isn't
+	// Tailscale's, such as a Headscale server's, and "" when it is. Only
+	// admins get it, like the tailnet's name.
+	ControlURL string `json:"controlUrl" roost:"secret"`
 	// Thresholds are when a device needs attention, unless it has some of
 	// its own, as the settings have them now.
 	Thresholds Thresholds `json:"thresholds"`

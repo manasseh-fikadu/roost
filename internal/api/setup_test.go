@@ -32,6 +32,21 @@ func TestSetup(t *testing.T) {
 			wantRefresh: true,
 		},
 		{
+			// Headscale's page asks someone to run a command, not to log in
+			// to Tailscale.
+			name: "needs login on a Headscale server",
+			status: tailnet.Status{
+				State: tailnet.StateNeedsLogin, ControlURL: "https://hs.example.com:8443",
+				LoginURL: "https://hs.example.com:8443/register/abc",
+			},
+			want: []string{
+				"Add Roost to your tailnet", "<code>hs.example.com:8443</code>", `href="https://hs.example.com:8443/register/abc"`,
+				"headscale preauthkeys create",
+			},
+			wantNot:     []string{"Log in to Tailscale"},
+			wantRefresh: true,
+		},
+		{
 			name:        "starting",
 			status:      tailnet.Status{State: "Starting"},
 			want:        []string{"Connecting to Tailscale", "Tailscale is Starting."},

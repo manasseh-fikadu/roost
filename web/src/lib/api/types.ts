@@ -572,6 +572,12 @@ export interface Hub {
    */
   tailnet: string;
   /**
+   * ControlURL is the control server the tailnet is on when it isn't
+   * Tailscale's, such as a Headscale server's, and "" when it is. Only
+   * admins get it, like the tailnet's name.
+   */
+  controlUrl: string;
+  /**
    * Thresholds are when a device needs attention, unless it has some of
    * its own, as the settings have them now.
    */

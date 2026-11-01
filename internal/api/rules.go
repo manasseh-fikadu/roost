@@ -19,6 +19,15 @@ const (
 	collectorGrace = 2 * time.Minute
 )
 
+// keyExpiryDetail says what to do about a node whose key expires, on a
+// control server of the user's own, such as Headscale's, or on Tailscale's.
+func keyExpiryDetail(ownControlServer bool) string {
+	if ownControlServer {
+		return "Log it in again, or turn off key expiry for it on the control server (with Headscale, `headscale nodes expire --disable`)."
+	}
+	return "Log it in to Tailscale again, or turn off key expiry for it in the Tailscale admin console."
+}
+
 // alertConditions returns the conditions that need an alert in snap, built
 // at now from src, with the machines Roost measures, and says whose data was
 // fresh. started is when Roost started.
@@ -47,7 +56,7 @@ func alertConditions(snap Snapshot, machines []machine, src sources, started, no
 				c := alerts.Condition{
 					Key: "key-expiry:" + d.ID, Source: string(AlertSourceDevice), DeviceID: d.ID, Severity: alerts.Warning,
 					Title:  fmt.Sprintf("Tailscale key of %s expires in %s", d.Name, days(left)),
-					Detail: "Log it in to Tailscale again, or turn off key expiry for it in the Tailscale admin console.",
+					Detail: keyExpiryDetail(snap.Hub.ControlURL != ""),
 				}
 				if left <= 0 {
 					c.Title = "Tailscale key of " + d.Name + " expired"

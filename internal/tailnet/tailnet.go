@@ -64,6 +64,9 @@ type Status struct {
 	LoginURL string
 	// Tailnet is the tailnet's name, such as example.com or user@github.
 	Tailnet string
+	// ControlURL is the control server the node is logged in to when it
+	// isn't Tailscale's, such as a Headscale server's, and "" when it is.
+	ControlURL string
 	// Self is the node Roost runs as: its own node in embedded mode, or the
 	// machine's in host mode.
 	Self Device

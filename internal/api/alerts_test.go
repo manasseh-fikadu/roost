@@ -569,3 +569,38 @@ func TestEventRoutes(t *testing.T) {
 		t.Errorf("the laptop's events = %+v, want the one", page)
 	}
 }
+
+// The Tailscale admin console doesn't exist on a Headscale tailnet, so the
+// advice for a key that's about to expire points at the control server.
+func TestSnapshot_keyExpiryAdvice(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct{ name, controlURL, want, wantNot string }{
+		{"Tailscale", "", "Tailscale admin console", "headscale"},
+		{"Headscale", "https://hs.example.com", "headscale nodes expire --disable", "admin console"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			now := time.Now()
+			status := &tailnet.Status{
+				State: tailnet.StateRunning, ControlURL: tt.controlURL,
+				Self:  tailnet.Device{ID: "roost", HostName: "roost", Online: true},
+				Peers: []tailnet.Device{{ID: "nas", HostName: "nas", Online: true, KeyExpiry: now.Add(48 * time.Hour)}},
+			}
+			feed := api.NewFeed(api.FeedOptions{
+				Tailnet: func() tailnet.Snapshot { return tailnet.Snapshot{Status: status, StatusAt: now} },
+				Alerts:  alerts.NewEngine(checksStore(t), nil),
+				Store:   checksStore(t),
+			})
+
+			var detail string
+			for _, a := range feed.Latest().Alerts {
+				if a.DeviceID == "nas" {
+					detail = a.Detail
+				}
+			}
+			if !strings.Contains(detail, tt.want) || strings.Contains(detail, tt.wantNot) {
+				t.Errorf("the key expiry alert says %q, want it to mention %q and not %q", detail, tt.want, tt.wantNot)
+			}
+		})
+	}
+}

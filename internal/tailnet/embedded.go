@@ -128,8 +128,7 @@ func (e *Embedded) Listen(ctx context.Context) (net.Listener, string, error) {
 	}
 	domain, ok := certDomain(st)
 	if !ok {
-		e.log.Warn("HTTPS is off for this tailnet, so Roost is served over plain HTTP; " +
-			"turn on MagicDNS and HTTPS certificates in the Tailscale admin console to fix it")
+		e.log.Warn(noHTTPSMessage(e.controlURL(ctx)))
 		ln, err := e.srv.Listen("tcp", ":80")
 		if err != nil {
 			return nil, "", err

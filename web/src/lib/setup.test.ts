@@ -96,12 +96,44 @@ describe('setupChecks', () => {
 		);
 	});
 
+	test('a Headscale tailnet names its control server', () => {
+		const s = snapshot({
+			hub: {
+				name: 'Roost',
+				setupDone: false,
+				tailnet: 'headscale',
+				controlUrl: 'https://hs.example.com:8443'
+			} as Snapshot['hub']
+		});
+		expect(byId(setupChecks(s, alice, 'embedded')).tailscale).toMatchObject({
+			status: 'online',
+			detail:
+				'Roost is its own machine on the tailnet · control server hs.example.com:8443 · tailnet headscale · 2 other devices found'
+		});
+	});
+
+	test('an empty Headscale tailnet says how to log a machine in', () => {
+		const s = snapshot({
+			hub: {
+				name: 'Roost',
+				setupDone: false,
+				tailnet: '',
+				controlUrl: 'http://hs:8080'
+			} as Snapshot['hub'],
+			devices: [device('roost', true)]
+		});
+		const t = byId(setupChecks(s, alice, 'embedded')).tailscale;
+		expect(t.status).toBe('attention');
+		expect(t.hint).toContain('tailscale up --login-server http://hs:8080');
+	});
+
 	test('a tailnet with only Roost on it needs a hint', () => {
 		const s = snapshot({ devices: [device('roost', true)] });
 		const t = byId(setupChecks(s, alice, 'embedded')).tailscale;
 		expect(t.status).toBe('attention');
 		expect(t.detail).toEndWith('0 other devices found');
 		expect(t.hint).toContain('Install Tailscale on one');
+		expect(t.hint).not.toContain('--login-server');
 	});
 
 	test.each<{ mode: 'host' | 'embedded'; hint: string }>([
