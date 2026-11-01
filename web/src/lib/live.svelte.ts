@@ -60,6 +60,11 @@ class Live {
 		return this.snapshot?.hub.name || this.#stored || 'Roost';
 	}
 
+	/** Whether this Roost runs a demo, with made-up machines. */
+	get demo(): boolean {
+		return this.snapshot?.hub.demo === true;
+	}
+
 	/** Takes a snapshot as the latest. */
 	receive(snapshot: Snapshot) {
 		this.snapshot = snapshot;

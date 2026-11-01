@@ -26,7 +26,14 @@ function container(over: Partial<Container> = {}): Container {
 }
 
 function snapshot(over: Partial<Snapshot> = {}): Snapshot {
-	return { devices: [], containers: [], checks: [], alerts: [], ...over } as unknown as Snapshot;
+	return {
+		hub: { demo: false },
+		devices: [],
+		containers: [],
+		checks: [],
+		alerts: [],
+		...over
+	} as unknown as Snapshot;
 }
 
 const ids = (s: Snapshot | null, admin: boolean) => paletteActions(s, admin).map((a) => a.id);
@@ -48,6 +55,15 @@ describe('paletteActions', () => {
 	test('an admin can open a terminal and files on a machine with working SSH', () => {
 		const s = snapshot({ devices: [device()] });
 		expect(ids(s, true)).toEqual(['shortcuts', 'terminal:d1', 'files:d1', 'new-check']);
+	});
+
+	test('a demo has no terminals, files or container actions to offer', () => {
+		const s = snapshot({
+			hub: { demo: true } as Snapshot['hub'],
+			devices: [device({ docker: true })],
+			containers: [container()]
+		});
+		expect(ids(s, true)).toEqual(['shortcuts', 'docker:d1', 'new-check']);
 	});
 
 	test('a machine without SSH access gets no terminal', () => {
