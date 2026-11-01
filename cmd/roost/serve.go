@@ -68,9 +68,10 @@ func openNode(ctx context.Context, cfg config.Config, logger *slog.Logger) (tail
 		return tailnet.NewHost(ctx, tailnet.HostOptions{Port: cfg.Port, Logger: logger})
 	}
 	return tailnet.NewEmbedded(tailnet.EmbeddedOptions{
-		Dir:      filepath.Join(cfg.DataDir, "tailscale"),
-		Hostname: cfg.Hostname,
-		Logger:   logger,
+		Dir:        filepath.Join(cfg.DataDir, "tailscale"),
+		Hostname:   cfg.Hostname,
+		ControlURL: cfg.ControlURL,
+		Logger:     logger,
 	})
 }
 

@@ -120,6 +120,37 @@ func TestParse(t *testing.T) {
 			want: with(func(c *config.Config) { c.Admins = []string{"carol@example.com"} }),
 		},
 		{
+			name: "control URL flag beats environment",
+			args: []string{"--control-url", "https://hs.example.com:8443"},
+			env:  map[string]string{"ROOST_CONTROL_URL": "https://other.example.com"},
+			want: with(func(c *config.Config) { c.ControlURL = "https://hs.example.com:8443" }),
+		},
+		{
+			name: "control URL from the environment",
+			env:  map[string]string{"ROOST_CONTROL_URL": "http://127.0.0.1:8080/"},
+			want: with(func(c *config.Config) { c.ControlURL = "http://127.0.0.1:8080/" }),
+		},
+		{
+			name:    "control URL in host mode",
+			args:    []string{"--tailscale", "host", "--control-url", "https://hs.example.com"},
+			wantErr: true,
+		},
+		{
+			name:    "control URL isn't a web address",
+			args:    []string{"--control-url", "hs.example.com"},
+			wantErr: true,
+		},
+		{
+			name:    "control URL with a path",
+			args:    []string{"--control-url", "https://example.com/headscale"},
+			wantErr: true,
+		},
+		{
+			name:    "control URL with a password",
+			args:    []string{"--control-url", "https://user:pass@hs.example.com"},
+			wantErr: true,
+		},
+		{
 			name:    "admin isn't a login",
 			args:    []string{"--admins", "alice@example.com,bob"},
 			wantErr: true,
