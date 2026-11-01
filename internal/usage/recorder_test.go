@@ -8,7 +8,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/usage"
+	"github.com/manasseh-fikadu/bield/internal/usage"
 )
 
 // sampleAt returns a sample from an agent at a time, in which a web

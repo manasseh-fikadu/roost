@@ -10,41 +10,41 @@ import (
 	"unicode"
 )
 
-// Role is what a Tailscale login may do in Roost.
+// Role is what a Tailscale login may do in Bield.
 type Role string
 
 // The roles a login can have.
 const (
 	// Admin can do everything: open terminals, change files, control Docker
-	// and change Roost's settings, including who has a role.
+	// and change Bield's settings, including who has a role.
 	Admin Role = "admin"
 	// Viewer can see the read-only dashboard, without logs, files, process
 	// command lines or other secrets.
 	Viewer Role = "viewer"
 )
 
-// Who can view Roost, as set with SetWhoCanView.
+// Who can view Bield, as set with SetWhoCanView.
 const (
 	// Tailnet makes anyone who signs in from the tailnet a viewer, unless
 	// they have a role of their own.
 	Tailnet = "tailnet"
-	// Listed lets only the logins with a role view Roost.
+	// Listed lets only the logins with a role view Bield.
 	Listed = "listed"
 )
 
-// DefaultWhoCanView is who can view Roost until an admin changes it. Roost
-// starts closed: sharing Roost's machine with someone, or a tailnet policy
+// DefaultWhoCanView is who can view Bield until an admin changes it. Bield
+// starts closed: sharing Bield's machine with someone, or a tailnet policy
 // that lets every member reach every device, shouldn't show them the whole
 // tailnet. Letting more people in later is one command.
 const DefaultWhoCanView = Listed
 
-// whoCanViewKey is the kv key that holds who can view Roost.
+// whoCanViewKey is the kv key that holds who can view Bield.
 const whoCanViewKey = "who_can_view"
 
-// ErrLastAdmin means a change would leave Roost without an admin.
+// ErrLastAdmin means a change would leave Bield without an admin.
 var ErrLastAdmin = errors.New("the last admin has to stay an admin, so make someone else an admin first")
 
-// A User is a Tailscale login with a role in Roost.
+// A User is a Tailscale login with a role in Bield.
 type User struct {
 	Login string
 	Role  Role
@@ -61,7 +61,7 @@ func (s *Store) Users(ctx context.Context) ([]User, error) {
 	return users, nil
 }
 
-// Access returns who can view Roost, Tailnet or Listed, and the logins that
+// Access returns who can view Bield, Tailnet or Listed, and the logins that
 // have a role, in order. It reads both in one transaction, so a change made
 // at the same time can't show up in one and not the other.
 func (s *Store) Access(ctx context.Context) (whoCanView string, users []User, err error) {
@@ -79,8 +79,8 @@ func (s *Store) Access(ctx context.Context) (whoCanView string, users []User, er
 }
 
 // Role returns the role a signed-in Tailscale login has, ignoring case: the
-// one it was given, or else Viewer if anyone on the tailnet can view Roost. It
-// returns "" if the login can't view Roost.
+// one it was given, or else Viewer if anyone on the tailnet can view Bield. It
+// returns "" if the login can't view Bield.
 func (s *Store) Role(ctx context.Context, login string) (Role, error) {
 	if login == "" {
 		return "", nil
@@ -101,7 +101,7 @@ func (s *Store) Role(ctx context.Context, login string) (Role, error) {
 }
 
 // SetRole gives login a role, and reports whether that changed anything. It
-// returns ErrLastAdmin instead of making Roost's last admin a viewer.
+// returns ErrLastAdmin instead of making Bield's last admin a viewer.
 func (s *Store) SetRole(ctx context.Context, login string, role Role) (changed bool, err error) {
 	if login, err = CleanLogin(login); err != nil {
 		return false, err
@@ -132,7 +132,7 @@ func (s *Store) SetRole(ctx context.Context, login string, role Role) (changed b
 }
 
 // RemoveUser takes login's role away, and reports whether it had one. It
-// returns ErrLastAdmin instead of removing Roost's last admin.
+// returns ErrLastAdmin instead of removing Bield's last admin.
 func (s *Store) RemoveUser(ctx context.Context, login string) (removed bool, err error) {
 	if login, err = CleanLogin(login); err != nil {
 		return false, err
@@ -159,7 +159,7 @@ func (s *Store) RemoveUser(ctx context.Context, login string) (removed bool, err
 	return removed, nil
 }
 
-// AddFirstAdmins makes logins admins if Roost has no admins yet, and reports
+// AddFirstAdmins makes logins admins if Bield has no admins yet, and reports
 // whether it did. Checking and adding happen in one transaction, so it can't
 // race with SetRole.
 func (s *Store) AddFirstAdmins(ctx context.Context, logins []string) (added bool, err error) {
@@ -191,20 +191,20 @@ func (s *Store) AddFirstAdmins(ctx context.Context, logins []string) (added bool
 	return added, nil
 }
 
-// WhoCanView returns who can view Roost: Tailnet or Listed.
+// WhoCanView returns who can view Bield: Tailnet or Listed.
 func (s *Store) WhoCanView(ctx context.Context) (string, error) {
 	who, err := whoCanViewIn(ctx, s.db)
 	if err != nil {
-		return "", fmt.Errorf("look up who can view Roost: %w", err)
+		return "", fmt.Errorf("look up who can view Bield: %w", err)
 	}
 	return who, nil
 }
 
-// SetWhoCanView sets who can view Roost, Tailnet or Listed, and reports
+// SetWhoCanView sets who can view Bield, Tailnet or Listed, and reports
 // whether that changed anything.
 func (s *Store) SetWhoCanView(ctx context.Context, who string) (changed bool, err error) {
 	if who != Tailnet && who != Listed {
-		return false, fmt.Errorf("who can view Roost is %q or %q, not %q", Tailnet, Listed, who)
+		return false, fmt.Errorf("who can view Bield is %q or %q, not %q", Tailnet, Listed, who)
 	}
 	err = s.inTx(ctx, func(tx *sql.Tx) error {
 		was, err := whoCanViewIn(ctx, tx)
@@ -220,7 +220,7 @@ func (s *Store) SetWhoCanView(ctx context.Context, who string) (changed bool, er
 		return nil
 	})
 	if err != nil {
-		return false, fmt.Errorf("set who can view Roost: %w", err)
+		return false, fmt.Errorf("set who can view Bield: %w", err)
 	}
 	return changed, nil
 }
@@ -278,7 +278,7 @@ func usersIn(ctx context.Context, q querier) ([]User, error) {
 	return users, rows.Err()
 }
 
-// whoCanViewIn reads who can view Roost.
+// whoCanViewIn reads who can view Bield.
 func whoCanViewIn(ctx context.Context, q querier) (string, error) {
 	var who sql.NullString
 	err := q.QueryRowContext(ctx, "SELECT value FROM kv WHERE key = ?", whoCanViewKey).Scan(&who)
@@ -291,7 +291,7 @@ func whoCanViewIn(ctx context.Context, q querier) (string, error) {
 // parseWhoCanView turns the stored who can view setting into Tailnet or
 // Listed. Until it's set, it's DefaultWhoCanView. Any value but Tailnet,
 // even an empty one, is Listed, so a bad value lets no one else in. Role and
-// WhoCanView both use it, so what Roost enforces is what it reports.
+// WhoCanView both use it, so what Bield enforces is what it reports.
 func parseWhoCanView(stored sql.NullString) string {
 	switch {
 	case !stored.Valid:

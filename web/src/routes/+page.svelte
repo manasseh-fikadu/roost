@@ -20,7 +20,7 @@
 	import StatusDot from '#lib/ui/StatusDot.svelte';
 	import Tooltip from '#lib/ui/Tooltip.svelte';
 
-	// An admin of a Roost that nobody has set up lands in the setup, once per
+	// An admin of a Bield that nobody has set up lands in the setup, once per
 	// browser tab, so leaving it doesn't bring them back every time.
 	$effect(() => {
 		if (shouldOpenSetup(isAdmin(page.data.me), live.snapshot?.hub, setupSent())) {

@@ -56,12 +56,12 @@ describe('terminalDevices', () => {
 		},
 		{
 			name: "the hub's own node, in host mode",
-			devices: [device('roost', hub, { self: true }), device('laptop', ok)],
-			want: ['roost', 'laptop']
+			devices: [device('bield', hub, { self: true }), device('laptop', ok)],
+			want: ['bield', 'laptop']
 		},
 		{
-			name: "the machine's node, not Roost's, in embedded mode",
-			devices: [device('roost', hub, { self: true }), device('vps', hub)],
+			name: "the machine's node, not Bield's, in embedded mode",
+			devices: [device('bield', hub, { self: true }), device('vps', hub)],
 			want: ['vps']
 		}
 	])('$name', ({ devices, want }) => {
@@ -70,21 +70,21 @@ describe('terminalDevices', () => {
 });
 
 describe('listedDeviceId', () => {
-	const embedded = [device('roost', hub, { self: true }), device('vps', hub), device('laptop', ok)];
+	const embedded = [device('bield', hub, { self: true }), device('vps', hub), device('laptop', ok)];
 	test.each<{ name: string; devices: Device[]; id: string; want: string }>([
 		{ name: "the machine's own node stays", devices: embedded, id: 'vps', want: 'vps' },
 		{
-			name: "Roost's own node means the machine's, in embedded mode",
+			name: "Bield's own node means the machine's, in embedded mode",
 			devices: embedded,
-			id: 'roost',
+			id: 'bield',
 			want: 'vps'
 		},
 		{ name: 'another device stays', devices: embedded, id: 'laptop', want: 'laptop' },
 		{
-			name: "Roost's own node stays when it's the only one",
-			devices: [device('roost', hub, { self: true }), device('laptop', ok)],
-			id: 'roost',
-			want: 'roost'
+			name: "Bield's own node stays when it's the only one",
+			devices: [device('bield', hub, { self: true }), device('laptop', ok)],
+			id: 'bield',
+			want: 'bield'
 		},
 		{
 			name: "a device that isn't listed stays",
@@ -114,7 +114,7 @@ describe('canOpen', () => {
 		{ name: 'offline', device: device('laptop', ok, { online: false }), want: false },
 		{
 			name: 'the hub, whatever Tailscale says',
-			device: device('roost', hub, { online: false }),
+			device: device('bield', hub, { online: false }),
 			want: true
 		},
 		{
@@ -153,9 +153,9 @@ describe('loadTabs', () => {
 		expect(loadTabs(saved, devices)).toEqual(want);
 	});
 
-	test("a tab on Roost's own node follows the machine's node, in embedded mode", () => {
-		const embedded = [device('roost', hub, { self: true }), device('vps', hub)];
-		const saved = JSON.stringify([{ key: 'a', deviceId: 'roost', session: 'web-1' }]);
+	test("a tab on Bield's own node follows the machine's node, in embedded mode", () => {
+		const embedded = [device('bield', hub, { self: true }), device('vps', hub)];
+		const saved = JSON.stringify([{ key: 'a', deviceId: 'bield', session: 'web-1' }]);
 		expect(loadTabs(saved, embedded)).toEqual([
 			{ key: 'a', deviceId: 'vps', session: 'web-1', cwd: null }
 		]);
@@ -193,17 +193,17 @@ describe('terminalURL', () => {
 			protocol: 'https:',
 			session: null,
 			cwd: null,
-			want: 'wss://roost.example.ts.net/api/devices/n%2F1/terminal?cols=80&rows=24'
+			want: 'wss://bield.example.ts.net/api/devices/n%2F1/terminal?cols=80&rows=24'
 		},
 		{
 			name: 'a tmux session in a directory over HTTP',
 			protocol: 'http:',
 			session: "it's",
 			cwd: '/srv/my app',
-			want: 'ws://roost.example.ts.net/api/devices/n%2F1/terminal?cols=80&rows=24&session=it%27s&cwd=%2Fsrv%2Fmy+app'
+			want: 'ws://bield.example.ts.net/api/devices/n%2F1/terminal?cols=80&rows=24&session=it%27s&cwd=%2Fsrv%2Fmy+app'
 		}
 	])('$name', ({ protocol, session, cwd, want }) => {
-		const url = terminalURL({ protocol, host: 'roost.example.ts.net' }, 'n/1', {
+		const url = terminalURL({ protocol, host: 'bield.example.ts.net' }, 'n/1', {
 			session,
 			cwd,
 			cols: 80,
@@ -302,7 +302,7 @@ describe('sshStateLabel', () => {
 			want: 'Connected with Tailscale SSH'
 		},
 		{ name: 'failing', ssh: { state: 'failing' }, want: "Can't log in" },
-		// A method only says how Roost got in while it can.
+		// A method only says how Bield got in while it can.
 		{
 			name: 'failing after a login',
 			ssh: { state: 'failing', method: 'tailscale' },
@@ -334,9 +334,9 @@ describe('commonSSHUser', () => {
 			want: 'bob'
 		},
 		{
-			name: "not the hub's, which is Roost's own user",
+			name: "not the hub's, which is Bield's own user",
 			devices: [
-				device('a', { state: 'ok', user: 'roost', hub: true }),
+				device('a', { state: 'ok', user: 'bield', hub: true }),
 				device('b', { state: 'ok', user: 'deploy' })
 			],
 			want: 'deploy'
@@ -355,7 +355,7 @@ describe('refusalText', () => {
 	});
 	test('node names the machine', () => {
 		const t = refusalText('node', 'laptop', 'alice');
-		expect(t.detail).toContain('Roost logging in to laptop');
+		expect(t.detail).toContain('Bield logging in to laptop');
 	});
 	test('user names the user', () => {
 		const t = refusalText('user', 'laptop', 'alice');

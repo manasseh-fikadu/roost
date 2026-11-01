@@ -12,12 +12,12 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
 )
 
 var (
-	roostIP  = netip.MustParseAddr("100.64.0.1")
+	bieldIP  = netip.MustParseAddr("100.64.0.1")
 	laptopIP = netip.MustParseAddr("100.64.0.2")
 	ciIP     = netip.MustParseAddr("100.64.0.3")
 )
@@ -25,7 +25,7 @@ var (
 func newTailnet(state string) *tailnettest.Tailnet {
 	return tailnettest.New(tailnet.Status{
 		State: state,
-		Self:  tailnet.Device{ID: "roost", DNSName: "roost.example.ts.net", IPs: []netip.Addr{roostIP}},
+		Self:  tailnet.Device{ID: "bield", DNSName: "bield.example.ts.net", IPs: []netip.Addr{bieldIP}},
 		Peers: []tailnet.Device{
 			{ID: "laptop", DNSName: "laptop.example.ts.net", IPs: []netip.Addr{laptopIP}, Owner: "alice@example.com"},
 			{ID: "ci", DNSName: "ci.example.ts.net", IPs: []netip.Addr{ciIP}, Tags: []string{"tag:ci"},
@@ -93,7 +93,7 @@ func TestTailnet_Listen(t *testing.T) {
 		default:
 		}
 
-		tn.SetStatus(tailnet.Status{State: tailnet.StateRunning, Self: tailnet.Device{IPs: []netip.Addr{roostIP}}})
+		tn.SetStatus(tailnet.Status{State: tailnet.StateRunning, Self: tailnet.Device{IPs: []netip.Addr{bieldIP}}})
 		ln := <-listened
 		srv := &http.Server{
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

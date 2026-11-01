@@ -14,12 +14,12 @@ import (
 	"slices"
 	"sync"
 
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // URL is where a Tailnet says the app is served. Requests from Client reach
 // the app whatever host they name.
-const URL = "http://roost.example.ts.net"
+const URL = "http://bield.example.ts.net"
 
 // Tailnet is a fake tailnet.Node whose answers the test sets. Create one with
 // New.

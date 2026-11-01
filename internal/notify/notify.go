@@ -20,11 +20,11 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/manasseh-fikadu/roost/internal/netguard"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/netguard"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
-// A Kind is a sort of place that Roost sends to.
+// A Kind is a sort of place that Bield sends to.
 type Kind string
 
 // The kinds of channel.
@@ -56,7 +56,7 @@ const (
 	StartTLS = "starttls"
 	// TLS connects over TLS from the start, which port 465 does.
 	TLS = "tls"
-	// Plain never uses TLS, which Roost only signs in over on the same
+	// Plain never uses TLS, which Bield only signs in over on the same
 	// machine.
 	Plain = "none"
 )
@@ -97,7 +97,7 @@ type Config struct {
 	// server. Password is a secret.
 	Username string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
-	// From is the address mail comes from, such as "Roost <roost@example.com>",
+	// From is the address mail comes from, such as "Bield <bield@example.com>",
 	// and To are the addresses it goes to.
 	From string   `json:"from,omitempty"`
 	To   []string `json:"to,omitempty"`
@@ -142,7 +142,7 @@ func (c Config) HasSecret(name string) bool {
 	return false
 }
 
-// A Channel is a place that Roost sends notifications to.
+// A Channel is a place that Bield sends notifications to.
 type Channel struct {
 	ID      int64
 	Name    string
@@ -190,7 +190,7 @@ func (c Channel) Check() error {
 	case strings.ContainsFunc(c.Name, unicode.IsControl):
 		return errors.New("the name can only be one line")
 	case !c.Kind.Valid():
-		return errors.New("this isn't a kind of channel Roost knows")
+		return errors.New("this isn't a kind of channel Bield knows")
 	case c.MinSeverity != "info" && c.MinSeverity != "warning" && c.MinSeverity != "critical":
 		return errors.New("the least severe alert must be info, warning or critical")
 	}
@@ -230,7 +230,7 @@ func (c Config) Check(k Kind) error {
 		}
 		return checkHeaderValue(c.Token, "the token")
 	}
-	return errors.New("this isn't a kind of channel Roost knows")
+	return errors.New("this isn't a kind of channel Bield knows")
 }
 
 func (c Config) checkNtfy() error {
@@ -281,7 +281,7 @@ func checkURL(s string) error {
 	case !validHost(u.Hostname()):
 		return errors.New("has a host that isn't a name or an IP address")
 	case netguard.ForbiddenHost(u.Hostname()):
-		return errors.New("is a link-local or cloud metadata address, which Roost doesn't connect to")
+		return errors.New("is a link-local or cloud metadata address, which Bield doesn't connect to")
 	}
 	if p := u.Port(); p != "" {
 		if n := atoi(p); n < 1 || n > 65535 {
@@ -335,12 +335,12 @@ func (c Config) checkEmail() error {
 	case c.Password != "" && c.Username == "":
 		return errors.New("a password needs a username")
 	case c.Username != "" && c.Security == Plain && !localHost(c.Host):
-		return errors.New("signing in needs TLS or STARTTLS, unless the mail server is on the same machine as Roost")
+		return errors.New("signing in needs TLS or STARTTLS, unless the mail server is on the same machine as Bield")
 	case strings.ContainsFunc(c.Username+c.Password, unicode.IsControl):
 		return errors.New("the username and password can only be one line")
 	}
 	if _, err := mail.ParseAddress(c.From); err != nil || strings.ContainsAny(c.From, "\r\n") {
-		return errors.New("the from address isn't an email address, such as roost@example.com")
+		return errors.New("the from address isn't an email address, such as bield@example.com")
 	}
 	if len(c.To) == 0 || len(c.To) > MaxRecipients {
 		return fmt.Errorf("send mail to 1 to %d addresses", MaxRecipients)
@@ -353,7 +353,7 @@ func (c Config) checkEmail() error {
 	return nil
 }
 
-// localHost reports whether host is the machine Roost runs on.
+// localHost reports whether host is the machine Bield runs on.
 func localHost(host string) bool {
 	if strings.EqualFold(host, "localhost") {
 		return true
@@ -394,7 +394,7 @@ func (c Config) Normalize(k Kind) Config {
 	return out
 }
 
-// Summary says where c sends, without any secret, such as "ntfy.sh/roost".
+// Summary says where c sends, without any secret, such as "ntfy.sh/bield".
 func (c Channel) Summary() string {
 	cfg := c.Config
 	switch c.Kind {

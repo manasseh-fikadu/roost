@@ -10,25 +10,25 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 const adminUsage = `Usage:
-  roost admin list [--data-dir directory]                List the admins and viewers
-  roost admin add [--data-dir directory] <login>         Make a Tailscale login an admin
-  roost admin add-viewer [--data-dir directory] <login>  Make a Tailscale login a viewer
-  roost admin remove [--data-dir directory] <login>      Take a login's role away
-  roost admin who-can-view [--data-dir directory] [tailnet|listed]
-                                                         Show or set who can view Roost
+  bield admin list [--data-dir directory]                List the admins and viewers
+  bield admin add [--data-dir directory] <login>         Make a Tailscale login an admin
+  bield admin add-viewer [--data-dir directory] <login>  Make a Tailscale login a viewer
+  bield admin remove [--data-dir directory] <login>      Take a login's role away
+  bield admin who-can-view [--data-dir directory] [tailnet|listed]
+                                                         Show or set who can view Bield
 
 Admins can do everything. Viewers see the dashboard, but can't change
 anything or see logs, files or secrets. With who-can-view set to listed,
-the default, only the admins and viewers can view Roost. With tailnet,
+the default, only the admins and viewers can view Bield. With tailnet,
 anyone who signs in from the tailnet is a viewer too.
 
-Roost makes its first admins itself. Use "roost admin add" when no one can
-sign in as an admin, such as when Roost's node is tagged. Changes apply at
-once, even while Roost is running.
+Bield makes its first admins itself. Use "bield admin add" when no one can
+sign in as an admin, such as when Bield's node is tagged. Changes apply at
+once, even while Bield is running.
 `
 
 // adminArgs is how many arguments each admin command takes, at least and at most.
@@ -40,7 +40,7 @@ var adminArgs = map[string][2]int{
 	"who-can-view": {0, 1},
 }
 
-// admin runs "roost admin", which changes the database directly, so it's the
+// admin runs "bield admin", which changes the database directly, so it's the
 // way back in when no admin can sign in.
 func admin(ctx context.Context, args []string, stdout, stderr io.Writer) (err error) {
 	if len(args) == 0 {
@@ -53,10 +53,10 @@ func admin(ctx context.Context, args []string, stdout, stderr io.Writer) (err er
 		fmt.Fprint(stderr, adminUsage)
 		return errUsage
 	}
-	fs := flag.NewFlagSet("roost admin "+cmd, flag.ContinueOnError)
+	fs := flag.NewFlagSet("bield admin "+cmd, flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	dataDir := envDataDir()
-	fs.StringVar(&dataDir, "data-dir", dataDir, "`directory` that holds Roost's database (env ROOST_DATA_DIR)")
+	fs.StringVar(&dataDir, "data-dir", dataDir, "`directory` that holds Bield's database (env BIELD_DATA_DIR)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -65,10 +65,10 @@ func admin(ctx context.Context, args []string, stdout, stderr io.Writer) (err er
 		return errUsage
 	}
 	if dataDir == "" {
-		return errors.New("no data directory: set --data-dir or ROOST_DATA_DIR")
+		return errors.New("no data directory: set --data-dir or BIELD_DATA_DIR")
 	}
 
-	dbPath := filepath.Join(dataDir, "roost.db")
+	dbPath := filepath.Join(dataDir, "bield.db")
 	// This command doesn't know how long an admin chose to keep history.
 	st, err := store.Open(ctx, dbPath, store.Options{NoPrune: true})
 	if err != nil {
@@ -117,12 +117,12 @@ func listUsers(ctx context.Context, st *store.Store, stdout, stderr io.Writer) e
 		return err
 	}
 	if len(users) == 0 {
-		fmt.Fprintln(stderr, "Roost has no admins or viewers yet")
+		fmt.Fprintln(stderr, "Bield has no admins or viewers yet")
 	}
 	if who == store.Tailnet {
-		fmt.Fprintln(stderr, "Anyone who signs in from the tailnet can view Roost too")
+		fmt.Fprintln(stderr, "Anyone who signs in from the tailnet can view Bield too")
 	} else {
-		fmt.Fprintln(stderr, "No one else can view Roost")
+		fmt.Fprintln(stderr, "No one else can view Bield")
 	}
 	return nil
 }
@@ -149,7 +149,7 @@ func setRole(ctx context.Context, st *store.Store, login string, role store.Role
 	return nil
 }
 
-// whoCanView prints who can view Roost, or sets it to who.
+// whoCanView prints who can view Bield, or sets it to who.
 func whoCanView(ctx context.Context, st *store.Store, who string, stdout io.Writer) error {
 	if who == "" {
 		who, err := st.WhoCanView(ctx)
@@ -163,12 +163,12 @@ func whoCanView(ctx context.Context, st *store.Store, who string, stdout io.Writ
 	if err != nil {
 		return err
 	}
-	msg := "Let only the users with a role view Roost"
+	msg := "Let only the users with a role view Bield"
 	if who == store.Tailnet {
-		fmt.Fprintln(stdout, "Anyone who signs in from the tailnet can view Roost")
-		msg = "Let anyone on the tailnet view Roost"
+		fmt.Fprintln(stdout, "Anyone who signs in from the tailnet can view Bield")
+		msg = "Let anyone on the tailnet view Bield"
 	} else {
-		fmt.Fprintln(stdout, "Only Roost's admins and viewers can view it")
+		fmt.Fprintln(stdout, "Only Bield's admins and viewers can view it")
 	}
 	if changed {
 		logAccess(ctx, st, msg, stdout)
@@ -180,8 +180,8 @@ func whoCanView(ctx context.Context, st *store.Store, who string, stdout io.Writ
 // API does for one an admin makes. It only warns if it can't, since the
 // change is made.
 func logAccess(ctx context.Context, st *store.Store, msg string, stdout io.Writer) {
-	err := st.AddEvents(ctx, store.Event{At: time.Now(), Level: "info", Kind: "access", Message: msg + " with roost admin"})
+	err := st.AddEvents(ctx, store.Event{At: time.Now(), Level: "info", Kind: "access", Message: msg + " with bield admin"})
 	if err != nil {
-		fmt.Fprintf(stdout, "Roost couldn't add this to its activity log: %v\n", err)
+		fmt.Fprintf(stdout, "Bield couldn't add this to its activity log: %v\n", err)
 	}
 }

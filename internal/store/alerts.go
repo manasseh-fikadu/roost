@@ -12,7 +12,7 @@ import (
 // ErrNoAlert means no alert has the ID.
 var ErrNoAlert = errors.New("no alert has this ID")
 
-// An Alert is a condition Roost saw, such as a disk that's nearly full, from
+// An Alert is a condition Bield saw, such as a disk that's nearly full, from
 // when it opened until it resolved. Times that haven't happened are zero.
 type Alert struct {
 	ID int64
@@ -27,7 +27,7 @@ type Alert struct {
 	Severity      string
 	Title, Detail string
 	OpenedAt      time.Time
-	// LastSeen is when Roost last saw the condition.
+	// LastSeen is when Bield last saw the condition.
 	LastSeen     time.Time
 	ResolvedAt   time.Time
 	AckedAt      time.Time
@@ -63,7 +63,7 @@ func (s *Store) AddAlert(ctx context.Context, a Alert) (Alert, error) {
 }
 
 // SaveAlert saves what can change on an alert: its severity, title and
-// detail, when Roost last saw it, and whether it's resolved, acknowledged
+// detail, when Bield last saw it, and whether it's resolved, acknowledged
 // or snoozed. It returns ErrNoAlert if there's no alert with a's ID.
 func (s *Store) SaveAlert(ctx context.Context, a Alert) error {
 	res, err := s.db.ExecContext(ctx, `

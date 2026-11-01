@@ -9,7 +9,7 @@ export interface AnsiSegment {
 	css: string;
 }
 
-/** The 16 terminal colors, tuned for Roost's dark theme: black is lifted so it stays visible. */
+/** The 16 terminal colors, tuned for Bield's dark theme: black is lifted so it stays visible. */
 export const palette = [
 	'#5c5c5c',
 	'#ff6166',

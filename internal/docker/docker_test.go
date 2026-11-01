@@ -11,7 +11,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/docker"
 )
 
 // fakeDocker answers the Engine API's list and inspect with the containers

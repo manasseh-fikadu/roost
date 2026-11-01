@@ -7,11 +7,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/notify"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/notify"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
-// maxChannels is how many notification channels Roost can have.
+// maxChannels is how many notification channels Bield can have.
 const maxChannels = 20
 
 // listChannels answers GET /api/notifications/channels.
@@ -113,7 +113,7 @@ func (h *handler) addChannel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if len(existing) >= maxChannels {
-		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: "Roost can send to up to " + strconv.Itoa(maxChannels) + " channels"})
+		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: "Bield can send to up to " + strconv.Itoa(maxChannels) + " channels"})
 		return
 	}
 	row := c.ToStore()

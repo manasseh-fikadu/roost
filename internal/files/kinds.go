@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-// A Kind is what a file is for, by its name: it decides how Roost serves the
+// A Kind is what a file is for, by its name: it decides how Bield serves the
 // file inline, and the web app which preview to show.
 type Kind string
 

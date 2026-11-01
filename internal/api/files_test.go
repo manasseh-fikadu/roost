@@ -17,12 +17,12 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/ssh/sshtest"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/ssh/sshtest"
 )
 
 // filesEnv is an sshEnv whose laptop serves a folder of the test machine over
-// SFTP and runs commands in sh, with Roost's access to it set up.
+// SFTP and runs commands in sh, with Bield's access to it set up.
 type filesEnv struct {
 	*sshEnv
 	home string
@@ -347,7 +347,7 @@ func TestFiles_uploadAudit(t *testing.T) {
 	})
 }
 
-// Roost shutting down writes the line of an upload that is still waiting.
+// Bield shutting down writes the line of an upload that is still waiting.
 func TestFiles_uploadAuditOnShutdown(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		st := testStore(t)

@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/netguard"
+	"github.com/manasseh-fikadu/bield/internal/netguard"
 )
 
 // SendTimeout is how long one message has to be sent.
@@ -28,7 +28,7 @@ type Sender interface {
 
 // An Env is what senders reach servers with. It's safe for concurrent use.
 type Env struct {
-	// Dial connects to servers. Roost passes the tailnet node's, which
+	// Dial connects to servers. Bield passes the tailnet node's, which
 	// reaches the tailnet's names and addresses as well as the internet.
 	// If it's nil, Env dials from this machine.
 	Dial DialFunc
@@ -103,7 +103,7 @@ func (e *Env) postJSON(ctx context.Context, address string, headers map[string]s
 		return scrub(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("User-Agent", "Roost")
+	req.Header.Set("User-Agent", "Bield")
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}

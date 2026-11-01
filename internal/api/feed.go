@@ -11,16 +11,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/alerts"
-	"github.com/manasseh-fikadu/roost/internal/checks"
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/systemd"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/alerts"
+	"github.com/manasseh-fikadu/bield/internal/checks"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/hostmetrics"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/systemd"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 const (
@@ -43,12 +43,12 @@ type FeedOptions struct {
 	Version string
 	// Demo says the tailnet is made up, which the snapshots say too.
 	Demo bool
-	// Tailnet returns what Roost last learned about the tailnet. Required.
+	// Tailnet returns what Bield last learned about the tailnet. Required.
 	Tailnet func() tailnet.Snapshot
 	// TailnetChanged receives a value when Tailnet's answer changes.
 	TailnetChanged <-chan struct{}
-	// Host returns what Roost last measured of its own machine. It's nil if
-	// Roost can't measure it.
+	// Host returns what Bield last measured of its own machine. It's nil if
+	// Bield can't measure it.
 	Host func() hostmetrics.Reading
 	// HostChanged receives a value when Host's answer changes.
 	HostChanged <-chan struct{}
@@ -60,18 +60,18 @@ type FeedOptions struct {
 	// Alerts opens and resolves alerts from what each snapshot shows. Nil
 	// means there are none.
 	Alerts *alerts.Engine
-	// Docker returns what Roost last read of the containers on its machine.
-	// It's nil if Roost doesn't read them.
+	// Docker returns what Bield last read of the containers on its machine.
+	// It's nil if Bield doesn't read them.
 	Docker func() docker.Reading
 	// DockerChanged receives a value when Docker's answer changes.
 	DockerChanged <-chan struct{}
-	// Systemd returns what Roost last read of the systemd units on its
-	// machine. It's nil if Roost doesn't read them.
+	// Systemd returns what Bield last read of the systemd units on its
+	// machine. It's nil if Bield doesn't read them.
 	Systemd func() systemd.Reading
 	// SystemdChanged receives a value when Systemd's answer changes.
 	SystemdChanged <-chan struct{}
-	// SSH says how Roost logs in to each machine, by access ID. It's nil
-	// if Roost doesn't.
+	// SSH says how Bield logs in to each machine, by access ID. It's nil
+	// if Bield doesn't.
 	SSH func() map[string]ssh.Access
 	// SSHChanged receives a value when SSH's answer changes.
 	SSHChanged <-chan struct{}
@@ -84,7 +84,7 @@ type FeedOptions struct {
 }
 
 // Feed builds the snapshots that GET /api/stream sends: one each time what
-// Roost knows changes, rather than one for each client. Each is encoded and
+// Bield knows changes, rather than one for each client. Each is encoded and
 // compressed once, for admins and once for everyone else, and every client
 // gets the same bytes.
 //
@@ -114,7 +114,7 @@ type Feed struct {
 	activity    activity
 	eventsErr   error
 	lastEventID int64
-	// started is when the feed was made, which is about when Roost started.
+	// started is when the feed was made, which is about when Bield started.
 	started time.Time
 
 	mu  sync.Mutex
@@ -152,7 +152,7 @@ func NewFeed(opts FeedOptions) *Feed {
 	return f
 }
 
-// Run builds a snapshot now, and then each time what Roost knows changes,
+// Run builds a snapshot now, and then each time what Bield knows changes,
 // until ctx ends.
 func (f *Feed) Run(ctx context.Context) {
 	agentsChanged, checksChanged := f.agentsChanged(), f.checksChanged()
@@ -213,7 +213,7 @@ func (f *Feed) checksChanged() <-chan struct{} {
 	return f.opts.Checks.Changes()
 }
 
-// measuresHub reports whether Roost measures the machine it runs on.
+// measuresHub reports whether Bield measures the machine it runs on.
 func (f *Feed) measuresHub() bool { return f.opts.Host != nil }
 
 // drain takes the changes waiting to be heard of.
@@ -351,7 +351,7 @@ func (f *Feed) newEvent(name string, v any) (*event, error) {
 }
 
 // recordPings stores the pings sent since the last ones it stored. A ping
-// that failed on Roost's side says nothing about the device, so it's left
+// that failed on Bield's side says nothing about the device, so it's left
 // out.
 func (f *Feed) recordPings(ctx context.Context, pings map[string]tailnet.PingRecord) {
 	var (
@@ -391,9 +391,9 @@ func (f *Feed) recordPings(ctx context.Context, pings map[string]tailnet.PingRec
 	f.pingsUpTo, f.pingsErr = upTo, nil
 }
 
-// recordMetrics stores the metrics of each device that Roost measures, if
+// recordMetrics stores the metrics of each device that Bield measures, if
 // they're new since it last stored them metricsEvery ago, or nearly. Metrics
-// older than that, such as an agent's from before Roost restarted, aren't
+// older than that, such as an agent's from before Bield restarted, aren't
 // new.
 func (f *Feed) recordMetrics(ctx context.Context, src sources, now time.Time) {
 	var rows []store.MetricsRow

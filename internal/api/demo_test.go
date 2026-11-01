@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/api"
 )
 
 // TestDemoRefusals checks that a demo refuses the routes demoRefusals lists,
@@ -46,7 +46,7 @@ func TestDemoRefusals(t *testing.T) {
 }
 
 // TestDemoHost checks that a demo answers to any host name, since there's no
-// tailnet name to hold requests to, and a real Roost does not.
+// tailnet name to hold requests to, and a real Bield does not.
 func TestDemoHost(t *testing.T) {
 	t.Parallel()
 	for _, demo := range []bool{false, true} {

@@ -1,4 +1,4 @@
-// Package store keeps Roost's data in a SQLite database.
+// Package store keeps Bield's data in a SQLite database.
 //
 // The schema is built by the numbered SQL files in migrations/, which are
 // embedded in the binary. To change it, add the next file, such as
@@ -27,9 +27,9 @@ import (
 	_ "modernc.org/sqlite" // registers the "sqlite" driver
 )
 
-// ErrNewerSchema means the database was migrated by a newer version of Roost,
+// ErrNewerSchema means the database was migrated by a newer version of Bield,
 // so this one doesn't know its schema.
-var ErrNewerSchema = errors.New("the database was written by a newer version of Roost")
+var ErrNewerSchema = errors.New("the database was written by a newer version of Bield")
 
 // busyTimeout is how long a statement waits for another connection to finish
 // writing before it fails with SQLITE_BUSY.
@@ -38,7 +38,7 @@ const busyTimeout = 5 * time.Second
 //go:embed migrations/*.sql
 var embedded embed.FS
 
-// Store is an open Roost database. It's safe for concurrent use.
+// Store is an open Bield database. It's safe for concurrent use.
 type Store struct {
 	db  *sql.DB
 	log *slog.Logger
@@ -232,7 +232,7 @@ func (s *Store) migrate(ctx context.Context, path string, migrations []migration
 // upgrade applies migrations in one transaction and returns how many it
 // applied, so either all of them apply or none do. The transaction takes the
 // write lock as it begins and reads the version again, so it skips migrations
-// that another process, such as roost admin, applied since migrate read it, and
+// that another process, such as bield admin, applied since migrate read it, and
 // no other process sees the database halfway through.
 func (s *Store) upgrade(ctx context.Context, migrations []migration) (int, error) {
 	tx, err := s.db.BeginTx(ctx, nil)

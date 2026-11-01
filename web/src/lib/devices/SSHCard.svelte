@@ -1,5 +1,5 @@
 <!--
-	How Roost logs in to a device over SSH, for terminals, files and Docker:
+	How Bield logs in to a device over SSH, for terminals, files and Docker:
 	how to set it up, and once it is, whether it works and what the machine
 	offers. Only admins see it.
 -->
@@ -72,7 +72,7 @@
 	let confirm = $state<'remove' | 'reset' | 'trust'>('remove');
 	/**
 	 * The fingerprint of the host key the admin is asked to trust, as it was
-	 * when they clicked, and what they're shown. Roost pins that key, and
+	 * when they clicked, and what they're shown. Bield pins that key, and
 	 * refuses if the machine offers another by the time they confirm.
 	 */
 	let trusting = $state('');
@@ -205,7 +205,7 @@
 
 {#snippet steps()}
 	{#if setupError}
-		<p class="text-[13px] text-red-fg">Couldn't get Roost's key: {setupError}</p>
+		<p class="text-[13px] text-red-fg">Couldn't get Bield's key: {setupError}</p>
 	{:else if !setup}
 		<Skeleton class="h-24" />
 	{:else}
@@ -213,7 +213,7 @@
 			{#if ssh.hub && setup.hubUser && !editing}
 				<li class="space-y-2">
 					<p>
-						Roost logs in to this machine on its loopback address. It can add its key to the
+						Bield logs in to this machine on its loopback address. It can add its key to the
 						authorized_keys of <span class="font-mono text-fg">{setup.hubUser}</span>, the user it
 						runs as.
 					</p>
@@ -223,20 +223,20 @@
 						onclick={() => run('authorize', () => authorizeSSH(deviceId))}
 					>
 						{#snippet icon()}<KeyRound class="size-3.5" />{/snippet}
-						Authorize Roost as {setup.hubUser}
+						Authorize Bield as {setup.hubUser}
 					</Button>
 				</li>
 				<li class="border-t border-line pt-4">To log in as another user, run this as that user:</li>
 			{:else}
 				<li>
 					<span class="mr-1.5 font-mono text-fg-faint">1</span>
-					Run this on {device.name}, as the user Roost should log in as:
+					Run this on {device.name}, as the user Bield should log in as:
 				</li>
 			{/if}
 			<li class="space-y-1.5">
 				<CodeLine command={setup.command} />
 				<p class="text-[12px] text-fg-subtle">
-					The key only works from Roost's own addresses, without agent or X11 forwarding.
+					The key only works from Bield's own addresses, without agent or X11 forwarding.
 					{#if mac}
 						On a Mac, turn on Remote Login first, in System Settings → General → Sharing.
 					{/if}
@@ -247,7 +247,7 @@
 					{#if !(ssh.hub && setup.hubUser) || editing}
 						<span class="mr-1.5 font-mono text-fg-faint">2</span>
 					{/if}
-					Then tell Roost which user that was.
+					Then tell Bield which user that was.
 				</p>
 				{@render setupForm(editing ? 'Save' : 'Connect')}
 			</li>
@@ -260,13 +260,13 @@
 		<p class="flex items-start gap-2.5">
 			<Waypoints class="mt-0.5 size-4 shrink-0 text-fg-faint" />
 			<span>
-				{device.name} runs Tailscale SSH, so Roost needs no key there. If your tailnet policy lets Roost
+				{device.name} runs Tailscale SSH, so Bield needs no key there. If your tailnet policy lets Bield
 				in, tell it which user to log in as.
 			</span>
 		</p>
 		{@render setupForm('Connect with Tailscale SSH', false)}
 		<details class="border-t border-line pt-3">
-			<summary class="cursor-pointer text-fg-subtle hover:text-fg">Use Roost's key instead</summary>
+			<summary class="cursor-pointer text-fg-subtle hover:text-fg">Use Bield's key instead</summary>
 			<div class="mt-3 space-y-3">
 				<p class="text-[12px] text-fg-subtle">
 					Tailscale SSH answers on port 22 of the tailnet address, so a key only works with an sshd
@@ -282,7 +282,7 @@
 	<Card
 		title="SSH access"
 		description={setUp
-			? "Terminals, files and Docker on this machine go over SSH, with Tailscale SSH or Roost's own key."
+			? "Terminals, files and Docker on this machine go over SSH, with Tailscale SSH or Bield's own key."
 			: 'Set up access for terminal, files and Docker on this machine.'}
 	>
 		{#snippet actions()}
@@ -318,7 +318,7 @@
 						<ShieldAlert class="size-4" /> The host key changed
 					</p>
 					<p class="text-fg-muted">
-						Roost won't log in until you trust the new key. If {device.name} wasn't reinstalled, another
+						Bield won't log in until you trust the new key. If {device.name} wasn't reinstalled, another
 						machine may be answering for it.
 					</p>
 					<dl class="space-y-0.5 font-mono text-[11.5px] break-all">
@@ -434,17 +434,17 @@
 >
 	{#if confirm === 'remove'}
 		<p class="text-[13px] text-fg-muted">
-			Roost closes its connections and terminals there. Its key stays in the machine's
+			Bield closes its connections and terminals there. Its key stays in the machine's
 			authorized_keys until you take it out.
 		</p>
 	{:else if confirm === 'reset'}
 		<p class="text-[13px] text-fg-muted">
-			Roost forgets the key it pinned for {device.name}, and pins whichever key the machine offers
+			Bield forgets the key it pinned for {device.name}, and pins whichever key the machine offers
 			at its next login. Only do this if you know the machine's key was meant to change.
 		</p>
 	{:else}
 		<div class="space-y-3 text-[13px] text-fg-muted">
-			<p>Roost will pin the key {device.name} offered, and nothing else:</p>
+			<p>Bield will pin the key {device.name} offered, and nothing else:</p>
 			<p
 				class="rounded-md border border-line bg-canvas px-3 py-2 font-mono text-[12px] break-all text-fg"
 			>
@@ -454,7 +454,7 @@
 				Compare it with the machine's own, which
 				<code class="font-mono text-[12px] text-fg">ssh-keygen -lf /etc/ssh/ssh_host_*_key.pub</code
 				>
-				lists there. If the machine offers another key by the time you confirm, Roost refuses and shows
+				lists there. If the machine offers another key by the time you confirm, Bield refuses and shows
 				you the new one.
 			</p>
 		</div>

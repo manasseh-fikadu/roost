@@ -16,7 +16,7 @@ import (
 	"testing/iotest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/files"
+	"github.com/manasseh-fikadu/bield/internal/files"
 )
 
 func TestRemote_Upload(t *testing.T) {

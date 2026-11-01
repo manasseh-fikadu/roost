@@ -25,7 +25,7 @@
 	import TabPanel from '#lib/ui/TabPanel.svelte';
 	import Tabs from '#lib/ui/Tabs.svelte';
 
-	/** The machines whose Docker Roost can read. */
+	/** The machines whose Docker Bield can read. */
 	const devices = $derived((live.snapshot?.devices ?? []).filter((d) => d.docker));
 	/** The device in ?device=, or else the first. */
 	const device = $derived.by((): Device | undefined => {
@@ -116,8 +116,8 @@
 {:else if !device}
 	<Card>
 		<EmptyState title="No machine has Docker yet" icon={ContainerIcon}>
-			Docker on the machine Roost runs on shows up here by itself. For another machine, an admin
-			sets up SSH access on its device page, and Roost checks it for Docker.
+			Docker on the machine Bield runs on shows up here by itself. For another machine, an admin
+			sets up SSH access on its device page, and Bield checks it for Docker.
 			<AdminOnly>
 				<SetUpAccess devices={live.snapshot?.devices ?? []} />
 				{#snippet fallback()}

@@ -157,15 +157,15 @@ describe('publicUrlProblem', () => {
 	test.each([
 		'',
 		'   ',
-		'https://roost.example.ts.net',
+		'https://bield.example.ts.net',
 		'http://100.64.0.1:4700',
-		'HTTPS://Roost.Example.com',
-		'https://roost.example.ts.net/',
-		'  https://roost.example.ts.net  ',
+		'HTTPS://Bield.Example.com',
+		'https://bield.example.ts.net/',
+		'  https://bield.example.ts.net  ',
 		'http://[fd7a:115c:a1e0::1]:8080',
 		'http://[::1]',
 		'https://localhost:1',
-		'https://roost.example.com:65535',
+		'https://bield.example.com:65535',
 		'https://my-host.example.com',
 		'https://a.b.c.d.example',
 		`https://${'a.'.repeat(126)}a`
@@ -174,17 +174,17 @@ describe('publicUrlProblem', () => {
 	});
 
 	test.each([
-		['no scheme', 'roost.example.com', 'web address'],
-		['another scheme', 'ftp://roost.example.com', 'web address'],
+		['no scheme', 'bield.example.com', 'web address'],
+		['another scheme', 'ftp://bield.example.com', 'web address'],
 		['a scheme alone', 'https://', 'web address'],
 		['an unclosed bracket', 'http://[::1', 'web address'],
 		['text after a bracket', 'http://[::1]x', 'web address'],
-		['a path', 'https://example.com/roost', 'scheme, a host and a port'],
+		['a path', 'https://example.com/bield', 'scheme, a host and a port'],
 		['two slashes at the end', 'https://example.com//', 'scheme, a host and a port'],
 		['a query', 'https://example.com?a=b', 'scheme, a host and a port'],
 		['a fragment', 'https://example.com#top', 'scheme, a host and a port'],
 		['a login', 'https://alice:secret@example.com', 'scheme, a host and a port'],
-		['a backslash', 'https://example.com\\roost', 'scheme, a host and a port'],
+		['a backslash', 'https://example.com\\bield', 'scheme, a host and a port'],
 		['a space in the host', 'https://exa mple.com', 'spaces'],
 		['a line break', 'https://example.com\nhttp://x', 'spaces'],
 		['a no-break space in the host', 'https://exa\u00a0mple.com', 'spaces']

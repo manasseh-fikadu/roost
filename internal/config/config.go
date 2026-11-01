@@ -1,4 +1,4 @@
-// Package config reads Roost's settings from flags and environment variables.
+// Package config reads Bield's settings from flags and environment variables.
 package config
 
 import (
@@ -14,9 +14,9 @@ import (
 	"unicode"
 )
 
-// The ways Roost can join the tailnet, set with --tailscale.
+// The ways Bield can join the tailnet, set with --tailscale.
 const (
-	// Embedded runs a Tailscale node inside Roost, so Roost is its own
+	// Embedded runs a Tailscale node inside Bield, so Bield is its own
 	// machine on the tailnet.
 	Embedded = "embedded"
 	// Host uses the Tailscale already running on this machine.
@@ -26,7 +26,7 @@ const (
 // Defaults for the settings that have one.
 const (
 	DefaultTailscale   = Embedded
-	DefaultHostname    = "roost"
+	DefaultHostname    = "bield"
 	DefaultSetupListen = "127.0.0.1:4700"
 	DefaultPort        = 4700
 	DefaultHostRoot    = "/"
@@ -43,7 +43,7 @@ const (
 
 // Config holds the hub's settings.
 type Config struct {
-	// Tailscale is how Roost joins the tailnet: Embedded or Host.
+	// Tailscale is how Bield joins the tailnet: Embedded or Host.
 	Tailscale string
 	// Hostname is the embedded node's name on the tailnet.
 	Hostname string
@@ -53,7 +53,7 @@ type Config struct {
 	// to, so it has none.
 	ControlURL string
 	// SetupListen is the local TCP address of the first-run page, which
-	// embedded mode serves until Roost is logged in to the tailnet.
+	// embedded mode serves until Bield is logged in to the tailnet.
 	SetupListen string
 	// Port is the port the app is served on in host mode, on each of the
 	// machine's tailnet IPs. Embedded mode always uses 443, or 80 without
@@ -62,24 +62,24 @@ type Config struct {
 	// DataDir is the directory that holds the database and the embedded
 	// node's state.
 	DataDir string
-	// HostRoot is the directory whose proc/ and sys/ Roost measures the machine
-	// from. It is "/" unless Roost runs in a container that has the host's
+	// HostRoot is the directory whose proc/ and sys/ Bield measures the machine
+	// from. It is "/" unless Bield runs in a container that has the host's
 	// /proc and /sys mounted somewhere else, such as /host.
 	HostRoot string
 	// DevUI, if set, is the URL of a Vite dev server to proxy the web UI to,
 	// instead of serving the embedded build.
 	DevUI string
-	// Admins are the Tailscale logins to make Roost's first admins, along with
-	// the owner of Roost's node. They're only used while Roost has no admins.
+	// Admins are the Tailscale logins to make Bield's first admins, along with
+	// the owner of Bield's node. They're only used while Bield has no admins.
 	Admins []string
-	// Demo runs Roost against a made-up tailnet, with no Tailscale and none
+	// Demo runs Bield against a made-up tailnet, with no Tailscale and none
 	// of the machine's own data, so it needs nothing to show off. It keeps
 	// its data in a temporary directory, and the Tailscale flags above don't
 	// apply.
 	Demo bool
 	// DemoListen is the local TCP address the demo is served on.
 	DemoListen string
-	// DemoDevices is how many devices the demo's tailnet has, Roost's own
+	// DemoDevices is how many devices the demo's tailnet has, Bield's own
 	// node included.
 	DemoDevices int
 	// DemoDays is how many days of history the demo starts with. It can be a
@@ -88,44 +88,44 @@ type Config struct {
 }
 
 // Parse reads the serve command's flags from args. A flag that isn't given falls
-// back to its ROOST_* environment variable, looked up with getenv, and then to
+// back to its BIELD_* environment variable, looked up with getenv, and then to
 // its default. Usage and errors are written to output.
 func Parse(args []string, getenv func(string) string, output io.Writer) (Config, error) {
-	fs := flag.NewFlagSet("roost serve", flag.ContinueOnError)
+	fs := flag.NewFlagSet("bield serve", flag.ContinueOnError)
 	fs.SetOutput(output)
 
-	// A bad ROOST_PORT only matters if --port doesn't replace it.
-	port, portErr := envInt(getenv, "ROOST_PORT", DefaultPort)
+	// A bad BIELD_PORT only matters if --port doesn't replace it.
+	port, portErr := envInt(getenv, "BIELD_PORT", DefaultPort)
 	var cfg Config
-	fs.StringVar(&cfg.Tailscale, "tailscale", envOr(getenv, "ROOST_TAILSCALE", DefaultTailscale),
-		"`mode`: \"embedded\" joins the tailnet as its own machine, \"host\" uses this machine's Tailscale (env ROOST_TAILSCALE)")
-	fs.StringVar(&cfg.Hostname, "hostname", envOr(getenv, "ROOST_HOSTNAME", DefaultHostname),
-		"`name` of Roost's machine on the tailnet in embedded mode (env ROOST_HOSTNAME)")
-	fs.StringVar(&cfg.ControlURL, "control-url", envOr(getenv, "ROOST_CONTROL_URL", ""),
-		"`URL` of the control server for the embedded node to log in to, such as a Headscale server's; Tailscale's by default (env ROOST_CONTROL_URL)")
-	fs.StringVar(&cfg.SetupListen, "setup-listen", envOr(getenv, "ROOST_SETUP_LISTEN", DefaultSetupListen),
-		"local `address` of the page for logging in to Tailscale in embedded mode (env ROOST_SETUP_LISTEN)")
+	fs.StringVar(&cfg.Tailscale, "tailscale", envOr(getenv, "BIELD_TAILSCALE", DefaultTailscale),
+		"`mode`: \"embedded\" joins the tailnet as its own machine, \"host\" uses this machine's Tailscale (env BIELD_TAILSCALE)")
+	fs.StringVar(&cfg.Hostname, "hostname", envOr(getenv, "BIELD_HOSTNAME", DefaultHostname),
+		"`name` of Bield's machine on the tailnet in embedded mode (env BIELD_HOSTNAME)")
+	fs.StringVar(&cfg.ControlURL, "control-url", envOr(getenv, "BIELD_CONTROL_URL", ""),
+		"`URL` of the control server for the embedded node to log in to, such as a Headscale server's; Tailscale's by default (env BIELD_CONTROL_URL)")
+	fs.StringVar(&cfg.SetupListen, "setup-listen", envOr(getenv, "BIELD_SETUP_LISTEN", DefaultSetupListen),
+		"local `address` of the page for logging in to Tailscale in embedded mode (env BIELD_SETUP_LISTEN)")
 	fs.IntVar(&cfg.Port, "port", port,
-		"`port` to serve on in host mode, on this machine's tailnet IPs (env ROOST_PORT)")
-	fs.StringVar(&cfg.DataDir, "data-dir", envOr(getenv, "ROOST_DATA_DIR", DefaultDataDir()),
-		"`directory` to keep the database and Tailscale state in (env ROOST_DATA_DIR)")
-	fs.StringVar(&cfg.HostRoot, "host-root", envOr(getenv, "ROOST_HOST_ROOT", DefaultHostRoot),
-		"`directory` whose proc/ and sys/ are the host's, for Roost in a container that mounts them there (env ROOST_HOST_ROOT)")
-	fs.StringVar(&cfg.DevUI, "dev-ui", envOr(getenv, "ROOST_DEV_UI", ""),
-		"`URL` of a Vite dev server to proxy the web UI to, for development (env ROOST_DEV_UI)")
-	admins := fs.String("admins", getenv("ROOST_ADMINS"),
-		"comma-separated Tailscale `logins` to make admins while Roost has none (env ROOST_ADMINS)")
-	demo, demoErr := envBool(getenv, "ROOST_DEMO")
+		"`port` to serve on in host mode, on this machine's tailnet IPs (env BIELD_PORT)")
+	fs.StringVar(&cfg.DataDir, "data-dir", envOr(getenv, "BIELD_DATA_DIR", DefaultDataDir()),
+		"`directory` to keep the database and Tailscale state in (env BIELD_DATA_DIR)")
+	fs.StringVar(&cfg.HostRoot, "host-root", envOr(getenv, "BIELD_HOST_ROOT", DefaultHostRoot),
+		"`directory` whose proc/ and sys/ are the host's, for Bield in a container that mounts them there (env BIELD_HOST_ROOT)")
+	fs.StringVar(&cfg.DevUI, "dev-ui", envOr(getenv, "BIELD_DEV_UI", ""),
+		"`URL` of a Vite dev server to proxy the web UI to, for development (env BIELD_DEV_UI)")
+	admins := fs.String("admins", getenv("BIELD_ADMINS"),
+		"comma-separated Tailscale `logins` to make admins while Bield has none (env BIELD_ADMINS)")
+	demo, demoErr := envBool(getenv, "BIELD_DEMO")
 	fs.BoolVar(&cfg.Demo, "demo", demo,
-		"run against a made-up tailnet with seeded data, for screenshots and trying Roost out; needs no Tailscale (env ROOST_DEMO)")
-	fs.StringVar(&cfg.DemoListen, "demo-listen", envOr(getenv, "ROOST_DEMO_LISTEN", DefaultDemoListen),
-		"local `address` to serve the demo on (env ROOST_DEMO_LISTEN)")
-	devices, devicesErr := envInt(getenv, "ROOST_DEMO_DEVICES", DefaultDemoDevices)
+		"run against a made-up tailnet with seeded data, for screenshots and trying Bield out; needs no Tailscale (env BIELD_DEMO)")
+	fs.StringVar(&cfg.DemoListen, "demo-listen", envOr(getenv, "BIELD_DEMO_LISTEN", DefaultDemoListen),
+		"local `address` to serve the demo on (env BIELD_DEMO_LISTEN)")
+	devices, devicesErr := envInt(getenv, "BIELD_DEMO_DEVICES", DefaultDemoDevices)
 	fs.IntVar(&cfg.DemoDevices, "demo-devices", devices,
-		"`number` of devices in the demo's tailnet, Roost's own included (env ROOST_DEMO_DEVICES)")
-	days, daysErr := envFloat(getenv, "ROOST_DEMO_DAYS", DefaultDemoDays)
+		"`number` of devices in the demo's tailnet, Bield's own included (env BIELD_DEMO_DEVICES)")
+	days, daysErr := envFloat(getenv, "BIELD_DEMO_DAYS", DefaultDemoDays)
 	fs.Float64Var(&cfg.DemoDays, "demo-days", days,
-		"`number` of days of history the demo starts with (env ROOST_DEMO_DAYS)")
+		"`number` of days of history the demo starts with (env BIELD_DEMO_DAYS)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -175,13 +175,13 @@ func (cfg Config) validate() error {
 	return nil
 }
 
-// validateMode checks the settings for the way Roost runs: a demo, whose
+// validateMode checks the settings for the way Bield runs: a demo, whose
 // tailnet is made up, or else a real one.
 func (cfg Config) validateMode() error {
 	if cfg.Demo {
 		switch {
 		case cfg.DemoListen == "":
-			return errors.New("no demo address: set --demo-listen or ROOST_DEMO_LISTEN")
+			return errors.New("no demo address: set --demo-listen or BIELD_DEMO_LISTEN")
 		case cfg.DemoDevices < 2 || cfg.DemoDevices > MaxDemoDevices:
 			return fmt.Errorf("a demo needs from 2 to %d devices, not %d", MaxDemoDevices, cfg.DemoDevices)
 		case !(cfg.DemoDays > 0 && cfg.DemoDays <= MaxDemoDays):
@@ -193,14 +193,14 @@ func (cfg Config) validateMode() error {
 	case cfg.Tailscale != Embedded && cfg.Tailscale != Host:
 		return fmt.Errorf("unknown Tailscale mode %q: use %q or %q", cfg.Tailscale, Embedded, Host)
 	case cfg.Hostname == "":
-		return errors.New("no hostname: set --hostname or ROOST_HOSTNAME")
+		return errors.New("no hostname: set --hostname or BIELD_HOSTNAME")
 	case cfg.ControlURL != "" && cfg.Tailscale == Host:
-		return errors.New("--control-url is for embedded mode: in host mode Roost uses the control server " +
+		return errors.New("--control-url is for embedded mode: in host mode Bield uses the control server " +
 			"this machine's Tailscale is logged in to, which `tailscale up --login-server` sets")
 	case cfg.Port < 1 || cfg.Port > 65535:
 		return fmt.Errorf("port %d is out of range", cfg.Port)
 	case cfg.DataDir == "":
-		return errors.New("no data directory: set --data-dir or ROOST_DATA_DIR")
+		return errors.New("no data directory: set --data-dir or BIELD_DATA_DIR")
 	case !validControlURL(cfg.ControlURL):
 		return fmt.Errorf("control URL %q isn't an http:// or https:// URL, such as https://headscale.example.com", cfg.ControlURL)
 	case !filepath.IsAbs(cfg.HostRoot):
@@ -241,15 +241,15 @@ func isSet(fs *flag.FlagSet, name string) bool {
 	return set
 }
 
-// DefaultDataDir returns the data directory used when none is set: roost in the
-// user's config directory, such as ~/.config/roost on Linux. It returns "" if
+// DefaultDataDir returns the data directory used when none is set: bield in the
+// user's config directory, such as ~/.config/bield on Linux. It returns "" if
 // there's no such directory.
 func DefaultDataDir() string {
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return ""
 	}
-	return filepath.Join(dir, "roost")
+	return filepath.Join(dir, "bield")
 }
 
 func envOr(getenv func(string) string, key, fallback string) string {

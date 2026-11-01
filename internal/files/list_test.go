@@ -7,7 +7,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/files"
+	"github.com/manasseh-fikadu/bield/internal/files"
 )
 
 func TestRemote_List(t *testing.T) {

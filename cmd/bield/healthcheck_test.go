@@ -67,10 +67,10 @@ func TestHealthcheck(t *testing.T) {
 		wantErr    string // part of the error, or "" for none
 		wantStdout string
 	}{
-		{name: "running", addr: answer(http.StatusOK, "").Listener.Addr().String(), wantStdout: "Roost is running\n"},
+		{name: "running", addr: answer(http.StatusOK, "").Listener.Addr().String(), wantStdout: "Bield is running\n"},
 		{name: "failing", addr: answer(http.StatusServiceUnavailable, "").Listener.Addr().String(), wantErr: "503"},
 		{name: "redirecting", addr: answer(http.StatusFound, "http://elsewhere.example/").Listener.Addr().String(), wantErr: "302"},
-		{name: "nothing listening", addr: closed.Listener.Addr().String(), wantErr: "no answer from Roost"},
+		{name: "nothing listening", addr: closed.Listener.Addr().String(), wantErr: "no answer from Bield"},
 		{name: "bad address", addr: "nonsense", wantErr: "isn't like"},
 	}
 	for _, tt := range tests {
@@ -96,7 +96,7 @@ func TestHealthcheck_arguments(t *testing.T) {
 
 	err := run(t.Context(), []string{"healthcheck", "extra"}, &bytes.Buffer{}, &stderr)
 
-	if !errors.Is(err, errUsage) || !strings.Contains(stderr.String(), "Usage: roost healthcheck") {
+	if !errors.Is(err, errUsage) || !strings.Contains(stderr.String(), "Usage: bield healthcheck") {
 		t.Errorf("healthcheck extra: error = %v, stderr = %q, want usage", err, stderr.String())
 	}
 }

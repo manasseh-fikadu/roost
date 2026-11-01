@@ -4,17 +4,17 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 func TestChannel_Check(t *testing.T) {
 	t.Parallel()
 	ok := map[Kind]Config{
-		Ntfy:     {Topic: "roost-alerts"},
+		Ntfy:     {Topic: "bield-alerts"},
 		Discord:  {URL: "https://discord.com/api/webhooks/123/abc-DEF"},
 		Slack:    {URL: "https://hooks.slack.com/services/T000/B000/XXXX"},
 		Telegram: {Token: "123456789:AAH-abcdefghijklmnopqrstuvwxyz0123", ChatID: "-1001234567890"},
-		Email:    {Host: "smtp.example.com", From: "Roost <roost@example.com>", To: []string{"alice@example.com"}},
+		Email:    {Host: "smtp.example.com", From: "Bield <bield@example.com>", To: []string{"alice@example.com"}},
 		Webhook:  {URL: "https://example.com/hook"},
 	}
 	with := func(k Kind, change func(c *Config)) Config {
@@ -50,19 +50,19 @@ func TestChannel_Check(t *testing.T) {
 		{"slack", Slack, ok[Slack], ""},
 		{"slack on another host", Slack, with(Slack, func(c *Config) { c.URL = "https://example.com/services/T/B/X" }), "Slack gave you"},
 		{"telegram", Telegram, ok[Telegram], ""},
-		{"telegram to a channel", Telegram, with(Telegram, func(c *Config) { c.ChatID = "@roost_alerts" }), ""},
+		{"telegram to a channel", Telegram, with(Telegram, func(c *Config) { c.ChatID = "@bield_alerts" }), ""},
 		{"telegram with a short token", Telegram, with(Telegram, func(c *Config) { c.Token = "123:abc" }), "bot token"},
 		{"telegram with a chat that isn't one", Telegram, with(Telegram, func(c *Config) { c.ChatID = "my chat" }), "chat ID"},
 		{"email", Email, ok[Email], ""},
-		{"email over TLS with a login", Email, with(Email, func(c *Config) { c.Security, c.Port, c.Username, c.Password = TLS, 465, "roost", "pw" }), ""},
-		{"email with a login in the clear", Email, with(Email, func(c *Config) { c.Security, c.Username, c.Password = Plain, "roost", "pw" }), "TLS or STARTTLS"},
-		{"email with a login in the clear on this machine", Email, with(Email, func(c *Config) { c.Host, c.Security, c.Username = "127.0.0.1", Plain, "roost" }), ""},
+		{"email over TLS with a login", Email, with(Email, func(c *Config) { c.Security, c.Port, c.Username, c.Password = TLS, 465, "bield", "pw" }), ""},
+		{"email with a login in the clear", Email, with(Email, func(c *Config) { c.Security, c.Username, c.Password = Plain, "bield", "pw" }), "TLS or STARTTLS"},
+		{"email with a login in the clear on this machine", Email, with(Email, func(c *Config) { c.Host, c.Security, c.Username = "127.0.0.1", Plain, "bield" }), ""},
 		{"email without a host", Email, with(Email, func(c *Config) { c.Host = "" }), "host"},
 		{"email with a host that has a space", Email, with(Email, func(c *Config) { c.Host = "smtp example.com" }), "host"},
 		{"email with a port that is too big", Email, with(Email, func(c *Config) { c.Port = 70000 }), "port"},
 		{"email with a security it doesn't know", Email, with(Email, func(c *Config) { c.Security = "ssl" }), "STARTTLS, TLS or none"},
 		{"email from nobody", Email, with(Email, func(c *Config) { c.From = "" }), "from address"},
-		{"email from a line break", Email, with(Email, func(c *Config) { c.From = "roost@example.com\r\nBcc: x@example.com" }), "from address"},
+		{"email from a line break", Email, with(Email, func(c *Config) { c.From = "bield@example.com\r\nBcc: x@example.com" }), "from address"},
 		{"email to nobody", Email, with(Email, func(c *Config) { c.To = nil }), "1 to 10"},
 		{"email to too many", Email, with(Email, func(c *Config) { c.To = make([]string, 11) }), "1 to 10"},
 		{"email to a name", Email, with(Email, func(c *Config) { c.To = []string{"Alice <alice@example.com>"} }), "email address"},
@@ -106,7 +106,7 @@ func TestChannel_Check(t *testing.T) {
 
 func TestChannel_Check_nameAndRouting(t *testing.T) {
 	t.Parallel()
-	good := Channel{Name: "Phone", Kind: Ntfy, MinSeverity: "info", Config: Config{Topic: "roost"}}
+	good := Channel{Name: "Phone", Kind: Ntfy, MinSeverity: "info", Config: Config{Topic: "bield"}}
 	for name, change := range map[string]func(c *Channel){
 		"a name with spaces around it": func(c *Channel) { c.Name = " Phone" },
 		"no name":                      func(c *Channel) { c.Name = "" },

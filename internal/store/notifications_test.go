@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 func TestStore_Channels(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 	at := time.UnixMilli(1_800_000_000_000)
 
@@ -20,7 +20,7 @@ func TestStore_Channels(t *testing.T) {
 	}
 	phone, err := s.AddChannel(ctx, store.Channel{
 		Name: "Phone", Kind: "ntfy", Enabled: true, MinSeverity: "warning", OnResolve: true,
-		Config: `{"topic":"roost"}`, Created: at,
+		Config: `{"topic":"bield"}`, Created: at,
 	})
 	if err != nil || phone.ID == 0 {
 		t.Fatalf("AddChannel() = %+v, %v, want a channel with an ID", phone, err)
@@ -41,7 +41,7 @@ func TestStore_Channels(t *testing.T) {
 		t.Fatalf("Channels() = %+v, %v, want both, by name", got, err)
 	}
 	if want := phone; got[0].ID != want.ID || got[0].Name != "Phone" || got[0].Kind != "ntfy" || !got[0].Enabled ||
-		got[0].MinSeverity != "warning" || !got[0].OnResolve || got[0].Config != `{"topic":"roost"}` || !got[0].Created.Equal(at) {
+		got[0].MinSeverity != "warning" || !got[0].OnResolve || got[0].Config != `{"topic":"bield"}` || !got[0].Created.Equal(at) {
 		t.Errorf("Channels()[0] = %+v, want %+v", got[0], want)
 	}
 	if got[1].ID != team.ID || got[1].Enabled || got[1].OnResolve {
@@ -82,7 +82,7 @@ func TestStore_Channels(t *testing.T) {
 
 func TestStore_Notified(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 	at := time.UnixMilli(1_800_000_000_000)
 	alert, err := s.AddAlert(ctx, store.Alert{Key: "disk:hub", Source: "metrics", Severity: "warning", Title: "Disk", OpenedAt: at, LastSeen: at})

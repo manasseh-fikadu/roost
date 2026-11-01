@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
 )
 
 // Node is the demo's Tailscale layer. It is a tailnettest.Tailnet, which

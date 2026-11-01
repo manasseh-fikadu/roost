@@ -1,4 +1,4 @@
-// What the first-run setup shows: whether Roost can see what it needs to,
+// What the first-run setup shows: whether Bield can see what it needs to,
 // with a hint for each thing it can't, and when to send an admin there.
 
 import { roleLabel } from './access.js';
@@ -11,7 +11,7 @@ export interface SetupCheck {
 	id: 'tailscale' | 'signin' | 'docker' | 'systemd';
 	label: string;
 	status: Status;
-	/** What Roost found, in a line. */
+	/** What Bield found, in a line. */
 	detail: string;
 	/** What to do about it, if there's something to. */
 	hint?: string;
@@ -25,7 +25,7 @@ function collector(s: Snapshot, name: string): Collector | undefined {
 	return s.collectors.find((c) => c.name === name);
 }
 
-/** Roost's checks of Tailscale, who's signed in, Docker and systemd, in order. */
+/** Bield's checks of Tailscale, who's signed in, Docker and systemd, in order. */
 export function setupChecks(
 	snapshot: Snapshot | null,
 	me: Me | null | undefined,
@@ -51,17 +51,17 @@ function tailscaleCheck(s: Snapshot | null, mode: TailscaleMode | undefined): Se
 		return {
 			...base,
 			status: 'attention',
-			detail: `Roost can't read the tailnet${c.error ? `: ${c.error}` : '.'}`,
+			detail: `Bield can't read the tailnet${c.error ? `: ${c.error}` : '.'}`,
 			hint:
 				mode === 'host'
-					? 'Make sure Tailscale is running on this machine (tailscale status), and that the user Roost runs as may use it: sudo tailscale set --operator=$USER. Then restart Roost.'
-					: 'Restart Roost. If its node was logged out of the tailnet, open the setup page on its machine to log it in again.'
+					? 'Make sure Tailscale is running on this machine (tailscale status), and that the user Bield runs as may use it: sudo tailscale set --operator=$USER. Then restart Bield.'
+					: 'Restart Bield. If its node was logged out of the tailnet, open the setup page on its machine to log it in again.'
 		};
 	}
 	const others = s.devices.filter((d) => !d.self).length;
 	const how =
 		mode === 'embedded'
-			? 'Roost is its own machine on the tailnet'
+			? 'Bield is its own machine on the tailnet'
 			: mode === 'host'
 				? "Using this machine's Tailscale"
 				: 'Connected to the tailnet';
@@ -81,7 +81,7 @@ function tailscaleCheck(s: Snapshot | null, mode: TailscaleMode | undefined): Se
 			...base,
 			status: 'attention',
 			detail: parts.join(' · '),
-			hint: `Roost sees no other machine yet. Install Tailscale on one and log it in to this tailnet${login}, and it shows up here within seconds.`
+			hint: `Bield sees no other machine yet. Install Tailscale on one and log it in to this tailnet${login}, and it shows up here within seconds.`
 		};
 	}
 	return { ...base, status: 'online', detail: parts.join(' · ') };
@@ -102,8 +102,8 @@ function signInCheck(me: Me | null | undefined): SetupCheck {
 		return {
 			...base,
 			status: 'attention',
-			detail: "Roost doesn't know who you are.",
-			hint: 'Open Roost from a device on the tailnet that you are logged in to.'
+			detail: "Bield doesn't know who you are.",
+			hint: 'Open Bield from a device on the tailnet that you are logged in to.'
 		};
 	}
 	const who = me.name && me.login ? `${me.name} (${me.login})` : (me.name ?? me.login ?? 'someone');
@@ -122,8 +122,8 @@ function dockerCheck(s: Snapshot | null): SetupCheck {
 		return {
 			...base,
 			status: 'unknown',
-			detail: 'No Docker socket on the machine Roost runs on.',
-			hint: 'Skip this if you don’t use Docker there. Docker on other machines works once Roost has SSH access to them.'
+			detail: 'No Docker socket on the machine Bield runs on.',
+			hint: 'Skip this if you don’t use Docker there. Docker on other machines works once Bield has SSH access to them.'
 		};
 	}
 	switch (c.state) {
@@ -140,7 +140,7 @@ function dockerCheck(s: Snapshot | null): SetupCheck {
 			return {
 				...base,
 				status: 'online',
-				detail: `Roost can read Docker · ${plural(s.containers.length, 'container')}`
+				detail: `Bield can read Docker · ${plural(s.containers.length, 'container')}`
 			};
 	}
 }
@@ -148,7 +148,7 @@ function dockerCheck(s: Snapshot | null): SetupCheck {
 /** What went wrong with Docker's socket, in a line: the error has more than that. */
 export function dockerDetail(error: string): string {
 	if (error.includes('docker group')) {
-		return "Roost can't open the Docker socket: permission denied.";
+		return "Bield can't open the Docker socket: permission denied.";
 	}
 	if (error.includes('no socket at')) {
 		return 'There is no Docker socket on this machine.';
@@ -156,21 +156,21 @@ export function dockerDetail(error: string): string {
 	if (error.includes('nothing listens on')) {
 		return 'Docker has a socket, but nothing answers on it.';
 	}
-	return error || "Roost can't read Docker.";
+	return error || "Bield can't read Docker.";
 }
 
-/** What to do about the error that Roost got from Docker's socket. */
+/** What to do about the error that Bield got from Docker's socket. */
 export function dockerHint(error: string): string {
 	if (error.includes('docker group')) {
-		return 'Add the user Roost runs as to the docker group (sudo usermod -aG docker $USER), then restart Roost.';
+		return 'Add the user Bield runs as to the docker group (sudo usermod -aG docker $USER), then restart Bield.';
 	}
 	if (error.includes('no socket at')) {
 		return 'Docker isn’t installed or isn’t running there. Start it, or skip this if you don’t use Docker.';
 	}
 	if (error.includes('nothing listens on')) {
-		return 'Docker isn’t running. Start it (sudo systemctl start docker), and Roost picks it up.';
+		return 'Docker isn’t running. Start it (sudo systemctl start docker), and Bield picks it up.';
 	}
-	return 'Make sure Docker runs and that the user Roost runs as may use its socket.';
+	return 'Make sure Docker runs and that the user Bield runs as may use its socket.';
 }
 
 function systemdCheck(s: Snapshot | null): SetupCheck {
@@ -183,8 +183,8 @@ function systemdCheck(s: Snapshot | null): SetupCheck {
 		return {
 			...base,
 			status: 'unknown',
-			detail: "The machine Roost runs on doesn't run systemd.",
-			hint: 'Nothing to do: Roost shows the health of services on machines that run systemd.'
+			detail: "The machine Bield runs on doesn't run systemd.",
+			hint: 'Nothing to do: Bield shows the health of services on machines that run systemd.'
 		};
 	}
 	switch (c.state) {
@@ -194,14 +194,14 @@ function systemdCheck(s: Snapshot | null): SetupCheck {
 			return {
 				...base,
 				status: 'attention',
-				detail: c.error ?? "Roost can't read systemd.",
-				hint: 'Roost runs systemctl as its own user. Make sure that user can run systemctl list-units without a password prompt.'
+				detail: c.error ?? "Bield can't read systemd.",
+				hint: 'Bield runs systemctl as its own user. Make sure that user can run systemctl list-units without a password prompt.'
 			};
 		case 'ok':
 			return {
 				...base,
 				status: 'online',
-				detail: `Roost can read systemd · ${plural(s.units.length, 'unit')} watched`
+				detail: `Bield can read systemd · ${plural(s.units.length, 'unit')} watched`
 			};
 	}
 }
@@ -238,7 +238,7 @@ export function shouldOpenSetup(
 	return admin && hub !== undefined && !hub.setupDone && !alreadySent;
 }
 
-const sentKey = 'roost:setup-sent';
+const sentKey = 'bield:setup-sent';
 
 /** Whether this browser tab has been sent to the setup, or has left it. */
 export function setupSent(): boolean {
@@ -266,7 +266,7 @@ export function markSetupSent(): void {
 
 /**
  * The device to set up SSH access to next: the first that's online and that
- * Roost can log in to but doesn't yet. The machine Roost runs on comes first,
+ * Bield can log in to but doesn't yet. The machine Bield runs on comes first,
  * where it takes one click.
  */
 export function sshCandidate(devices: readonly Device[]): Device | undefined {

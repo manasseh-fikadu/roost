@@ -6,7 +6,7 @@ export const out = '../docs/images';
 /** Opens a page of the demo, and waits for the live feed to fill it in. */
 export async function open(page: Page, path: string) {
 	// The first-run setup would take over the overview.
-	await page.addInitScript(() => sessionStorage.setItem('roost:setup-sent', '1'));
+	await page.addInitScript(() => sessionStorage.setItem('bield:setup-sent', '1'));
 	await page.goto(path);
 	await page.getByRole('note').filter({ hasText: 'made-up machines' }).waitFor();
 	await settle(page);

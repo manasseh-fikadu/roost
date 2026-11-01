@@ -1,4 +1,4 @@
-<!-- Roost's mark: three linked nodes. -->
+<!-- Bield's mark: three linked nodes. -->
 <script lang="ts">
 	interface Props {
 		class?: string;

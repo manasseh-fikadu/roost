@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// The Raw types are what the Engine API says, with the fields Roost reads.
+// The Raw types are what the Engine API says, with the fields Bield reads.
 
 // RawContainer is a container in the list.
 type RawContainer struct {
@@ -320,7 +320,7 @@ func (c *Client) Inspect(ctx context.Context, id string) (*RawInspect, error) {
 }
 
 // InspectRaw returns a container's whole inspection as the daemon wrote it,
-// not only the fields Roost reads.
+// not only the fields Bield reads.
 func (c *Client) InspectRaw(ctx context.Context, id string) (json.RawMessage, error) {
 	var out json.RawMessage
 	if err := c.getContainer(ctx, id, "/json", nil, &out); err != nil {

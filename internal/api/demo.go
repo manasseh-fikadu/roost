@@ -57,7 +57,7 @@ var demoRefusals = []demoRefusal{
 		"POST /api/devices/{id}/agent/uninstall",
 		"DELETE /api/devices/{id}/agent",
 	}},
-	{"Changing who can use Roost is", []string{
+	{"Changing who can use Bield is", []string{
 		"PATCH /api/access",
 		"PUT /api/access/users/{login}",
 		"DELETE /api/access/users/{login}",
@@ -69,7 +69,7 @@ var demoRefusals = []demoRefusal{
 func demoNotice(pattern string) string {
 	for _, r := range demoRefusals {
 		if slices.Contains(r.patterns, pattern) {
-			return r.notice + " turned off in this demo, since its machines are made up. Run Roost on your own tailnet to use them."
+			return r.notice + " turned off in this demo, since its machines are made up. Run Bield on your own tailnet to use them."
 		}
 	}
 	return ""

@@ -26,7 +26,7 @@ export interface TermStatus {
  * What to tell someone whose terminal ended. The hub sends no status when
  * the connection to the machine dropped, so the shell, and the tmux session
  * it was attached to, may still be running. A tmux client that exits with 0
- * may only have detached, and Roost can't tell that from its last shell
+ * may only have detached, and Bield can't tell that from its last shell
  * exiting, so it doesn't say the session ended.
  */
 export function exitMessage(session: string | null, code: number | null | undefined): string {
@@ -48,12 +48,12 @@ export function exitMessage(session: string | null, code: number | null | undefi
 }
 
 /** Where the Terminal page keeps its tabs in localStorage. */
-export const tabsKey = 'roost.terminal.tabs';
+export const tabsKey = 'bield.terminal.tabs';
 
-/** The devices Roost has SSH access to, with the machine Roost runs on once. */
+/** The devices Bield has SSH access to, with the machine Bield runs on once. */
 export function terminalDevices(devices: Device[]): Device[] {
 	const set = devices.filter((d) => d.ssh && d.ssh.state !== 'not-set-up');
-	// The machine Roost runs on can be two nodes, which share access. Its
+	// The machine Bield runs on can be two nodes, which share access. Its
 	// own node is the one with its name.
 	const hubs = set.filter((d) => d.ssh?.hub);
 	const drop = hubs.length > 1 ? hubs.find((d) => d.self) : undefined;
@@ -61,10 +61,10 @@ export function terminalDevices(devices: Device[]): Device[] {
 }
 
 /**
- * The ID a device is listed under on the Terminal page. The machine Roost
+ * The ID a device is listed under on the Terminal page. The machine Bield
  * runs on can be two nodes that share one SSH access, and the page lists only
  * one (see terminalDevices), so a link to the other, such as the Terminal
- * button on Roost's own node in embedded mode, means the one that's listed.
+ * button on Bield's own node in embedded mode, means the one that's listed.
  * Any other ID stays as it is.
  */
 export function listedDeviceId(devices: Device[], id: string): string {
@@ -107,7 +107,7 @@ export function loadTabs(saved: string | null, devices: Device[]): TerminalTab[]
 		) {
 			continue;
 		}
-		// A tab on the machine Roost runs on follows the node that's listed.
+		// A tab on the machine Bield runs on follows the node that's listed.
 		const deviceId = listedDeviceId(devices, t.deviceId);
 		if (ids.has(deviceId)) {
 			tabs.push({ key: t.key, deviceId, session: t.session, cwd: null });
@@ -268,18 +268,18 @@ export function refusalText(
 			return {
 				title: 'Tailscale SSH wants a browser check',
 				detail:
-					'The rule that covers Roost has the action "check", which asks for a visit to a link ' +
-					'each time, and Roost can\'t make one. Roost needs a rule with the action "accept".'
+					'The rule that covers Bield has the action "check", which asks for a visit to a link ' +
+					'each time, and Bield can\'t make one. Bield needs a rule with the action "accept".'
 			};
 		case 'node':
 			return {
-				title: "The tailnet policy doesn't let Roost SSH here",
-				detail: `No rule in the "ssh" section of your policy covers Roost logging in to ${deviceName}.`
+				title: "The tailnet policy doesn't let Bield SSH here",
+				detail: `No rule in the "ssh" section of your policy covers Bield logging in to ${deviceName}.`
 			};
 		case 'user':
 			return {
-				title: `The tailnet policy doesn't let Roost log in as ${user}`,
-				detail: `A rule lets Roost SSH to ${deviceName}, but its "users" don't include ${user}, or ${deviceName} has no account named ${user}.`
+				title: `The tailnet policy doesn't let Bield log in as ${user}`,
+				detail: `A rule lets Bield SSH to ${deviceName}, but its "users" don't include ${user}, or ${deviceName} has no account named ${user}.`
 			};
 	}
 }

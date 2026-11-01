@@ -7,12 +7,12 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 func TestStore_DeviceSettings(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	no := false
 	set := func(id string, ds store.DeviceSettings) {
 		t.Helper()
@@ -72,7 +72,7 @@ func TestThresholdOverrides_Or(t *testing.T) {
 
 func TestStore_RTTHistory(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	start := time.UnixMilli(1_800_000_000_000).Truncate(5 * time.Minute)
 	reply := func(at time.Duration, rtt time.Duration) store.Ping {
 		return store.Ping{DeviceID: "laptop", At: start.Add(at), Replied: true, RTT: rtt}
@@ -117,7 +117,7 @@ func TestStore_prunesPingsOnceTheyAreSummedUp(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		const week = 7 * 24 * time.Hour
-		s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+		s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 		synctest.Wait()
 		now := time.Now()
 		err := s.AddPings(t.Context(), []store.Ping{

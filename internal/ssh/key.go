@@ -16,19 +16,19 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
-// keyFile is the name of Roost's private key in its key directory. The
+// keyFile is the name of Bield's private key in its key directory. The
 // public key is next to it, with .pub added.
 const keyFile = "id_ed25519"
 
-// Key is Roost's own SSH key, which it logs in to machines with.
+// Key is Bield's own SSH key, which it logs in to machines with.
 type Key struct {
 	signer gossh.Signer
 	// public is the public key as in authorized_keys, with its comment.
 	public string
 }
 
-// LoadKey reads Roost's key from dir, or makes one if there's none yet,
-// named after comment, such as roost@roost. Only Roost's user can read the
+// LoadKey reads Bield's key from dir, or makes one if there's none yet,
+// named after comment, such as bield@bield. Only Bield's user can read the
 // key: dir has mode 0700 and the private key 0600. If the key's mode lets
 // anyone else read it, LoadKey makes it 0600 again.
 func LoadKey(dir, comment string) (*Key, error) {
@@ -38,16 +38,16 @@ func LoadKey(dir, comment string) (*Key, error) {
 		return newKey(dir, comment)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("read Roost's SSH key: %w", err)
+		return nil, fmt.Errorf("read Bield's SSH key: %w", err)
 	}
 	if info, err := os.Stat(path); err == nil && info.Mode().Perm()&0o077 != 0 {
 		if err := os.Chmod(path, 0o600); err != nil {
-			return nil, fmt.Errorf("make Roost's SSH key private: %w", err)
+			return nil, fmt.Errorf("make Bield's SSH key private: %w", err)
 		}
 	}
 	signer, err := gossh.ParsePrivateKey(pemBytes)
 	if err != nil {
-		return nil, fmt.Errorf("read Roost's SSH key %s: %w", path, err)
+		return nil, fmt.Errorf("read Bield's SSH key %s: %w", path, err)
 	}
 	pub, err := os.ReadFile(filepath.Clean(path + ".pub"))
 	if err != nil || !hasKey(pub, signer.PublicKey()) {
@@ -80,15 +80,15 @@ func newKey(dir, comment string) (*Key, error) {
 		public += " " + comment
 	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("make Roost's SSH key directory: %w", err)
+		return nil, fmt.Errorf("make Bield's SSH key directory: %w", err)
 	}
 	path := filepath.Join(dir, keyFile)
 	if err := writeNew(path+".pub", []byte(public+"\n"), 0o644); err != nil {
-		return nil, fmt.Errorf("save Roost's SSH key: %w", err)
+		return nil, fmt.Errorf("save Bield's SSH key: %w", err)
 	}
 	// The private key goes last: once it's there, the key is complete.
 	if err := writeNew(path, pem.EncodeToMemory(block), 0o600); err != nil {
-		return nil, fmt.Errorf("save Roost's SSH key: %w", err)
+		return nil, fmt.Errorf("save Bield's SSH key: %w", err)
 	}
 	return &Key{signer: signer, public: public}, nil
 }
@@ -115,7 +115,7 @@ func writeNew(path string, data []byte, perm fs.FileMode) error {
 // PublicKey returns the public key as in authorized_keys, with its comment.
 func (k *Key) PublicKey() string { return k.public }
 
-// AuthorizedKey returns the line that lets Roost log in with k, for a
+// AuthorizedKey returns the line that lets Bield log in with k, for a
 // machine's ~/.ssh/authorized_keys. The machine only takes the key from the
 // addresses in from, and turns off agent and X11 forwarding for it.
 func (k *Key) AuthorizedKey(from []netip.Addr) string {
@@ -140,8 +140,8 @@ func SetupCommand(line string) string {
 		"grep -qxF " + q + " ~/.ssh/authorized_keys || echo " + q + " >> ~/.ssh/authorized_keys"
 }
 
-// AuthorizeHere adds line to the authorized_keys of the user Roost runs as,
-// unless that file already has k, so Roost can log in to its own machine as
+// AuthorizeHere adds line to the authorized_keys of the user Bield runs as,
+// unless that file already has k, so Bield can log in to its own machine as
 // that user. It reports whether it added the line.
 func (k *Key) AuthorizeHere(line string) (bool, error) {
 	home, err := os.UserHomeDir()

@@ -42,7 +42,7 @@
 
 	let query = $state('');
 	// Kept in the browser: stopped containers are noise to some and the point to others.
-	const showStopped = new Persisted('roost.docker.showStopped', true);
+	const showStopped = new Persisted('bield.docker.showStopped', true);
 
 	// The time moves on every second for "updated 3s ago" and "stopped 3h ago".
 	let now = $state(Date.now());

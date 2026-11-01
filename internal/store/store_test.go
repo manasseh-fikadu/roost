@@ -15,13 +15,13 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 func TestOpen_newDatabase(t *testing.T) {
 	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "data")
-	path := filepath.Join(dir, "roost.db")
+	path := filepath.Join(dir, "bield.db")
 
 	s := openStore(t, path, nil)
 
@@ -54,7 +54,7 @@ func TestOpen_newDatabase(t *testing.T) {
 
 func TestOpen_connectionSettings(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	pragmas := []struct {
 		name string
 		want string
@@ -96,7 +96,7 @@ func TestOpen_migratesFromEveryVersion(t *testing.T) {
 	for from := range len(entries) {
 		t.Run(fmt.Sprintf("from version %d", from), func(t *testing.T) {
 			t.Parallel()
-			path := filepath.Join(t.TempDir(), "roost.db")
+			path := filepath.Join(t.TempDir(), "bield.db")
 			if from == 0 {
 				// An empty file, like one SQLite leaves before its first write.
 				if err := os.WriteFile(path, nil, 0o600); err != nil {
@@ -129,7 +129,7 @@ func TestOpen_migratesFromEveryVersion(t *testing.T) {
 
 func TestOpen_olderVersion(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "roost.db")
+	path := filepath.Join(t.TempDir(), "bield.db")
 	createNotes := "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL) STRICT;"
 	addPinned := "ALTER TABLE notes ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0;"
 	indexPinned := "CREATE INDEX notes_pinned ON notes (pinned);"
@@ -177,14 +177,14 @@ func TestOpen_olderVersion(t *testing.T) {
 	}
 }
 
-// roost serve and roost admin can open the same database at once, so two
+// bield serve and bield admin can open the same database at once, so two
 // processes can find the same migrations to apply.
 func TestOpen_concurrentUpgrades(t *testing.T) {
 	t.Parallel()
 	createNotes := "CREATE TABLE notes (id INTEGER PRIMARY KEY, body TEXT NOT NULL) STRICT;"
 	newer := migrations(createNotes, "CREATE TABLE tags (name TEXT) STRICT;", "CREATE TABLE pins (id INTEGER) STRICT;")
 	for round := range 20 {
-		path := filepath.Join(t.TempDir(), "roost.db")
+		path := filepath.Join(t.TempDir(), "bield.db")
 		closeStore(t, openStore(t, path, migrations(createNotes)))
 
 		const openers = 4
@@ -225,7 +225,7 @@ func TestOpen_concurrentUpgrades(t *testing.T) {
 func TestStore_applyFrom(t *testing.T) {
 	t.Parallel()
 	files := migrations("CREATE TABLE notes (id INTEGER) STRICT;", "CREATE TABLE tags (name TEXT) STRICT;")
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), files)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), files)
 
 	if err := s.ApplyFrom(t.Context(), files, 0); err != nil {
 		t.Errorf("applying migrations the database already has: %v", err)
@@ -237,7 +237,7 @@ func TestStore_applyFrom(t *testing.T) {
 
 func TestOpen_failedMigration(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "roost.db")
+	path := filepath.Join(t.TempDir(), "bield.db")
 	createNotes := "CREATE TABLE notes (body TEXT) STRICT;"
 	closeStore(t, openStore(t, path, migrations(createNotes)))
 
@@ -273,7 +273,7 @@ func TestOpen_failedMigration(t *testing.T) {
 
 func TestOpen_newerDatabase(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "roost.db")
+	path := filepath.Join(t.TempDir(), "bield.db")
 	db := rawDB(t, path)
 	newer := latestVersion(t) + 1
 	if _, err := db.ExecContext(t.Context(), fmt.Sprintf("PRAGMA user_version = %d", newer)); err != nil {
@@ -316,7 +316,7 @@ func TestOpen_badMigrations(t *testing.T) {
 			for _, name := range tt.files {
 				files[name] = &fstest.MapFile{Data: []byte("CREATE TABLE t (a INTEGER);")}
 			}
-			path := filepath.Join(t.TempDir(), "roost.db")
+			path := filepath.Join(t.TempDir(), "bield.db")
 
 			_, err := store.OpenWith(t.Context(), path, store.Options{}, files)
 
@@ -335,7 +335,7 @@ func TestOpen_pathNeedsEscaping(t *testing.T) {
 	root := t.TempDir()
 	// Characters that mean something in a file: URI.
 	dir := "my data?#%20"
-	path := filepath.Join(root, dir, "roost.db")
+	path := filepath.Join(root, dir, "bield.db")
 
 	openStore(t, path, nil)
 
@@ -355,7 +355,7 @@ func TestStore_prunesExpiredEvents(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		const month = 30 * 24 * time.Hour
-		path := filepath.Join(t.TempDir(), "roost.db")
+		path := filepath.Join(t.TempDir(), "bield.db")
 		s := openStore(t, path, nil)
 		// Let the prune that Open starts with finish before adding rows.
 		synctest.Wait()
@@ -494,8 +494,8 @@ func firstColumn(t *testing.T, db *sql.DB, query string) []string {
 func TestSnapshot(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "roost.db")
-	// The store stays open, as it does while Roost runs.
+	path := filepath.Join(dir, "bield.db")
+	// The store stays open, as it does while Bield runs.
 	s := openStore(t, path, nil)
 	if _, err := s.SetRole(t.Context(), "alice@example.com", store.Admin); err != nil {
 		t.Fatal(err)
@@ -526,7 +526,7 @@ func TestSnapshot(t *testing.T) {
 func TestSnapshot_leavesTheDatabaseAlone(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "roost.db")
+	path := filepath.Join(dir, "bield.db")
 	dst := filepath.Join(dir, "copy.db")
 
 	t.Run("missing database", func(t *testing.T) {
@@ -561,4 +561,4 @@ func TestSnapshot_leavesTheDatabaseAlone(t *testing.T) {
 
 // testingTempDir returns a new directory that outlives a benchmark, since the
 // benchmarks share a database.
-func testingTempDir() (string, error) { return os.MkdirTemp("", "roost-bench-") }
+func testingTempDir() (string, error) { return os.MkdirTemp("", "bield-bench-") }

@@ -16,8 +16,8 @@ func TestRun(t *testing.T) {
 		wantStdout string // substring
 		wantStderr string // substring
 	}{
-		{name: "no command", wantErr: errUsage, wantStderr: "Usage: roost"},
-		{name: "help", args: []string{"help"}, wantStdout: "Usage: roost"},
+		{name: "no command", wantErr: errUsage, wantStderr: "Usage: bield"},
+		{name: "help", args: []string{"help"}, wantStdout: "Usage: bield"},
 		{name: "unknown command", args: []string{"bogus"}, wantErr: errUsage, wantStderr: `unknown command "bogus"`},
 		{name: "version", args: []string{"version"}, wantStdout: buildVersion() + "\n"},
 	}

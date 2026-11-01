@@ -1,5 +1,5 @@
 // Package usage finds out what uses a machine's CPU and memory: which
-// services, containers and processes. Roost samples its own machine's
+// services, containers and processes. Bield samples its own machine's
 // processes from /proc (Sampler), agents report theirs (ParseAgent), and a
 // Recorder keeps each device's latest sample and sums up each minute for its
 // history.
@@ -41,7 +41,7 @@ type Source string
 
 // The sources of a Sample.
 const (
-	// SourceHub is Roost sampling its own machine.
+	// SourceHub is Bield sampling its own machine.
 	SourceHub Source = "hub"
 	// SourceAgent is a device's agent.
 	SourceAgent Source = "agent"

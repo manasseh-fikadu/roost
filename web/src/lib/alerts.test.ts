@@ -60,7 +60,7 @@ function container(name: string, change: Partial<Container> = {}): Container {
 		restartCount: 0,
 		restartPolicy: 'no',
 		ports: [],
-		deviceId: 'roost',
+		deviceId: 'bield',
 		checkIds: [],
 		...change
 	};
@@ -86,14 +86,14 @@ test.each([
 });
 
 describe('onDevice', () => {
-	// In embedded mode, Roost's node and the machine's own are both the hub.
-	const devices = [device('roost', 'hub'), device('vps', 'hub'), device('laptop', 'agent')];
-	const alerts = [alert(1, 'open', 'roost'), alert(2, 'open', 'laptop'), alert(3, 'open')];
+	// In embedded mode, Bield's node and the machine's own are both the hub.
+	const devices = [device('bield', 'hub'), device('vps', 'hub'), device('laptop', 'agent')];
+	const alerts = [alert(1, 'open', 'bield'), alert(2, 'open', 'laptop'), alert(3, 'open')];
 
 	test.each<{ id: string; want: number[] }>([
 		{ id: 'laptop', want: [2] },
 		{ id: 'vps', want: [1] },
-		{ id: 'roost', want: [1] }
+		{ id: 'bield', want: [1] }
 	])("the $id's alerts", ({ id, want }) => {
 		const d = devices.find((d) => d.id === id)!;
 		expect(onDevice(alerts, d, devices).map((a) => a.id)).toEqual(want);
@@ -118,7 +118,7 @@ test.each<{ name: string; unit: Partial<Unit>; want: Status }>([
 		active: 'active',
 		sub: '',
 		watched: true,
-		deviceId: 'roost',
+		deviceId: 'bield',
 		...unit
 	};
 	expect(unitStatus(u)).toBe(want);
@@ -185,7 +185,7 @@ test('mapServices sums up projects, loose containers and units', () => {
 		active: 'active',
 		sub: 'running',
 		watched: true,
-		deviceId: 'roost',
+		deviceId: 'bield',
 		memory: 1024
 	};
 	const services = mapServices(

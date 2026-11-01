@@ -1,6 +1,6 @@
 // The live data every page reads: the latest snapshot from GET /api/stream,
 // which the hub sends every few seconds over one connection. The shell
-// connects while someone who can view Roost has it open, and a tab that stays
+// connects while someone who can view Bield has it open, and a tab that stays
 // hidden closes the connection until it's shown again.
 
 import type { Snapshot } from './api/types.js';
@@ -18,13 +18,13 @@ const staleAfter = 35_000;
 
 /**
  * How long a hidden tab keeps the stream open. Over plain HTTP, a browser
- * opens at most six connections to Roost, across all its tabs, and each open
+ * opens at most six connections to Bield, across all its tabs, and each open
  * stream holds one.
  */
 const hiddenFor = 30_000;
 
-/** Where the browser keeps Roost's name, so a reload shows it before the first snapshot. */
-const nameKey = 'roost:name';
+/** Where the browser keeps Bield's name, so a reload shows it before the first snapshot. */
+const nameKey = 'bield:name';
 
 function storedName(): string {
 	try {
@@ -49,18 +49,18 @@ class Live {
 	connection: Connection = $state('connecting');
 	/** When the latest snapshot arrived, in Unix milliseconds, or 0. */
 	receivedAt = $state(0);
-	/** The name an admin gave this Roost in the settings. */
+	/** The name an admin gave this Bield in the settings. */
 	#stored = $state(storedName());
 
 	/**
-	 * What Roost is called: the latest snapshot's name, else the last one this
-	 * browser saw, else "Roost".
+	 * What Bield is called: the latest snapshot's name, else the last one this
+	 * browser saw, else "Bield".
 	 */
 	get name(): string {
-		return this.snapshot?.hub.name || this.#stored || 'Roost';
+		return this.snapshot?.hub.name || this.#stored || 'Bield';
 	}
 
-	/** Whether this Roost runs a demo, with made-up machines. */
+	/** Whether this Bield runs a demo, with made-up machines. */
 	get demo(): boolean {
 		return this.snapshot?.hub.demo === true;
 	}
@@ -82,7 +82,7 @@ export const live = new Live();
 
 interface Options {
 	/**
-	 * Called each time the connection drops, before Roost waits to
+	 * Called each time the connection drops, before Bield waits to
 	 * reconnect, and when a tab that was hidden long enough to close it is
 	 * shown again. The hub also ends the stream when the caller's role
 	 * changes, so this is when to ask again who they are.
@@ -114,7 +114,7 @@ export function connect({ onDrop }: Options = {}): () => void {
 			failures = 0;
 		});
 		// EventSource retries some failures by itself, at its own pace, and
-		// gives up on others, such as a 403. Roost retries all of them.
+		// gives up on others, such as a 403. Bield retries all of them.
 		source.onerror = drop;
 	}
 

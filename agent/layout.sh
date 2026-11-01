@@ -2,8 +2,8 @@
 # SPDX-License-Identifier: MIT
 # Where the agent lives on a machine. The hub puts this at the top of
 # install.sh and uninstall.sh, so they agree.
-NAME="roost-agent"
-LABEL="dev.roost.agent"
+NAME="bield-agent"
+LABEL="dev.bield.agent"
 CONF_DIR="$HOME/.config/$NAME"
 
 case "$(uname -s)" in

@@ -8,12 +8,12 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 func TestStore_ContainerHistory(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	start := time.UnixMilli(1_800_000_000_000).Truncate(5 * time.Minute)
 	row := func(device, name string, at time.Duration, cpu, mem *float64) store.ContainerMetricsRow {
 		return store.ContainerMetricsRow{DeviceID: device, Name: name, At: start.Add(at), CPU: cpu, Mem: mem, NetRx: new(100.0)}
@@ -62,7 +62,7 @@ func TestStore_prunesContainerMetrics(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		const week = 7 * 24 * time.Hour
-		s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+		s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 		synctest.Wait()
 		now := time.Now()
 		err := s.AddContainerMetrics(t.Context(), []store.ContainerMetricsRow{

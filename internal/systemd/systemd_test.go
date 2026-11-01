@@ -11,7 +11,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/systemd"
+	"github.com/manasseh-fikadu/bield/internal/systemd"
 )
 
 // fakeSystemctl answers like systemctl, from the units of each scope it

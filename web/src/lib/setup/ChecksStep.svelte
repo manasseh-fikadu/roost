@@ -1,5 +1,5 @@
 <!--
-	The first step of the setup: whether Roost can see what it needs to, and
+	The first step of the setup: whether Bield can see what it needs to, and
 	what to do about what it can't. The checks come from what the hub already
 	knows, so they update on their own.
 -->
@@ -35,10 +35,10 @@
 </script>
 
 <Card
-	title="Does Roost see what it needs to?"
+	title="Does Bield see what it needs to?"
 	description={snapshot
 		? attention === 0
-			? 'Everything Roost needs is there. These update on their own.'
+			? 'Everything Bield needs is there. These update on their own.'
 			: 'A few things need a look. These update on their own, so fix one and watch it turn green.'
 		: 'Asking the hub…'}
 >

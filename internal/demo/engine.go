@@ -16,7 +16,7 @@ import (
 )
 
 // An engine is a made-up Docker Engine: it serves the API of one machine's
-// containers on a connection, as Docker does on its socket. Roost's Docker
+// containers on a connection, as Docker does on its socket. Bield's Docker
 // client, collector and sampler ask it what they'd ask a real one.
 type engine struct {
 	d *Demo
@@ -220,7 +220,7 @@ func (e *engine) container(w http.ResponseWriter, r *http.Request, rest string) 
 	case sub == "stats":
 		e.streamStats(w, r, c)
 	case r.Method == http.MethodPost && (sub == "start" || sub == "stop" || sub == "restart"):
-		// A demo changes nothing, and Roost doesn't ask.
+		// A demo changes nothing, and Bield doesn't ask.
 		w.WriteHeader(http.StatusNoContent)
 	default:
 		http.NotFound(w, r)

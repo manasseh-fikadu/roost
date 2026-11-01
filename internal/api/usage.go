@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/usage"
+	"github.com/manasseh-fikadu/bield/internal/usage"
 )
 
 const (
@@ -41,7 +41,7 @@ func (h *handler) deviceUsage(w http.ResponseWriter, r *http.Request) {
 	} else {
 		s, interval, ok = h.opts.Usage.Latest(historyID)
 		if !ok {
-			// Until the device sends a sample after Roost starts, the latest
+			// Until the device sends a sample after Bield starts, the latest
 			// stored minute will do.
 			s, ok, err = h.opts.Usage.At(r.Context(), historyID, time.Now(), usageKept)
 		}

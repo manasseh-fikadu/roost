@@ -10,13 +10,13 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 func openStore(t *testing.T) *store.Store {
 	t.Helper()
-	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "roost.db"), store.Options{})
+	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "bield.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,7 +35,7 @@ func TestLoadAndSave(t *testing.T) {
 		t.Errorf("Load() of a new store = %+v, want the defaults", got)
 	}
 
-	got.General = settings.General{Name: "Home lab", PublicURL: "https://roost.example.com"}
+	got.General = settings.General{Name: "Home lab", PublicURL: "https://bield.example.com"}
 	got.Thresholds.DiskWarn, got.Thresholds.CPUWindowMinutes = 80, 15
 	got.Rules.CPU = false
 	got.WatchedUnits = []string{"nginx.service", "user:app.service"}
@@ -53,7 +53,7 @@ func TestLoadAndSave(t *testing.T) {
 
 	// A setting that wasn't saved, such as one a later version adds, gets
 	// its default.
-	// This is how #26 saved them, before Roost had a Settings page.
+	// This is how #26 saved them, before Bield had a Settings page.
 	if err := st.SetKV(t.Context(), "settings", `{"thresholds":{"diskWarn":70}}`); err != nil {
 		t.Fatal(err)
 	}
@@ -104,16 +104,16 @@ func TestCheck(t *testing.T) {
 		{"an empty user unit", func(s *settings.Settings) { s.WatchedUnits = []string{"user:"} }, true},
 		{"no units", func(s *settings.Settings) { s.WatchedUnits = nil }, false},
 		{"no name", func(s *settings.Settings) { s.General.Name = "" }, true},
-		{"a name with spaces around it", func(s *settings.Settings) { s.General.Name = " Roost" }, true},
+		{"a name with spaces around it", func(s *settings.Settings) { s.General.Name = " Bield" }, true},
 		{"a two line name", func(s *settings.Settings) { s.General.Name = "Home\nlab" }, true},
 		{"a long name", func(s *settings.Settings) { s.General.Name = strings.Repeat("é", settings.MaxName) }, false},
 		{"a name that is too long", func(s *settings.Settings) { s.General.Name = strings.Repeat("é", settings.MaxName+1) }, true},
-		{"a public URL", func(s *settings.Settings) { s.General.PublicURL = "https://roost.example.com:8443" }, false},
-		{"a public URL with a path", func(s *settings.Settings) { s.General.PublicURL = "https://example.com/roost" }, true},
+		{"a public URL", func(s *settings.Settings) { s.General.PublicURL = "https://bield.example.com:8443" }, false},
+		{"a public URL with a path", func(s *settings.Settings) { s.General.PublicURL = "https://example.com/bield" }, true},
 		{"a public URL with a slash", func(s *settings.Settings) { s.General.PublicURL = "https://example.com/" }, true},
 		{"a public URL with a login", func(s *settings.Settings) { s.General.PublicURL = "https://alice:secret@example.com" }, true},
-		{"a public URL without a scheme", func(s *settings.Settings) { s.General.PublicURL = "roost.example.com" }, true},
-		{"a public URL with another scheme", func(s *settings.Settings) { s.General.PublicURL = "ftp://roost.example.com" }, true},
+		{"a public URL without a scheme", func(s *settings.Settings) { s.General.PublicURL = "bield.example.com" }, true},
+		{"a public URL with another scheme", func(s *settings.Settings) { s.General.PublicURL = "ftp://bield.example.com" }, true},
 		{"a public URL with a query", func(s *settings.Settings) { s.General.PublicURL = "https://example.com?a=b" }, true},
 		{"a public URL with an IPv6 address", func(s *settings.Settings) { s.General.PublicURL = "http://[fd7a:115c:a1e0::1]:4700" }, false},
 		{"a public URL with an IP address", func(s *settings.Settings) { s.General.PublicURL = "http://100.64.0.1" }, false},
@@ -201,10 +201,10 @@ func TestCleanPublicURL(t *testing.T) {
 	t.Parallel()
 	for in, want := range map[string]string{
 		"":                               "",
-		"  https://roost.example.com/ ":  "https://roost.example.com",
+		"  https://bield.example.com/ ":  "https://bield.example.com",
 		"http://100.64.0.1:4700":         "http://100.64.0.1:4700",
-		"https://roost.example.com":      "https://roost.example.com",
-		"https://example.com/roost":      "!",
+		"https://bield.example.com":      "https://bield.example.com",
+		"https://example.com/bield":      "!",
 		"https://example.com//":          "!",
 		"mailto:alice@example.com":       "!",
 		"https://exa mple.com":           "!",
@@ -277,7 +277,7 @@ func TestChanges(t *testing.T) {
 		want   []string
 	}{
 		{"nothing", func(*settings.Settings) {}, nil},
-		{"a name", func(s *settings.Settings) { s.General.Name = "Home lab" }, []string{`Renamed Roost to "Home lab"`}},
+		{"a name", func(s *settings.Settings) { s.General.Name = "Home lab" }, []string{`Renamed Bield to "Home lab"`}},
 		{"a public URL, whose value stays out", func(s *settings.Settings) { s.General.PublicURL = "https://secret.example.com" },
 			[]string{"Changed the public URL"}},
 		{"finishing the setup", func(s *settings.Settings) { s.General.SetupDone = true },
@@ -294,7 +294,7 @@ func TestChanges(t *testing.T) {
 				"stopped watching sshd.service, docker.service, tailscaled.service, cron.service",
 		}},
 		{"retention", func(s *settings.Settings) { s.Retention.HistoryDays, s.Retention.ActivityDays = 1, 90 },
-			[]string{"Changed how long Roost keeps history: activity log 30 days → 90 days, device history 7 days → 1 day"}},
+			[]string{"Changed how long Bield keeps history: activity log 30 days → 90 days, device history 7 days → 1 day"}},
 		{"reminders", func(s *settings.Settings) { s.Notifications.RemindHours = 6 },
 			[]string{"Set reminders about open alerts to every 6 hours"}},
 		{"an hourly reminder", func(s *settings.Settings) { s.Notifications.RemindHours = 1 },
@@ -303,7 +303,7 @@ func TestChanges(t *testing.T) {
 			s.Notifications.Quiet = settings.QuietHours{Enabled: true, Start: "23:00", End: "06:30", Timezone: "Europe/Berlin", AllowCritical: true}
 		}, []string{"Set quiet hours to 23:00–06:30 Europe/Berlin, with critical alerts getting through"}},
 		{"several parts", func(s *settings.Settings) { s.General.Name, s.Rules.Disk = "Lab", false },
-			[]string{`Renamed Roost to "Lab"`, "Turned off alerts for disk"}},
+			[]string{`Renamed Bield to "Lab"`, "Turned off alerts for disk"}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()

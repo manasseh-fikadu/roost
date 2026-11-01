@@ -1,7 +1,7 @@
 -- In the tables below, device_id is a device's Tailscale node ID, or 'hub'
--- for the machine Roost runs on, whichever node it appears as.
+-- for the machine Bield runs on, whichever node it appears as.
 
--- A device's metrics, about every 30 seconds, from Roost's own measurements
+-- A device's metrics, about every 30 seconds, from Bield's own measurements
 -- or from the device's agent. A value is NULL if the device didn't report it.
 CREATE TABLE metrics (
     ts        INTEGER NOT NULL, -- Unix milliseconds
@@ -18,7 +18,7 @@ CREATE TABLE metrics (
 
 CREATE INDEX metrics_device_ts ON metrics (device_id, ts);
 
--- The latest report of each device's agent, so Roost still knows a device's
+-- The latest report of each device's agent, so Bield still knows a device's
 -- metrics and details after it restarts.
 CREATE TABLE agents (
     device_id   TEXT PRIMARY KEY,

@@ -1,5 +1,5 @@
 -- Alerts: each is a condition, such as a disk that's nearly full, from when
--- Roost saw it until it cleared. A condition that comes back opens a new one.
+-- Bield saw it until it cleared. A condition that comes back opens a new one.
 CREATE TABLE alerts (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     key           TEXT NOT NULL, -- the condition, such as 'disk:hub'
@@ -10,7 +10,7 @@ CREATE TABLE alerts (
     title         TEXT NOT NULL,
     detail        TEXT NOT NULL,
     opened_at     INTEGER NOT NULL, -- Unix milliseconds
-    last_seen     INTEGER NOT NULL, -- when Roost last saw the condition
+    last_seen     INTEGER NOT NULL, -- when Bield last saw the condition
     resolved_at   INTEGER,          -- NULL while it's open
     acked_at      INTEGER,
     acked_by      TEXT,
@@ -34,5 +34,5 @@ CREATE TABLE alert_notes (
 CREATE INDEX alert_notes_alert ON alert_notes (alert_id, id);
 
 -- Who did what the activity log says, if someone did: a login, or '' for
--- something Roost saw happen.
+-- something Bield saw happen.
 ALTER TABLE events ADD COLUMN actor TEXT NOT NULL DEFAULT '';

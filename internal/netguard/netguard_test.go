@@ -7,7 +7,7 @@ import (
 	"net/netip"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/netguard"
+	"github.com/manasseh-fikadu/bield/internal/netguard"
 )
 
 func TestForbiddenHost(t *testing.T) {

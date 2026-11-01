@@ -9,9 +9,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // The longest a device's display name and notes can be, in characters.

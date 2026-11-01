@@ -13,7 +13,7 @@ import (
 )
 
 // Host uses the tailscaled that runs on the machine, through its local
-// socket. Roost listens on the machine's tailnet IPs, so tailscaled has to use
+// socket. Bield listens on the machine's tailnet IPs, so tailscaled has to use
 // a TUN device (the default) rather than userspace networking.
 type Host struct {
 	localAPI
@@ -60,7 +60,7 @@ func (h *Host) Dial(ctx context.Context, network, addr string) (net.Conn, error)
 
 // Listen waits until the machine is on the tailnet and listens on its tailnet
 // IPs. The app is served over HTTPS with the machine's certificate if the
-// tailnet has HTTPS turned on and tailscaled lets Roost fetch it, and over
+// tailnet has HTTPS turned on and tailscaled lets Bield fetch it, and over
 // plain HTTP otherwise.
 func (h *Host) Listen(ctx context.Context) (net.Listener, string, error) {
 	st, err := waitRunning(ctx, h.lc, func(s ipn.State) {
@@ -86,7 +86,7 @@ func (h *Host) Listen(ctx context.Context) (net.Listener, string, error) {
 	}
 	if len(lns) == 0 {
 		return nil, "", fmt.Errorf("can't listen on any of this machine's tailnet IPs on port %d; "+
-			"Roost's host mode needs tailscaled to use a TUN device, not userspace networking", h.port)
+			"Bield's host mode needs tailscaled to use a TUN device, not userspace networking", h.port)
 	}
 	var ln net.Listener = newMultiListener(lns)
 
@@ -95,14 +95,14 @@ func (h *Host) Listen(ctx context.Context) (net.Listener, string, error) {
 		err := h.fetchCert(ctx, domain)
 		switch {
 		case local.IsAccessDeniedError(err):
-			h.log.Warn("tailscaled won't give Roost this machine's HTTPS certificate, so Roost is served over plain HTTP; "+
-				"run Roost as root, or make its user the Tailscale operator with `sudo tailscale set --operator=$USER`",
+			h.log.Warn("tailscaled won't give Bield this machine's HTTPS certificate, so Bield is served over plain HTTP; "+
+				"run Bield as root, or make its user the Tailscale operator with `sudo tailscale set --operator=$USER`",
 				"domain", domain)
 		case err != nil:
 			// The tailnet has HTTPS on, so keep to it, as embedded mode does:
 			// each TLS handshake asks for the certificate again, and a failed
 			// fetch from Let's Encrypt shouldn't move the app to another URL.
-			h.log.Warn("couldn't get this machine's HTTPS certificate yet; Roost serves HTTPS anyway "+
+			h.log.Warn("couldn't get this machine's HTTPS certificate yet; Bield serves HTTPS anyway "+
 				"and asks again on each connection", "domain", domain, "error", err)
 			fallthrough
 		default:
@@ -118,7 +118,7 @@ func (h *Host) Listen(ctx context.Context) (net.Listener, string, error) {
 }
 
 // fetchCert gets the certificate for domain now, which also finds out whether
-// tailscaled lets Roost have it.
+// tailscaled lets Bield have it.
 func (h *Host) fetchCert(ctx context.Context, domain string) error {
 	ctx, cancel := context.WithTimeout(ctx, certTimeout)
 	defer cancel()

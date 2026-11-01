@@ -6,12 +6,12 @@ import (
 	"sync"
 )
 
-// secretTag is the struct tag, roost:"secret", on a response field that only
+// secretTag is the struct tag, bield:"secret", on a response field that only
 // admins get. writeJSON clears such fields for everyone else, so handlers
 // never need to check who's asking before they answer.
 const secretTag = "secret"
 
-// redact returns v with every field tagged roost:"secret" set to its zero
+// redact returns v with every field tagged bield:"secret" set to its zero
 // value, wherever it's nested: in structs, pointers, slices, arrays, map
 // values and interfaces. It copies what it changes and never changes v, which
 // may be shared, such as the poller's latest snapshot. It returns v as it is
@@ -54,7 +54,7 @@ func redactValue(v reflect.Value) reflect.Value {
 			switch {
 			case !f.IsExported():
 				// holdsSecrets made sure there's nothing to clear here.
-			case f.Tag.Get("roost") == secretTag:
+			case f.Tag.Get("bield") == secretTag:
 				out.Field(i).SetZero()
 			default:
 				out.Field(i).Set(redactValue(v.Field(i)))
@@ -94,7 +94,7 @@ func redactValue(v reflect.Value) reflect.Value {
 var secretTypes sync.Map // reflect.Type → bool
 
 // holdsSecrets reports whether a value of type t can hold a field tagged
-// roost:"secret". An interface can hold anything, so it always can. It
+// bield:"secret". An interface can hold anything, so it always can. It
 // panics if a secret is in a struct embedded without being exported, since
 // JSON encodes that struct's fields but redact can't clear them.
 func holdsSecrets(t reflect.Type) bool {
@@ -123,7 +123,7 @@ func findSecrets(t reflect.Type, seen map[reflect.Type]bool) bool {
 	case reflect.Struct:
 		holds := false
 		for f := range t.Fields() {
-			secret := f.Tag.Get("roost") == secretTag
+			secret := f.Tag.Get("bield") == secretTag
 			switch {
 			case f.IsExported():
 				holds = holds || secret || findSecrets(f.Type, seen)

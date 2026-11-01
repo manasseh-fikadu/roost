@@ -6,7 +6,7 @@ import (
 )
 
 // A reading is what a machine was doing at one moment. All of its values
-// come from the machine and the time, so the history Roost starts with and
+// come from the machine and the time, so the history Bield starts with and
 // the readings that follow it are one line.
 type reading struct {
 	// cpu, mem and disk are percentages.

@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-// Local is this machine. Roost can only measure Linux, so a Collector of it
+// Local is this machine. Bield can only measure Linux, so a Collector of it
 // fails each time.
 func Local(root string) System {
 	return System{FS: os.DirFS(root), Statfs: func(string) (uint64, uint64, error) {

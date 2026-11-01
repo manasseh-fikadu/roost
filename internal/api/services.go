@@ -9,10 +9,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/alerts"
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/systemd"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/alerts"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/systemd"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // cleanExits are the exit codes of a container that was stopped rather than
@@ -20,7 +20,7 @@ import (
 // `docker stop` sends.
 var cleanExits = []int{0, 130, 137, 143}
 
-// newContainers returns the containers on the machine Roost runs on, as the
+// newContainers returns the containers on the machine Bield runs on, as the
 // API shows them, on the device deviceID, with the checks of their ports.
 // hub holds the names and addresses of that machine.
 func newContainers(r docker.Reading, deviceID string, cs []Check, hub []string) []Container {
@@ -119,7 +119,7 @@ func checkHostPort(c Check) (string, int, bool) {
 	return "", 0, false
 }
 
-// hubNames returns the names and addresses that reach the machine Roost
+// hubNames returns the names and addresses that reach the machine Bield
 // runs on: loopback, and its nodes' IPs and names.
 func hubNames(st *tailnet.Status) []string {
 	out := []string{"localhost", "127.0.0.1", "::1"}

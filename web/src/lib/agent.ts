@@ -20,7 +20,7 @@ export interface AgentState {
 export function agentState(d: Device, now: number): AgentState {
 	const a = d.agent;
 	if (d.measuredBy === 'hub') {
-		return { label: 'Built in', status: 'online', detail: 'Roost runs here and measures it' };
+		return { label: 'Built in', status: 'online', detail: 'Bield runs here and measures it' };
 	}
 	if (!a) {
 		return agentRuns(d.os)

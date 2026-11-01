@@ -13,14 +13,14 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/alerts"
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/systemd"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/alerts"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/hostmetrics"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/systemd"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // alertSummary writes an alert as "severity: title".
@@ -40,7 +40,7 @@ func TestSnapshot_alertRules(t *testing.T) {
 	ago := func(d time.Duration) time.Time { return now.Add(-d) }
 	status := &tailnet.Status{
 		State: tailnet.StateRunning,
-		Self:  tailnet.Device{ID: "roost", HostName: "roost", DNSName: roostHost, IPs: []netip.Addr{roostIP}, OS: "linux", Online: true},
+		Self:  tailnet.Device{ID: "bield", HostName: "bield", DNSName: bieldHost, IPs: []netip.Addr{bieldIP}, OS: "linux", Online: true},
 		Peers: []tailnet.Device{
 			{ID: "laptop", HostName: "laptop", OS: "macOS", Online: true},
 			{ID: "phone", HostName: "phone", OS: "android", LastSeen: ago(time.Hour)},
@@ -101,13 +101,13 @@ func TestSnapshot_alertRules(t *testing.T) {
 		"critical: API is failing",
 		"critical: Container api crashed (exit 1)",
 		"critical: Container cache was killed for using too much memory",
-		"critical: Disk 96% full on roost",
+		"critical: Disk 96% full on bield",
 		"critical: Tailscale key of server expires in 2 days",
 		"warning: Agent on laptop stopped reporting",
-		"warning: CPU 97% busy on roost",
+		"warning: CPU 97% busy on bield",
 		"warning: Container db stopped",
 		"warning: Container web is unhealthy",
-		"warning: Memory 95% used on roost",
+		"warning: Memory 95% used on bield",
 		"warning: Tailscale key of nas expires in 10 days",
 		"warning: User unit backup.service failed",
 		"warning: cron.service isn't running",
@@ -123,7 +123,7 @@ func TestSnapshot_alertRules(t *testing.T) {
 	for _, a := range snap.Alerts {
 		switch a.Source {
 		case api.AlertSourceMetrics, api.AlertSourceContainer, api.AlertSourceUnit:
-			if a.DeviceID != "roost" {
+			if a.DeviceID != "bield" {
 				t.Errorf("%q is on device %q, want the hub's", a.Title, a.DeviceID)
 			}
 		case api.AlertSourceCheck:
@@ -141,7 +141,7 @@ func TestSnapshot_alertRules(t *testing.T) {
 	for _, c := range snap.Containers {
 		byName[c.Name] = c
 	}
-	if web := byName["web"]; web.Problem != "is unhealthy" || !slices.Equal(web.CheckIDs, []string{api1.ID}) || web.DeviceID != "roost" || web.ID != "a1" {
+	if web := byName["web"]; web.Problem != "is unhealthy" || !slices.Equal(web.CheckIDs, []string{api1.ID}) || web.DeviceID != "bield" || web.ID != "a1" {
 		t.Errorf("web = %+v, want it unhealthy, with the check of its port", web)
 	}
 	if job := byName["job"]; job.Problem != "" || len(job.CheckIDs) != 0 {
@@ -167,7 +167,7 @@ func TestSnapshot_alertRules(t *testing.T) {
 	// The hub has no thresholds of its own yet, so the device's status uses
 	// the same.
 	for _, d := range snap.Devices {
-		if d.ID == "roost" && (d.Status != api.StatusAttention || !strings.Contains(d.StatusReason, "Disk 96% full")) {
+		if d.ID == "bield" && (d.Status != api.StatusAttention || !strings.Contains(d.StatusReason, "Disk 96% full")) {
 			t.Errorf("the hub's status = %s %q, want attention for its disk", d.Status, d.StatusReason)
 		}
 	}
@@ -226,7 +226,7 @@ func TestFeed_alertsOpenAndResolve(t *testing.T) {
 		st := checksStore(t)
 		synctest.Wait()
 		src := &fakeSources{
-			status:     &tailnet.Status{State: tailnet.StateRunning, Self: tailnet.Device{ID: "roost", HostName: "roost", Online: true}},
+			status:     &tailnet.Status{State: tailnet.StateRunning, Self: tailnet.Device{ID: "bield", HostName: "bield", Online: true}},
 			statusAt:   time.Now(),
 			containers: docker.Reading{At: time.Now(), Containers: []docker.Container{{ID: "a1", Name: "api", State: "running", RestartPolicy: "always"}}},
 			changed:    make(chan struct{}, 1),
@@ -246,7 +246,7 @@ func TestFeed_alertsOpenAndResolve(t *testing.T) {
 			t.Fatalf("after the crash, alerts = %q", got)
 		}
 
-		// While Docker can't be read, Roost can't say it's fixed.
+		// While Docker can't be read, Bield can't say it's fixed.
 		src.set(func(f *fakeSources) {
 			f.containers = docker.Reading{At: f.containers.At, Err: errors.New("connection refused")}
 		})
@@ -294,7 +294,7 @@ func TestFeed_metricAlertsAfterRevoke(t *testing.T) {
 		synctest.Wait()
 		status := &tailnet.Status{
 			State: tailnet.StateRunning,
-			Self:  tailnet.Device{ID: "roost", HostName: "roost", Online: true},
+			Self:  tailnet.Device{ID: "bield", HostName: "bield", Online: true},
 			Peers: []tailnet.Device{{ID: "laptop", HostName: "laptop", Online: true}},
 		}
 		reg := agents.NewRegistry(st, nil)
@@ -315,7 +315,7 @@ func TestFeed_metricAlertsAfterRevoke(t *testing.T) {
 			t.Fatalf("alerts = %q, want the laptop's disk", got)
 		}
 
-		// The agent stopped, so Roost can't say the disk was cleaned up.
+		// The agent stopped, so Bield can't say the disk was cleaned up.
 		time.Sleep(3 * time.Minute)
 		want := []string{"critical: Disk 99% full on laptop", "warning: Agent on laptop stopped reporting"}
 		if got := alertSummary(feed.Latest().Alerts); !slices.Equal(got, want) {
@@ -343,7 +343,7 @@ func TestFeed_deviceActivity(t *testing.T) {
 		st := checksStore(t)
 		synctest.Wait()
 		peers := func(ps ...tailnet.Device) *tailnet.Status {
-			return &tailnet.Status{State: tailnet.StateRunning, Self: tailnet.Device{ID: "roost", HostName: "roost", Online: true}, Peers: ps}
+			return &tailnet.Status{State: tailnet.StateRunning, Self: tailnet.Device{ID: "bield", HostName: "bield", Online: true}, Peers: ps}
 		}
 		laptop := tailnet.Device{ID: "laptop", HostName: "laptop", Online: true}
 		phone := tailnet.Device{ID: "phone", HostName: "phone", Online: true}
@@ -352,12 +352,12 @@ func TestFeed_deviceActivity(t *testing.T) {
 		go feed.Run(t.Context())
 		synctest.Wait()
 
-		// Right after Roost starts, peers show up, which isn't news.
+		// Right after Bield starts, peers show up, which isn't news.
 		src.set(func(f *fakeSources) { f.status, f.statusAt = peers(laptop, phone), time.Now() })
 		time.Sleep(time.Minute)
 		synctest.Wait()
 		if got := eventMessages(t, st); len(got) != 0 {
-			t.Errorf("while Roost warmed up, the activity log = %q, want nothing", got)
+			t.Errorf("while Bield warmed up, the activity log = %q, want nothing", got)
 		}
 
 		offline := phone
@@ -392,7 +392,7 @@ func openAlert(t *testing.T) (http.Handler, *store.Store, *api.Feed, int64) {
 	tn := testTailnet()
 	engine := alerts.NewEngine(st, nil)
 	engine.Apply(t.Context(), []alerts.Condition{{
-		Key: "disk:roost", Source: "metrics", DeviceID: "roost", Severity: alerts.Warning, Title: "Disk 90% full on roost",
+		Key: "disk:bield", Source: "metrics", DeviceID: "bield", Severity: alerts.Warning, Title: "Disk 90% full on bield",
 	}}, func(string, string, string) bool { return true }, time.Now())
 	opts := withStore(t, tn, st, api.Options{Alerts: engine})
 	return api.New(opts), st, opts.Feed, engine.Open()[0].ID
@@ -493,7 +493,7 @@ func TestAddAlertNote_storeFails(t *testing.T) {
 	alertStore := testStore(t)
 	engine := alerts.NewEngine(alertStore, nil)
 	engine.Apply(t.Context(), []alerts.Condition{{
-		Key: "disk:roost", Source: "metrics", DeviceID: "roost", Severity: alerts.Warning, Title: "Disk 90% full on roost",
+		Key: "disk:bield", Source: "metrics", DeviceID: "bield", Severity: alerts.Warning, Title: "Disk 90% full on bield",
 	}}, func(string, string, string) bool { return true }, time.Now())
 	id := engine.Open()[0].ID
 	if err := alertStore.Close(); err != nil {
@@ -583,7 +583,7 @@ func TestSnapshot_keyExpiryAdvice(t *testing.T) {
 			now := time.Now()
 			status := &tailnet.Status{
 				State: tailnet.StateRunning, ControlURL: tt.controlURL,
-				Self:  tailnet.Device{ID: "roost", HostName: "roost", Online: true},
+				Self:  tailnet.Device{ID: "bield", HostName: "bield", Online: true},
 				Peers: []tailnet.Device{{ID: "nas", HostName: "nas", Online: true, KeyExpiry: now.Add(48 * time.Hour)}},
 			}
 			feed := api.NewFeed(api.FeedOptions{

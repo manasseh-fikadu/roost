@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/api"
 )
 
 // TestRoutes walks every route New registers. Each one must say who can use
@@ -36,7 +36,7 @@ func TestRoutes(t *testing.T) {
 	}{
 		{"an unknown device", strangerIP, anyone},
 		{"a tagged device", serverIP, anyone},
-		{"Roost's own node", roostIP, anyone},
+		{"Bield's own node", bieldIP, anyone},
 		{"carol, who has no role", tabletIP, anyone},
 		{"bob, a viewer", phoneIP, viewers},
 		{"alice, an admin", laptopIP, admins},

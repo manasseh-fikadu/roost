@@ -1,8 +1,8 @@
-// How Roost shows the state of a device, service or check.
+// How Bield shows the state of a device, service or check.
 
 import type { Status } from './api/types.js';
 
-/** The state of something Roost watches. The hub sends it. */
+/** The state of something Bield watches. The hub sends it. */
 export type { Status };
 
 /** A color for badges and pills. */

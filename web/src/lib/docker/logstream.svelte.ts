@@ -179,8 +179,8 @@ export class LogStream {
 			this.status = 'failed';
 			this.message = reason<DockerStreamFailure>(e.data, 'message') ?? 'The log failed';
 		});
-		// The connection broke: the network dropped, or Roost restarted, or
-		// Roost answered with an error, which an EventSource can't read.
+		// The connection broke: the network dropped, or Bield restarted, or
+		// Bield answered with an error, which an EventSource can't read.
 		source.onerror = () => {
 			if (this.#source !== source) return;
 			source.close();
@@ -197,7 +197,7 @@ export class LogStream {
 				}
 				if (++this.#attempts > maxAttempts) {
 					this.status = 'failed';
-					this.message = 'Lost the connection to Roost.';
+					this.message = 'Lost the connection to Bield.';
 					return;
 				}
 				this.#retryTimer = setTimeout(() => this.#open(true), backoff(this.#attempts - 1));
@@ -206,10 +206,10 @@ export class LogStream {
 	}
 
 	/**
-	 * Asks for no lines of the log, to learn why the stream broke: Roost's
+	 * Asks for no lines of the log, to learn why the stream broke: Bield's
 	 * answer to an error is a message, and an EventSource only says it
 	 * failed. It returns the message, or null if the request worked or never
-	 * got to Roost, which is a break that asking again may mend.
+	 * got to Bield, which is a break that asking again may mend.
 	 */
 	async #whyNot(): Promise<string | null> {
 		try {

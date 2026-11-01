@@ -1,4 +1,4 @@
-// Package settings holds what admins can change about how Roost watches the
+// Package settings holds what admins can change about how Bield watches the
 // tailnet, such as when an alert opens, and what it's called. The store keeps
 // them, and the Settings page (#10) changes them. Until an admin does, they're
 // Defaults.
@@ -22,37 +22,37 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/systemd"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/systemd"
 )
 
 // kvKey is the setting in the store's kv table that holds them, as JSON.
 const kvKey = "settings"
 
-// MaxName is the longest name Roost can have, in characters.
+// MaxName is the longest name Bield can have, in characters.
 const MaxName = 40
 
 // Settings are what admins can change.
 type Settings struct {
 	General    General    `json:"general"`
 	Thresholds Thresholds `json:"thresholds"`
-	// Rules say which alerts Roost raises.
+	// Rules say which alerts Bield raises.
 	Rules Rules `json:"rules"`
-	// WatchedUnits are the systemd units on the machine Roost runs on that
+	// WatchedUnits are the systemd units on the machine Bield runs on that
 	// it watches, such as "ssh.service", or "user:app.service" for a user
-	// unit of the user Roost runs as. Roost always watches failed units.
+	// unit of the user Bield runs as. Bield always watches failed units.
 	WatchedUnits  []string      `json:"watchedUnits"`
 	Retention     Retention     `json:"retention"`
 	Notifications Notifications `json:"notifications"`
 }
 
-// General is how Roost presents itself.
+// General is how Bield presents itself.
 type General struct {
 	// Name is shown in the header, and in the title of every page.
 	Name string `json:"name"`
-	// PublicURL is the address that people and agents reach Roost at, such
-	// as https://roost.example.ts.net, if it isn't the one the app was
-	// opened at. It's used in the links and commands Roost writes. It's ""
+	// PublicURL is the address that people and agents reach Bield at, such
+	// as https://bield.example.ts.net, if it isn't the one the app was
+	// opened at. It's used in the links and commands Bield writes. It's ""
 	// to use the address of the request.
 	PublicURL string `json:"publicUrl"`
 	// SetupDone is whether an admin finished or skipped the first-run setup,
@@ -99,10 +99,10 @@ func (t Thresholds) CPUWindow() time.Duration {
 }
 
 // MaxCPUWindow is the longest CPU window, which is how much of the CPU's
-// past Roost keeps.
+// past Bield keeps.
 const MaxCPUWindow = time.Hour
 
-// Rules say which alerts Roost raises. A device that a rule is off for isn't
+// Rules say which alerts Bield raises. A device that a rule is off for isn't
 // flagged for it in the dashboard either.
 type Rules struct {
 	// Offline alerts when a device has been off the tailnet for the offline
@@ -118,18 +118,18 @@ type Rules struct {
 	CPU    bool `json:"cpu"`
 	// Checks alerts when a check keeps failing.
 	Checks bool `json:"checks"`
-	// Containers alerts when a Docker container on Roost's machine stops
+	// Containers alerts when a Docker container on Bield's machine stops
 	// unexpectedly.
 	Containers bool `json:"containers"`
 	// Units alerts when a systemd unit fails, or a watched one isn't
 	// running.
 	Units bool `json:"units"`
-	// Collectors alerts when one of Roost's own jobs keeps failing.
+	// Collectors alerts when one of Bield's own jobs keeps failing.
 	Collectors bool `json:"collectors"`
 }
 
-// Retention is how many days Roost keeps each kind of history. It lasts as
-// long as the day count says, and Roost deletes what's older within the hour.
+// Retention is how many days Bield keeps each kind of history. It lasts as
+// long as the day count says, and Bield deletes what's older within the hour.
 type Retention struct {
 	// ActivityDays is how long the activity log and resolved alerts last.
 	ActivityDays int `json:"activityDays"`
@@ -142,11 +142,11 @@ type Retention struct {
 	ChecksDays int `json:"checksDays"`
 }
 
-// Notifications are when Roost sends the notifications that its channels
+// Notifications are when Bield sends the notifications that its channels
 // send. Which alerts a channel hears about is up to the channel.
 type Notifications struct {
 	// RemindHours is how many hours after the last notification about an
-	// alert Roost sends another, while the alert is open and nobody has
+	// alert Bield sends another, while the alert is open and nobody has
 	// acknowledged or snoozed it. 0 sends none.
 	RemindHours int `json:"remindHours"`
 	// Quiet holds notifications back at night.
@@ -161,7 +161,7 @@ func (n Notifications) Remind() time.Duration {
 	return time.Duration(n.RemindHours) * time.Hour
 }
 
-// QuietHours are the hours of the day when Roost holds notifications back,
+// QuietHours are the hours of the day when Bield holds notifications back,
 // and sends them when the hours end if the alert they're about is still
 // there, and nobody has acknowledged it.
 type QuietHours struct {
@@ -171,7 +171,7 @@ type QuietHours struct {
 	Start string `json:"start"`
 	End   string `json:"end"`
 	// Timezone is the name of the time zone the times are in, such as
-	// "Europe/Berlin". It's "" for the one that Roost's machine is in.
+	// "Europe/Berlin". It's "" for the one that Bield's machine is in.
 	Timezone string `json:"timezone"`
 	// AllowCritical sends notifications about critical alerts during the
 	// quiet hours too.
@@ -234,7 +234,7 @@ func (r Retention) Keep() store.Retention {
 // Defaults returns the settings a new hub starts with.
 func Defaults() Settings {
 	return Settings{
-		General: General{Name: "Roost"},
+		General: General{Name: "Bield"},
 		Thresholds: Thresholds{
 			DiskWarn:         85,
 			DiskCritical:     95,
@@ -249,7 +249,7 @@ func Defaults() Settings {
 			Offline: true, KeyExpiry: true, AgentStopped: true, Disk: true, Memory: true, CPU: true,
 			Checks: true, Containers: true, Units: true, Collectors: true,
 		},
-		// ssh.service is sshd.service on some systems. Roost leaves out the
+		// ssh.service is sshd.service on some systems. Bield leaves out the
 		// ones a machine doesn't have.
 		WatchedUnits: []string{"ssh.service", "sshd.service", "docker.service", "tailscaled.service", "cron.service"},
 		Retention:    Retention{ActivityDays: 30, HistoryDays: 7, ChecksDays: 7},
@@ -333,7 +333,7 @@ func (g General) Check() error {
 
 // CleanPublicURL returns the address of a public URL that an admin typed:
 // without spaces around it or a slash at its end. It fails if it isn't a web
-// address that Roost can write links with.
+// address that Bield can write links with.
 func CleanPublicURL(s string) (string, error) {
 	s = strings.TrimSuffix(strings.TrimSpace(s), "/")
 	return s, checkPublicURL(s)
@@ -346,9 +346,9 @@ func checkPublicURL(s string) error {
 	u, err := url.Parse(s)
 	switch {
 	case err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.Opaque != "":
-		return errors.New("the public URL must be a web address, such as https://roost.example.ts.net")
+		return errors.New("the public URL must be a web address, such as https://bield.example.ts.net")
 	case u.User != nil || u.Path != "" || u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.HasSuffix(s, "/"):
-		return errors.New("the public URL can only be a scheme, a host and a port, such as https://roost.example.ts.net:8443")
+		return errors.New("the public URL can only be a scheme, a host and a port, such as https://bield.example.ts.net:8443")
 	case !validHost(u.Hostname()) || !validPort(u):
 		return errors.New("the public URL's host must be a name or an IP address, and its port a number from 1 to 65535")
 	}

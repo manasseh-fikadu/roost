@@ -11,8 +11,8 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/manasseh-fikadu/roost/internal/netguard"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/netguard"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // What a check can be.
@@ -140,7 +140,7 @@ func checkHostPort(target string) error {
 // errForbiddenTarget is why a check can't aim at a link-local address. A check
 // that reached a cloud's metadata service would show, by its status, that the
 // credentials are there to take.
-var errForbiddenTarget = errors.New("the target is a link-local or cloud metadata address, which Roost doesn't connect to")
+var errForbiddenTarget = errors.New("the target is a link-local or cloud metadata address, which Bield doesn't connect to")
 
 func validPort(p string) bool {
 	n, err := strconv.ParseUint(p, 10, 16)

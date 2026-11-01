@@ -9,17 +9,17 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 // CSRFHeader must be set, to anything, on every request that isn't a GET,
 // HEAD or OPTIONS. A web page can't send a custom header to another origin
-// without Roost's permission, which it never gives, so a page elsewhere can't
+// without Bield's permission, which it never gives, so a page elsewhere can't
 // make a signed-in browser change anything.
-const CSRFHeader = "X-Roost"
+const CSRFHeader = "X-Bield"
 
-// caller is who sent a request, as Tailscale says, and what Roost lets them do.
+// caller is who sent a request, as Tailscale says, and what Bield lets them do.
 type caller struct {
 	// who is nil for an anonymous caller.
 	who *tailnet.Identity
@@ -29,12 +29,12 @@ type caller struct {
 	// level is anyone, viewers or admins. guard always sets it, so a request
 	// that skipped guard has noLevel and can't use any route.
 	level level
-	// reason says why an anonymous caller is anonymous, or why Roost doesn't
+	// reason says why an anonymous caller is anonymous, or why Bield doesn't
 	// know a signed-in caller's role: a Reason constant.
 	reason string
 }
 
-// role returns the caller's role, or "" if they can't view Roost.
+// role returns the caller's role, or "" if they can't view Bield.
 func (c caller) role() Role {
 	switch c.level {
 	case admins:
@@ -57,11 +57,11 @@ func callerOf(r *http.Request) caller {
 // guard checks every request before it reaches a handler, and works out who
 // sent it:
 //
-//   - The Host header must be one of the names of Roost's node, so a page
-//     that rebinds its own domain to Roost's address can't talk to Roost as
+//   - The Host header must be one of the names of Bield's node, so a page
+//     that rebinds its own domain to Bield's address can't talk to Bield as
 //     the browser's device.
 //   - Requests that change things need CSRFHeader.
-//   - WebSockets must come from a page on Roost, since browsers let any page
+//   - WebSockets must come from a page on Bield, since browsers let any page
 //     open one.
 //
 // Then it asks Tailscale who is on the other end of the connection, and the
@@ -71,19 +71,19 @@ func (h *handler) guard(next http.Handler) http.Handler {
 		snap := h.opts.Snapshot()
 		if snap.Status == nil {
 			w.Header().Set("Retry-After", "1")
-			h.deny(w, r, http.StatusServiceUnavailable, "Roost is starting")
+			h.deny(w, r, http.StatusServiceUnavailable, "Bield is starting")
 			return
 		}
 		self := snap.Status.Self
 		if !h.opts.Demo && !ownHost(self, r.Host) {
-			h.deny(w, r, http.StatusMisdirectedRequest, "Roost only answers to its own name on the tailnet")
+			h.deny(w, r, http.StatusMisdirectedRequest, "Bield only answers to its own name on the tailnet")
 			return
 		}
 		switch {
 		case isWebSocket(r):
 			// Browsers can't add headers to a WebSocket, but they do send Origin.
 			if !sameOrigin(r) {
-				h.deny(w, r, http.StatusForbidden, "WebSockets must come from Roost's own pages")
+				h.deny(w, r, http.StatusForbidden, "WebSockets must come from Bield's own pages")
 				return
 			}
 		case !safeMethod(r.Method) && r.Header.Get(CSRFHeader) == "":
@@ -97,8 +97,8 @@ func (h *handler) guard(next http.Handler) http.Handler {
 
 // identify asks Tailscale who is at remoteAddr. Anyone it can't name is
 // anonymous, and so are tagged devices, which belong to no one, and
-// connections from Roost's own node. In host mode that node is the machine
-// Roost runs on, and any process there would otherwise act as its owner.
+// connections from Bield's own node. In host mode that node is the machine
+// Bield runs on, and any process there would otherwise act as its owner.
 // Anonymous callers can only use routes for anyone.
 func (h *handler) identify(ctx context.Context, remoteAddr, selfID string) caller {
 	who, err := h.opts.WhoIs(ctx, remoteAddr)
@@ -109,7 +109,7 @@ func (h *handler) identify(ctx context.Context, remoteAddr, selfID string) calle
 		h.log.Warn("ask Tailscale who sent a request", "remote_addr", remoteAddr, "error", err)
 		return caller{level: anyone, reason: ReasonWhoIsFailed}
 	case who.NodeID == selfID:
-		return caller{node: who.NodeID, level: anyone, reason: ReasonRoostMachine}
+		return caller{node: who.NodeID, level: anyone, reason: ReasonBieldMachine}
 	case len(who.Tags) > 0:
 		return caller{node: who.NodeID, level: anyone, reason: ReasonTaggedDevice}
 	case who.LoginName == "":
@@ -117,7 +117,7 @@ func (h *handler) identify(ctx context.Context, remoteAddr, selfID string) calle
 	}
 	l, err := h.levelOf(ctx, who.LoginName)
 	if err != nil {
-		// If Roost can't tell what someone's role is, they have none.
+		// If Bield can't tell what someone's role is, they have none.
 		return caller{who: who, node: who.NodeID, level: anyone, reason: ReasonRoleLookupFailed}
 	}
 	return caller{who: who, node: who.NodeID, level: l}
@@ -152,9 +152,9 @@ func (h *handler) deny(w http.ResponseWriter, r *http.Request, status int, msg s
 	http.Error(w, msg, status)
 }
 
-// ownHost reports whether hostport names Roost's node: its MagicDNS name,
+// ownHost reports whether hostport names Bield's node: its MagicDNS name,
 // the short name that MagicDNS also resolves, or one of its tailnet IPs. A
-// page can't make the browser send any of these unless it's on Roost.
+// page can't make the browser send any of these unless it's on Bield.
 func ownHost(self tailnet.Device, hostport string) bool {
 	host, _, err := net.SplitHostPort(hostport)
 	if err != nil {

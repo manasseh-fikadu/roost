@@ -16,7 +16,7 @@ const (
 	// caller's role hasn't changed.
 	roleCheckInterval = 10 * time.Second
 	// streamWriteTimeout is how long a client gets to take one event before
-	// Roost gives up on it. It's shorter than the time the server gives
+	// Bield gives up on it. It's shorter than the time the server gives
 	// responses to finish when it shuts down, so a stalled client can't hold
 	// the shutdown up.
 	streamWriteTimeout = 5 * time.Second

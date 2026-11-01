@@ -15,9 +15,9 @@ import (
 )
 
 var (
-	// ErrNoDocker means Roost knows of no Docker to ask on a machine.
+	// ErrNoDocker means Bield knows of no Docker to ask on a machine.
 	ErrNoDocker = errors.New("no Docker socket was found on the machine")
-	// ErrUnreachable means Docker didn't answer where Roost looked for it.
+	// ErrUnreachable means Docker didn't answer where Bield looked for it.
 	ErrUnreachable = errors.New("can't reach Docker")
 )
 
@@ -63,7 +63,7 @@ const (
 	// headerTimeout is how long a request that streams waits for Docker to
 	// start answering.
 	headerTimeout = 15 * time.Second
-	// maxJSON is the most JSON Roost reads from one answer.
+	// maxJSON is the most JSON Bield reads from one answer.
 	maxJSON = 64 << 20
 )
 

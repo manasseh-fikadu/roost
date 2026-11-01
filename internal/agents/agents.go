@@ -1,7 +1,7 @@
-// Package agents keeps what Roost's agents report. The agent is a shell
+// Package agents keeps what Bield's agents report. The agent is a shell
 // script in agent/ that sends a heartbeat with its machine's metrics every 15
 // seconds. A Registry checks each heartbeat, keeps each device's latest
-// report, and stores it, so Roost still knows the device after a restart.
+// report, and stores it, so Bield still knows the device after a restart.
 package agents
 
 import (
@@ -15,8 +15,8 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/hostmetrics"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 const (
@@ -41,8 +41,8 @@ const (
 	maxTempAbs = 1000
 )
 
-// ErrVersion means a heartbeat isn't in a format Roost knows.
-var ErrVersion = errors.New("this heartbeat's format isn't one Roost knows; reinstall the agent")
+// ErrVersion means a heartbeat isn't in a format Bield knows.
+var ErrVersion = errors.New("this heartbeat's format isn't one Bield knows; reinstall the agent")
 
 // A Heartbeat is what the agent sends to POST /api/agent/heartbeat. Anyone
 // with the agents' token can send one, so Record checks every value, and a
@@ -116,9 +116,9 @@ func (f *flag) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// A Report is what Roost knows of a device from its agent.
+// A Report is what Bield knows of a device from its agent.
 type Report struct {
-	// ReceivedAt is when the latest heartbeat arrived, by Roost's clock.
+	// ReceivedAt is when the latest heartbeat arrived, by Bield's clock.
 	ReceivedAt time.Time
 	// Version is the agent's version, such as 1.2.0.
 	Version string
@@ -183,7 +183,7 @@ func NewRegistry(st *store.Store, log *slog.Logger) *Registry {
 // before the first heartbeat.
 func (r *Registry) SetWindow(window func() time.Duration) { r.window = window }
 
-// Load reads the reports the store kept, so Roost knows the devices before
+// Load reads the reports the store kept, so Bield knows the devices before
 // their agents report again. A report it can't read is skipped.
 func (r *Registry) Load(ctx context.Context) error {
 	records, err := r.st.Agents(ctx)

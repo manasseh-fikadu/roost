@@ -49,7 +49,7 @@
 	const device = $derived(live.snapshot?.devices.find((d) => d.id === page.params.id));
 	const now = $derived(live.snapshot ? Date.parse(live.snapshot.generatedAt) : Date.now());
 	const devices = $derived(live.snapshot?.devices ?? []);
-	// On the machine Roost runs on, which can be two nodes, either's alerts
+	// On the machine Bield runs on, which can be two nodes, either's alerts
 	// and services count.
 	const alerts = $derived(device ? onDevice(live.snapshot?.alerts ?? [], device, devices) : []);
 	const units = $derived(device ? onDevice(live.snapshot?.units ?? [], device, devices) : []);
@@ -241,8 +241,8 @@
 				>
 					<p class="p-4 text-[13px] text-fg-muted">
 						On {device.name}, its log says why: on macOS,
-						<code class="font-mono text-[12px]">~/Library/Logs/roost-agent.log</code>, and on Linux,
-						<code class="font-mono text-[12px]">journalctl --user -u roost-agent</code>.
+						<code class="font-mono text-[12px]">~/Library/Logs/bield-agent.log</code>, and on Linux,
+						<code class="font-mono text-[12px]">journalctl --user -u bield-agent</code>.
 					</p>
 				</Card>
 			{:else if !device.measuredBy}
@@ -256,7 +256,7 @@
 						{#if agentRuns(device.os)}
 							<AdminOnly>
 								<p>
-									Run one command on {device.name}, or let Roost run it over SSH once it can log in.
+									Run one command on {device.name}, or let Bield run it over SSH once it can log in.
 									It installs a small background service for your user, without root.
 								</p>
 								<AddAgent {device} label="Install the agent" variant="primary" />
@@ -266,7 +266,7 @@
 							</AdminOnly>
 						{:else}
 							<p>
-								The agent runs on macOS and Linux. On {osLabel(device.os)}, Roost shows what
+								The agent runs on macOS and Linux. On {osLabel(device.os)}, Bield shows what
 								Tailscale knows.
 							</p>
 						{/if}
@@ -313,7 +313,7 @@
 						<DataRow label="Traffic">↓{bytes(device.rxBytes)} ↑{bytes(device.txBytes)}</DataRow>
 					{/if}
 					{#if device.exitNode}
-						<DataRow label="Exit node">Roost's traffic goes through it</DataRow>
+						<DataRow label="Exit node">Bield's traffic goes through it</DataRow>
 					{/if}
 					<DataRow label="Key expiry">
 						{device.keyExpiry ? expiry(device.keyExpiry) : 'disabled'}

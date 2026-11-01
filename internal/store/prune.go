@@ -144,7 +144,7 @@ func (s *Store) prune(ctx context.Context, now time.Time) {
 	for _, r := range retention {
 		before := now.Add(-r.keep(keep))
 		if r.rolled != nil {
-			// Raw samples go once they're in buckets, which Roost has made up
+			// Raw samples go once they're in buckets, which Bield has made up
 			// to the watermark.
 			done, ok, err := s.watermark(ctx, *r.rolled, FineStep)
 			if err != nil || !ok {

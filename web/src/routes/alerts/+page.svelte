@@ -156,7 +156,7 @@
 
 <PageHeader
 	title="Alerts"
-	description="Problems Roost found on devices, checks, containers and services. They resolve when the problem clears."
+	description="Problems Bield found on devices, checks, containers and services. They resolve when the problem clears."
 />
 
 {#if focusId !== null}
@@ -191,7 +191,7 @@
 					</div>
 				{:else if open.length === 0}
 					<EmptyState title="No open alerts" icon={ShieldCheck}>
-						Everything the hub can see looks fine. Roost opens an alert when a machine goes offline,
+						Everything the hub can see looks fine. Bield opens an alert when a machine goes offline,
 						a disk fills up, a check keeps failing or a service stops.
 						<AdminOnly><NotificationsHint /></AdminOnly>
 					</EmptyState>

@@ -69,7 +69,7 @@ export class LiveStats {
 					return;
 				}
 				if (failures >= maxFailures) {
-					this.ended = "Roost couldn't keep the stats stream open";
+					this.ended = "Bield couldn't keep the stats stream open";
 					return;
 				}
 				retry = setTimeout(open, backoff(failures++));

@@ -1,5 +1,5 @@
 name: Feature request
-description: Suggest something Roost should do.
+description: Suggest something Bield should do.
 labels: [enhancement]
 body:
   - type: textarea
@@ -13,7 +13,7 @@ body:
     id: idea
     attributes:
       label: What would help?
-      description: How you'd like Roost to handle it. A rough idea is fine.
+      description: How you'd like Bield to handle it. A rough idea is fine.
   - type: textarea
     id: alternatives
     attributes:

@@ -202,13 +202,13 @@ func TestEmail(t *testing.T) {
 	cert, pool := testCert(t)
 	env := NewEnv(nil)
 	env.TLS = &tls.Config{RootCAs: pool}
-	base := Config{Host: "127.0.0.1", From: "roost@example.com", To: []string{"alice@example.com", "bob@example.com"}}
+	base := Config{Host: "127.0.0.1", From: "bield@example.com", To: []string{"alice@example.com", "bob@example.com"}}
 
 	t.Run("STARTTLS and a login", func(t *testing.T) {
 		t.Parallel()
-		srv := newFakeSMTP(t, cert, false, true, "roost:pw")
+		srv := newFakeSMTP(t, cert, false, true, "bield:pw")
 		cfg := base
-		cfg.Port, cfg.Username, cfg.Password = srv.port(), "roost", "pw"
+		cfg.Port, cfg.Username, cfg.Password = srv.port(), "bield", "pw"
 		m := opened()
 		m.Title = "Disk 96% full on café\r\nBcc: evil@example.com"
 		if err := (email{cfg, env}).Send(t.Context(), m); err != nil {
@@ -218,7 +218,7 @@ func TestEmail(t *testing.T) {
 		if len(got) != 1 {
 			t.Fatalf("the server got %d mails, want 1", len(got))
 		}
-		if !got[0].secure || got[0].user != "roost" || got[0].from != "roost@example.com" || strings.Join(got[0].to, ",") != "alice@example.com,bob@example.com" {
+		if !got[0].secure || got[0].user != "bield" || got[0].from != "bield@example.com" || strings.Join(got[0].to, ",") != "alice@example.com,bob@example.com" {
 			t.Errorf("mail = %+v, want it sent over TLS, signed in, to both", got[0])
 		}
 		h, body := got[0].parse(t)
@@ -230,13 +230,13 @@ func TestEmail(t *testing.T) {
 			t.Error("a line break in the title added a header")
 		}
 		from, _ := mail.ParseAddress(h.Get("From"))
-		if from == nil || from.Address != "roost@example.com" || from.Name != "Home lab" {
-			t.Errorf("From = %q, want Home lab <roost@example.com>", h.Get("From"))
+		if from == nil || from.Address != "bield@example.com" || from.Name != "Home lab" {
+			t.Errorf("From = %q, want Home lab <bield@example.com>", h.Get("From"))
 		}
 		if h.Get("To") != "<alice@example.com>, <bob@example.com>" || h.Get("Content-Type") != "text/plain; charset=utf-8" || h.Get("Message-ID") == "" || h.Get("Date") == "" {
 			t.Errorf("headers = %v", h)
 		}
-		if !strings.Contains(body, "12 GB left on /") || !strings.Contains(body, "https://roost.example.ts.net/alerts?alert=12") {
+		if !strings.Contains(body, "12 GB left on /") || !strings.Contains(body, "https://bield.example.ts.net/alerts?alert=12") {
 			t.Errorf("body = %q", body)
 		}
 	})
@@ -269,9 +269,9 @@ func TestEmail(t *testing.T) {
 
 	t.Run("a server that can't do STARTTLS gets nothing", func(t *testing.T) {
 		t.Parallel()
-		srv := newFakeSMTP(t, cert, false, false, "roost:pw")
+		srv := newFakeSMTP(t, cert, false, false, "bield:pw")
 		cfg := base
-		cfg.Port, cfg.Username, cfg.Password = srv.port(), "roost", "pw"
+		cfg.Port, cfg.Username, cfg.Password = srv.port(), "bield", "pw"
 		err := (email{cfg, env}).Send(t.Context(), opened())
 		if err == nil || !strings.Contains(err.Error(), "STARTTLS") {
 			t.Errorf("Send() error = %v, want one that says the server has no STARTTLS", err)
@@ -298,9 +298,9 @@ func TestEmail(t *testing.T) {
 
 	t.Run("a wrong password", func(t *testing.T) {
 		t.Parallel()
-		srv := newFakeSMTP(t, cert, false, true, "roost:pw")
+		srv := newFakeSMTP(t, cert, false, true, "bield:pw")
 		cfg := base
-		cfg.Port, cfg.Username, cfg.Password = srv.port(), "roost", "wrong"
+		cfg.Port, cfg.Username, cfg.Password = srv.port(), "bield", "wrong"
 		err := (email{cfg, env}).Send(t.Context(), opened())
 		if err == nil || Reason(err) != "the mail server answered 535" {
 			t.Errorf("Send() error = %v, reason %q, want the mail server's 535", err, Reason(err))

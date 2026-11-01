@@ -7,18 +7,18 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/agent"
+	"github.com/manasseh-fikadu/bield/agent"
 )
 
 func TestInstall(t *testing.T) {
 	t.Parallel()
-	script := agent.Install("https://roost.example.ts.net", "CODE234")
+	script := agent.Install("https://bield.example.ts.net", "CODE234")
 	for _, want := range []string{
-		"\nSERVER_URL='https://roost.example.ts.net'\n",
+		"\nSERVER_URL='https://bield.example.ts.net'\n",
 		"\nCODE='CODE234'\n",
 		`AGENT_VERSION="` + agent.Version + `"`,
-		"\nROOST_AGENT_EOF\n",
-		"\nNAME=\"roost-agent\"\n",
+		"\nBIELD_AGENT_EOF\n",
+		"\nNAME=\"bield-agent\"\n",
 	} {
 		if !strings.Contains(script, want) {
 			t.Errorf("Install() doesn't contain %q", want)
@@ -39,7 +39,7 @@ func TestInstall(t *testing.T) {
 func TestUninstall(t *testing.T) {
 	t.Parallel()
 	script := agent.Uninstall()
-	for _, want := range []string{"\nNAME=\"roost-agent\"\n", "/api/agent/enrollment"} {
+	for _, want := range []string{"\nNAME=\"bield-agent\"\n", "/api/agent/enrollment"} {
 		if !strings.Contains(script, want) {
 			t.Errorf("Uninstall() doesn't contain %q", want)
 		}

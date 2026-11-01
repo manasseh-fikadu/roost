@@ -1,5 +1,5 @@
 <!--
-	The places Roost sends notifications to: each with where it goes, which
+	The places Bield sends notifications to: each with where it goes, which
 	alerts it hears about, and how the last message went. Admins add, change,
 	test and delete them.
 -->
@@ -97,7 +97,7 @@
 		);
 	}
 
-	/** Pausing and resuming show at once, and go back if Roost can't save them. */
+	/** Pausing and resuming show at once, and go back if Bield can't save them. */
 	async function toggle(c: NotificationChannel, enabled: boolean) {
 		replace({ ...c, enabled });
 		try {
@@ -140,7 +140,7 @@
 
 <Card
 	title="Channels"
-	description="Where Roost sends alerts. Each channel picks which ones it hears about."
+	description="Where Bield sends alerts. Each channel picks which ones it hears about."
 >
 	{#snippet actions()}
 		<Button variant="primary" icon={plus} onclick={() => edit(null)}>Add channel</Button>
@@ -154,7 +154,7 @@
 		<ErrorState title="Couldn't load the channels" message={failure} onretry={load} />
 	{:else if visible && visible.length === 0}
 		<EmptyState title="No channels yet" icon={Bell}>
-			Alerts only show up in Roost until you add a place to send them: your phone, a chat room or an
+			Alerts only show up in Bield until you add a place to send them: your phone, a chat room or an
 			inbox.
 			<div class="mt-3">
 				<Button variant="primary" icon={plus} onclick={() => edit(null)}>Add channel</Button>
@@ -236,7 +236,7 @@
 			{/each}
 		</ul>
 		<p class="border-t border-line px-4 py-2.5 text-[12.5px] text-fg-subtle">
-			What Roost sent, and what failed, is in the
+			What Bield sent, and what failed, is in the
 			<a
 				href="{resolve('/activity')}?kind=notification"
 				class="text-fg-muted underline hover:text-fg"

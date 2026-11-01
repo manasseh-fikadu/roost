@@ -12,11 +12,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/alerts"
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/notify"
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/alerts"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/notify"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // A recorder is the sender of every channel in a test: it keeps what it was
@@ -43,9 +43,9 @@ func notifyHandler(t *testing.T) (http.Handler, *store.Store, *recorder) {
 	t.Helper()
 	st := testStore(t)
 	rec := &recorder{}
-	opts := withStore(t, testTailnet(), st, api.Options{AppURL: "https://roost.example.ts.net"})
+	opts := withStore(t, testTailnet(), st, api.Options{AppURL: "https://bield.example.ts.net"})
 	opts.Notify = notify.NewDispatcher(notify.Options{
-		Store: st, Open: opts.Alerts.Open, Settings: opts.Settings, AppURL: "https://roost.example.ts.net", NewSender: rec.newSender,
+		Store: st, Open: opts.Alerts.Open, Settings: opts.Settings, AppURL: "https://bield.example.ts.net", NewSender: rec.newSender,
 	})
 	return api.New(opts), st, rec
 }
@@ -54,8 +54,8 @@ const (
 	webhookJSON = `{"name":"Hook","kind":"webhook","enabled":true,"minSeverity":"warning","onResolve":true,
 		"config":{"url":"https://example.com/hook/very-secret-path","token":"s3cret-token"}}`
 	emailJSON = `{"name":"Mail","kind":"email","enabled":true,"minSeverity":"critical","onResolve":false,
-		"config":{"host":"smtp.example.com","security":"tls","username":"roost","password":"mail-password",
-		"from":"roost@example.com","to":[" alice@example.com ","","bob@example.com"]}}`
+		"config":{"host":"smtp.example.com","security":"tls","username":"bield","password":"mail-password",
+		"from":"bield@example.com","to":[" alice@example.com ","","bob@example.com"]}}`
 )
 
 func addChannel(t *testing.T, h http.Handler, body string) api.NotificationChannel {
@@ -92,7 +92,7 @@ func TestChannels(t *testing.T) {
 		t.Errorf("POST by a viewer = %d, want 403", rec.Code)
 	}
 	if got := listChannels(t, h); len(got) != 0 {
-		t.Fatalf("channels of a new Roost = %+v, want none", got)
+		t.Fatalf("channels of a new Bield = %+v, want none", got)
 	}
 
 	hook := addChannel(t, h, webhookJSON)
@@ -104,7 +104,7 @@ func TestChannels(t *testing.T) {
 		t.Errorf("secrets %v, summary %q, want url and token saved and the host shown without the path", hook.Secrets, hook.Summary)
 	}
 	if !slices.Equal(mail.Secrets, []string{"password"}) || !slices.Equal(mail.Config.To, []string{"alice@example.com", "bob@example.com"}) ||
-		mail.Summary != "alice@example.com, bob@example.com via smtp.example.com" || mail.Config.Username != "roost" {
+		mail.Summary != "alice@example.com, bob@example.com via smtp.example.com" || mail.Config.Username != "bield" {
 		t.Errorf("added mail channel = %+v", mail)
 	}
 
@@ -126,7 +126,7 @@ func TestChannels(t *testing.T) {
 	if got := listChannels(t, h); len(got) != 2 || got[0].Name != "Hook" || got[1].Name != "Mail" {
 		t.Errorf("channels = %+v, want both, by name", got)
 	}
-	// What is stored does have them: that is how Roost sends.
+	// What is stored does have them: that is how Bield sends.
 	rows, _ := st.Channels(t.Context())
 	if len(rows) != 2 || !strings.Contains(rows[0].Config, "very-secret-path") {
 		t.Errorf("stored channels = %+v, want the webhook's address kept", rows)
@@ -276,7 +276,7 @@ func TestChannels_test(t *testing.T) {
 	if err := json.Unmarshal(r.Body.Bytes(), &dl); r.Code != http.StatusOK || err != nil || !dl.OK || dl.Event != "test" || dl.Error != "" {
 		t.Fatalf("POST test = %d %s, want a success", r.Code, r.Body)
 	}
-	if len(rec.sent) != 1 || rec.sent[0].Event != notify.Test || rec.sent[0].URL != "https://roost.example.ts.net/settings?tab=notifications" || rec.sent[0].Instance != "Roost" {
+	if len(rec.sent) != 1 || rec.sent[0].Event != notify.Test || rec.sent[0].URL != "https://bield.example.ts.net/settings?tab=notifications" || rec.sent[0].Instance != "Bield" {
 		t.Errorf("sent = %+v, want one test message", rec.sent)
 	}
 	if got := listChannels(t, h)[0]; got.Last == nil || !got.Last.OK || got.Last.Event != "test" {
@@ -314,7 +314,7 @@ func TestSettings_notifications(t *testing.T) {
 	v := getSettings(t, h)
 	if v.Settings.Notifications.RemindHours != 0 || v.Settings.Notifications.Quiet.Enabled || v.Settings.Notifications.Quiet.Start != "22:00" ||
 		v.Settings.Notifications.Quiet.End != "07:00" || !v.Settings.Notifications.Quiet.AllowCritical {
-		t.Errorf("notifications of a new Roost = %+v", v.Settings.Notifications)
+		t.Errorf("notifications of a new Bield = %+v", v.Settings.Notifications)
 	}
 	patchSettings(t, h, `{"notifications": {"remindHours": 6}}`)
 	v = patchSettings(t, h, `{"notifications": {"quiet": {"enabled": true, "start": "23:30", "timezone": "Europe/Berlin"}}}`)

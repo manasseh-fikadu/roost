@@ -24,7 +24,7 @@
 	<EmptyState title="Coming soon" {icon}>
 		{@render children()}
 		<a
-			href="https://github.com/manasseh-fikadu/roost/issues/{issue}"
+			href="https://github.com/manasseh-fikadu/bield/issues/{issue}"
 			target="_blank"
 			rel="noreferrer"
 			class="mt-2 block font-mono text-[12px] text-fg-muted underline decoration-line-heavy underline-offset-4 transition-colors hover:text-fg"

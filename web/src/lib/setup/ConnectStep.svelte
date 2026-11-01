@@ -27,7 +27,7 @@
 	/** The machines the agent runs on, and the ones that report. */
 	const agentable = $derived(devices.filter((d) => agentRuns(d.os)));
 	const measured = $derived(agentable.filter((d) => d.measuredBy));
-	/** The machines Roost can log in to, those it does, and the first that it doesn't. */
+	/** The machines Bield can log in to, those it does, and the first that it doesn't. */
 	const loginable = $derived(devices.filter((d) => d.ssh));
 	const loggedIn = $derived(loginable.filter((d) => d.ssh?.state !== 'not-set-up'));
 	const first = $derived(sshCandidate(devices));
@@ -56,7 +56,7 @@
 			{@render row(
 				BellRing,
 				'Get told when something breaks',
-				'Send alerts to ntfy, Discord, Slack, Telegram, email or a webhook, so you hear about a problem without opening Roost.'
+				'Send alerts to ntfy, Discord, Slack, Telegram, email or a webhook, so you hear about a problem without opening Bield.'
 			)}
 			<a href="{resolve('/settings')}?tab=notifications" class={buttonClass('secondary', 'sm')}>
 				Add a channel
@@ -67,7 +67,7 @@
 				Cpu,
 				'Install the agent for CPU, memory and disk',
 				agentable.length === 0
-					? 'Roost measures the machine it runs on. The agent does the same on a Mac or a Linux machine.'
+					? 'Bield measures the machine it runs on. The agent does the same on a Mac or a Linux machine.'
 					: `${measured.length} of ${plural(agentable.length, 'machine')} report their CPU, memory and disk.`
 			)}
 			<AddAgent label="Add agent" />
@@ -77,8 +77,8 @@
 				SquareTerminal,
 				'Set up access for terminal, files and Docker',
 				loginable.length === 0
-					? 'Roost can log in to Linux, macOS and FreeBSD machines over SSH.'
-					: `Roost can log in to ${loggedIn.length} of ${plural(loginable.length, 'machine')}.`
+					? 'Bield can log in to Linux, macOS and FreeBSD machines over SSH.'
+					: `Bield can log in to ${loggedIn.length} of ${plural(loginable.length, 'machine')}.`
 			)}
 			{#if first}
 				<a

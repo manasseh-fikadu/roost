@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/demo"
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/systemd"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/demo"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/systemd"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 func newDemo(t *testing.T, devices int) *demo.Demo {
@@ -195,7 +195,7 @@ func TestSystemctl(t *testing.T) {
 	}
 }
 
-// dockerOf returns a Docker client of the made-up machine Roost runs on.
+// dockerOf returns a Docker client of the made-up machine Bield runs on.
 func dockerOf(t *testing.T, d *demo.Demo) *docker.Client {
 	t.Helper()
 	dial := d.HubDocker()
@@ -217,17 +217,17 @@ func TestEngine(t *testing.T) {
 	for _, ct := range containers {
 		names = append(names, ct.Name+" "+ct.State)
 	}
-	if want := []string{"caddy running", "roost running", "watchtower running"}; !slices.Equal(names, want) {
+	if want := []string{"bield running", "caddy running", "watchtower running"}; !slices.Equal(names, want) {
 		t.Errorf("containers = %v, want %v", names, want)
 	}
 
 	// Docker counts up, so the second sample has a CPU rate to take from.
-	first, err := c.Sample(t.Context(), "roost")
+	first, err := c.Sample(t.Context(), "bield")
 	if err != nil {
 		t.Fatal(err)
 	}
 	time.Sleep(20 * time.Millisecond)
-	second, err := c.Sample(t.Context(), "roost")
+	second, err := c.Sample(t.Context(), "bield")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +254,7 @@ func TestEngine(t *testing.T) {
 func TestSSH(t *testing.T) {
 	t.Parallel()
 	d := newDemo(t, 12)
-	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "roost.db"), store.Options{})
+	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "bield.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func TestSSH(t *testing.T) {
 
 func openStore(t *testing.T) *store.Store {
 	t.Helper()
-	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "roost.db"), store.Options{})
+	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "bield.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

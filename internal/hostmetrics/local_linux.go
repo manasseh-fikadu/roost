@@ -8,7 +8,7 @@ import (
 )
 
 // Local is the machine whose /proc, /sys and /etc are under root. Root is "/"
-// unless Roost runs in a container that has the host's /proc and /sys mounted
+// unless Bield runs in a container that has the host's /proc and /sys mounted
 // elsewhere. Disk usage is always that of the file system that holds "/", which
 // in a container is the one under the container's own files.
 func Local(root string) System {

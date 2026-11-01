@@ -9,7 +9,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 func TestStore_retention(t *testing.T) {
@@ -36,7 +36,7 @@ func TestStore_retention(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
 			synctest.Test(t, func(t *testing.T) {
-				s, err := store.OpenWith(t.Context(), filepath.Join(t.TempDir(), "roost.db"), tt.opts, store.Migrations())
+				s, err := store.OpenWith(t.Context(), filepath.Join(t.TempDir(), "bield.db"), tt.opts, store.Migrations())
 				if err != nil {
 					t.Fatal(err)
 				}

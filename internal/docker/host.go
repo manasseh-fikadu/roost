@@ -23,7 +23,7 @@ const (
 	// counterTTL is how old a container's last counters can be and still make
 	// rates for its next sample.
 	counterTTL = 2 * time.Minute
-	// coldDelay is how long a container Roost has no counters for waits for
+	// coldDelay is how long a container Bield has no counters for waits for
 	// its second sample.
 	coldDelay = time.Second
 	// parallel is how many requests a Host sends at once, which is gentle on
@@ -282,7 +282,7 @@ func (h *Host) Disk(ctx context.Context, wait time.Duration) *DiskUsage {
 
 // Do starts, stops or restarts a container, and reports whether anything
 // changed. Once it asks, it goes on if ctx ends: Docker acts on the
-// container anyway, and Roost should hear what happened.
+// container anyway, and Bield should hear what happened.
 func (h *Host) Do(ctx context.Context, id string, a Action) (bool, error) {
 	changed, err := h.client.Do(context.WithoutCancel(ctx), id, a)
 	// The next look at the containers shows what happened.

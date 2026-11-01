@@ -163,27 +163,27 @@
 		<div class="space-y-3 p-4 text-[13px] text-fg-muted">
 			<p>
 				Add agent makes an install command for macOS or Linux. It works on one machine for an hour,
-				and installs the agent for the user who runs it, without root. On a machine Roost can log in
+				and installs the agent for the user who runs it, without root. On a machine Bield can log in
 				to over SSH, it can run the install for you.
 			</p>
 			<p class="flex items-start gap-2.5">
 				<KeyRound class="mt-0.5 size-4 shrink-0 text-fg-faint" />
 				<span>
 					The agent trades the command's code for a secret of its own, which only its user can read.
-					Roost takes its heartbeats only from the machine it enrolled on, as Tailscale says, and
+					Bield takes its heartbeats only from the machine it enrolled on, as Tailscale says, and
 					stops taking them when an admin revokes it.
 				</span>
 			</p>
 			<p>
 				On macOS it runs as a LaunchAgent, which logs to
-				<code class="font-mono text-[12px]">~/Library/Logs/roost-agent.log</code>. On Linux it's a
+				<code class="font-mono text-[12px]">~/Library/Logs/bield-agent.log</code>. On Linux it's a
 				systemd user service:
-				<code class="font-mono text-[12px]">journalctl --user -u roost-agent</code>.
+				<code class="font-mono text-[12px]">journalctl --user -u bield-agent</code>.
 			</p>
 			<AdminOnly>
 				<AgentUninstall />
 				{#snippet fallback()}
-					<p>Only Roost's admins can add or remove agents.</p>
+					<p>Only Bield's admins can add or remove agents.</p>
 				{/snippet}
 			</AdminOnly>
 		</div>
@@ -193,7 +193,7 @@
 <Dialog
 	bind:open={confirmOpen}
 	title="Revoke {revoking?.name ?? 'this'}'s agent?"
-	description="Roost ignores its heartbeats and forgets what it reported. To add it again, run a new install command on the machine."
+	description="Bield ignores its heartbeats and forgets what it reported. To add it again, run a new install command on the machine."
 >
 	<p class="text-[13px] text-fg-muted">
 		The agent keeps running until it's uninstalled, and tries again every few minutes.

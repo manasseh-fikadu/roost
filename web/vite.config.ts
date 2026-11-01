@@ -18,7 +18,7 @@ export default defineConfig({
 		})
 	],
 	// `make dev` runs the Go server with --dev-ui, which proxies the web UI to
-	// Vite. Open Roost's tailnet URL, not Vite's, so the API sees requests
+	// Vite. Open Bield's tailnet URL, not Vite's, so the API sees requests
 	// arrive over the tailnet as it does in production.
 	server: {
 		host: '127.0.0.1',

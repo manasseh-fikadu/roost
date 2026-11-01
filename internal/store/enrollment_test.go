@@ -11,12 +11,12 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 func TestStore_Enroll(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	now := time.UnixMilli(1_800_000_000_000)
 	code, expires, err := s.NewEnrollmentCode(t.Context(), "alice@example.com", now)
 	if err != nil {
@@ -121,7 +121,7 @@ func TestStore_Enroll(t *testing.T) {
 func TestStore_prunesExpiredCodes(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
-		s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+		s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 		synctest.Wait()
 		old, _, err := s.NewEnrollmentCode(t.Context(), "alice@example.com", time.Now().Add(-store.EnrollmentCodeLife-time.Minute))
 		if err != nil {
@@ -147,7 +147,7 @@ func TestStore_prunesExpiredCodes(t *testing.T) {
 // The token that agents shared before enrollment is gone.
 func TestOpen_dropsAgentToken(t *testing.T) {
 	t.Parallel()
-	path := filepath.Join(t.TempDir(), "roost.db")
+	path := filepath.Join(t.TempDir(), "bield.db")
 	v5 := fstest.MapFS{}
 	entries, err := fs.ReadDir(store.Migrations(), ".")
 	if err != nil {

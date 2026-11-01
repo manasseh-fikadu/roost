@@ -14,7 +14,7 @@ import (
 // in web/vite.config.ts.
 const fallbackPage = "200.html"
 
-const noUIMessage = "This Roost binary was built without its web UI. Build one with `make build`, " +
+const noUIMessage = "This Bield binary was built without its web UI. Build one with `make build`, " +
 	"or run `make dev` and open the Vite dev server.\n"
 
 // uiHandler serves the built web app from fsys. Paths that name a file get that
@@ -69,7 +69,7 @@ func isFile(fsys fs.FS, name string) bool {
 }
 
 // devUIProxy proxies the web UI to the Vite dev server at target, for `make
-// dev`. The browser stays on Roost's tailnet address, so requests reach the API
+// dev`. The browser stays on Bield's tailnet address, so requests reach the API
 // the same way they do in production, and Vite's hot reloading works through
 // the proxy.
 func devUIProxy(target *url.URL, log *slog.Logger) http.Handler {

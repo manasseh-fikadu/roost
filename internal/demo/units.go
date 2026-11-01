@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-// unitInfo is a systemd unit of the machine Roost pretends to run on.
+// unitInfo is a systemd unit of the machine Bield pretends to run on.
 type unitInfo struct {
 	name, desc  string
 	active, sub string
@@ -29,11 +29,11 @@ var hubUnits = []unitInfo{
 }
 
 // Systemctl stands in for systemctl, for systemd.Options.Run: it answers
-// the questions the collector asks about the units of the machine Roost
+// the questions the collector asks about the units of the machine Bield
 // pretends to run on.
 func (d *Demo) Systemctl(_ context.Context, args ...string) ([]byte, error) {
 	if len(args) > 0 && args[0] == "--user" {
-		// The demo's Roost has no user session worth showing.
+		// The demo's Bield has no user session worth showing.
 		return nil, nil
 	}
 	var out strings.Builder

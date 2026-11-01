@@ -30,7 +30,7 @@ const (
 	// maxLogLine is the longest a line gets, so output without a newline
 	// can't grow without bound.
 	maxLogLine = 64 << 10
-	// maxFrame is the largest frame of multiplexed output Roost waits for.
+	// maxFrame is the largest frame of multiplexed output Bield waits for.
 	// Docker's are far smaller, so a larger size means the stream isn't
 	// multiplexed after all.
 	maxFrame = 1 << 20

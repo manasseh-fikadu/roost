@@ -23,7 +23,7 @@ export interface ErrorBody {
   error: string;
 }
 /**
- * Me is the response to GET /api/me: who Roost thinks is asking.
+ * Me is the response to GET /api/me: who Bield thinks is asking.
  */
 export interface Me {
   /**
@@ -43,13 +43,13 @@ export interface Me {
    */
   device?: string;
   /**
-   * Role is what the caller may do. It's empty if they can't view Roost:
+   * Role is what the caller may do. It's empty if they can't view Bield:
    * anonymous callers can't, and neither can signed-in callers without a
    * role unless anyone on the tailnet can view it.
    */
   role?: Role;
   /**
-   * Reason says why an anonymous caller isn't signed in, or why Roost
+   * Reason says why an anonymous caller isn't signed in, or why Bield
    * doesn't know a signed-in caller's role: one of the Reason constants.
    */
   reason?: string;
@@ -68,30 +68,30 @@ export const ReasonTaggedDevice = "tagged-device";
  */
 export const ReasonNoUser = "no-user";
 /**
- * ReasonRoostMachine means the request came from Roost's own node, which
- * in host mode is the machine Roost runs on. Any process there could
+ * ReasonBieldMachine means the request came from Bield's own node, which
+ * in host mode is the machine Bield runs on. Any process there could
  * send it, so it doesn't count as the machine's owner.
  */
-export const ReasonRoostMachine = "roost-machine";
+export const ReasonBieldMachine = "bield-machine";
 /**
- * ReasonWhoIsFailed means Roost couldn't ask Tailscale.
+ * ReasonWhoIsFailed means Bield couldn't ask Tailscale.
  */
 export const ReasonWhoIsFailed = "whois-failed";
 /**
- * ReasonRoleLookupFailed means the caller is signed in, but Roost
+ * ReasonRoleLookupFailed means the caller is signed in, but Bield
  * couldn't look up their role, so for now they have none.
  */
 export const ReasonRoleLookupFailed = "role-lookup-failed";
 /**
  * Why a caller is anonymous, or has no role, in Me.Reason.
  */
-export type Reason = typeof ReasonUnknownDevice | typeof ReasonTaggedDevice | typeof ReasonNoUser | typeof ReasonRoostMachine | typeof ReasonWhoIsFailed | typeof ReasonRoleLookupFailed;
+export type Reason = typeof ReasonUnknownDevice | typeof ReasonTaggedDevice | typeof ReasonNoUser | typeof ReasonBieldMachine | typeof ReasonWhoIsFailed | typeof ReasonRoleLookupFailed;
 /**
- * Role is what a signed-in caller may do in Roost.
+ * Role is what a signed-in caller may do in Bield.
  */
 /**
  * RoleAdmin can do everything: open terminals, change files, control
- * Docker and change Roost's settings, including who has a role.
+ * Docker and change Bield's settings, including who has a role.
  */
 export const RoleAdmin = "admin";
 /**
@@ -105,7 +105,7 @@ export const RoleViewer = "viewer";
 export type Role = typeof RoleAdmin | typeof RoleViewer;
 /**
  * Access is the response to GET /api/access and to the requests that change
- * it: who has a role in Roost, and who else can view it. Only admins can see
+ * it: who has a role in Bield, and who else can view it. Only admins can see
  * or change it.
  */
 export interface Access {
@@ -116,7 +116,7 @@ export interface Access {
   users: User[];
 }
 /**
- * WhoCanView is who can view Roost, other than the users with a role.
+ * WhoCanView is who can view Bield, other than the users with a role.
  */
 /**
  * WhoCanViewTailnet makes anyone who signs in from the tailnet a viewer,
@@ -124,15 +124,15 @@ export interface Access {
  */
 export const WhoCanViewTailnet = "tailnet";
 /**
- * WhoCanViewListed lets only the users with a role view Roost.
+ * WhoCanViewListed lets only the users with a role view Bield.
  */
 export const WhoCanViewListed = "listed";
 /**
- * Who can view Roost.
+ * Who can view Bield.
  */
 export type WhoCanView = typeof WhoCanViewTailnet | typeof WhoCanViewListed;
 /**
- * A User is a Tailscale login with a role in Roost.
+ * A User is a Tailscale login with a role in Bield.
  */
 export interface User {
   login: string;
@@ -147,41 +147,41 @@ export interface User {
  */
 export interface ChangeAccess {
   /**
-   * WhoCanView, if it's set, changes who can view Roost.
+   * WhoCanView, if it's set, changes who can view Bield.
    */
   whoCanView?: WhoCanView;
 }
 /**
  * SetRole is the body of PUT /api/access/users/{login}, which gives a
- * Tailscale login a role. DELETE takes the role away. Roost always keeps an
+ * Tailscale login a role. DELETE takes the role away. Bield always keeps an
  * admin, so the last one can't be made a viewer or removed.
  */
 export interface SetRole {
   role: Role;
 }
 /**
- * Settings are what admins can change about how Roost works. GET
- * /api/settings has them, and PATCH changes them. They're live: Roost uses a
+ * Settings are what admins can change about how Bield works. GET
+ * /api/settings has them, and PATCH changes them. They're live: Bield uses a
  * change as soon as it's saved.
  */
 export interface Settings {
   general: GeneralSettings;
   thresholds: Thresholds;
   /**
-   * Rules say which alerts Roost raises.
+   * Rules say which alerts Bield raises.
    */
   rules: AlertRules;
   /**
-   * WatchedUnits are the systemd units on the machine Roost runs on that
+   * WatchedUnits are the systemd units on the machine Bield runs on that
    * it watches, such as "ssh.service", or "user:app.service" for a unit of
-   * the user Roost runs as. Roost always shows failed units too.
+   * the user Bield runs as. Bield always shows failed units too.
    */
   watchedUnits: string[];
   retention: RetentionSettings;
   notifications: NotificationSettings;
 }
 /**
- * GeneralSettings are how Roost presents itself.
+ * GeneralSettings are how Bield presents itself.
  */
 export interface GeneralSettings {
   /**
@@ -189,9 +189,9 @@ export interface GeneralSettings {
    */
   name: string;
   /**
-   * PublicURL is the address that people and agents reach Roost at, such
-   * as https://roost.example.ts.net, if it isn't the one Roost knows. It
-   * is used in the links and commands Roost writes, such as the agent's
+   * PublicURL is the address that people and agents reach Bield at, such
+   * as https://bield.example.ts.net, if it isn't the one Bield knows. It
+   * is used in the links and commands Bield writes, such as the agent's
    * install command. It's empty to use the address of the request.
    */
   publicUrl: string;
@@ -238,7 +238,7 @@ export interface Thresholds {
   checkFailures: number /* int */;
 }
 /**
- * AlertRules say which alerts Roost raises. A device that a rule is off for
+ * AlertRules say which alerts Bield raises. A device that a rule is off for
  * isn't flagged for it on the dashboard either, and turning a rule off
  * resolves its open alerts.
  */
@@ -266,7 +266,7 @@ export interface AlertRules {
    */
   checks: boolean;
   /**
-   * Containers is a Docker container on Roost's machine that stopped
+   * Containers is a Docker container on Bield's machine that stopped
    * unexpectedly.
    */
   containers: boolean;
@@ -276,13 +276,13 @@ export interface AlertRules {
    */
   units: boolean;
   /**
-   * Collectors is one of Roost's own jobs that keeps failing.
+   * Collectors is one of Bield's own jobs that keeps failing.
    */
   collectors: boolean;
 }
 /**
- * RetentionSettings are how many days Roost keeps each kind of history.
- * Roost deletes what is older within the hour.
+ * RetentionSettings are how many days Bield keeps each kind of history.
+ * Bield deletes what is older within the hour.
  */
 export interface RetentionSettings {
   /**
@@ -302,13 +302,13 @@ export interface RetentionSettings {
   checksDays: number /* int */;
 }
 /**
- * NotificationSettings are when Roost sends notifications. Which alerts each
+ * NotificationSettings are when Bield sends notifications. Which alerts each
  * channel hears about is up to the channel.
  */
 export interface NotificationSettings {
   /**
    * RemindHours is how many hours after the last notification about an
-   * alert Roost sends another, while the alert is open and nobody has
+   * alert Bield sends another, while the alert is open and nobody has
    * acknowledged or snoozed it. 0 sends none.
    */
   remindHours: number /* int */;
@@ -318,7 +318,7 @@ export interface NotificationSettings {
   quiet: QuietHours;
 }
 /**
- * QuietHours are the hours when Roost holds notifications back. Those that
+ * QuietHours are the hours when Bield holds notifications back. Those that
  * are still due when the hours end are sent then.
  */
 export interface QuietHours {
@@ -331,7 +331,7 @@ export interface QuietHours {
   end: string;
   /**
    * Timezone is the name of the time zone the times are in, such as
-   * "Europe/Berlin". It's empty for the one Roost's machine is in.
+   * "Europe/Berlin". It's empty for the one Bield's machine is in.
    */
   timezone: string;
   /**
@@ -347,30 +347,30 @@ export interface QuietHours {
 export interface SettingsView {
   settings: Settings;
   /**
-   * Defaults are the settings of a new Roost, so the app can say what
+   * Defaults are the settings of a new Bield, so the app can say what
    * resetting one would do.
    */
   defaults: Settings;
   /**
-   * Tailscale is how Roost joins the tailnet. It's set when Roost starts.
+   * Tailscale is how Bield joins the tailnet. It's set when Bield starts.
    */
   tailscale: TailscaleMode;
 }
 /**
- * TailscaleMode is how Roost joins the tailnet.
+ * TailscaleMode is how Bield joins the tailnet.
  */
 /**
- * TailscaleModeEmbedded runs a Tailscale node inside Roost, so Roost is
+ * TailscaleModeEmbedded runs a Tailscale node inside Bield, so Bield is
  * its own machine on the tailnet.
  */
 export const TailscaleModeEmbedded = "embedded";
 /**
- * TailscaleModeHost uses the Tailscale already running on Roost's
+ * TailscaleModeHost uses the Tailscale already running on Bield's
  * machine.
  */
 export const TailscaleModeHost = "host";
 /**
- * The ways Roost can join the tailnet.
+ * The ways Bield can join the tailnet.
  */
 export type TailscaleMode = typeof TailscaleModeEmbedded | typeof TailscaleModeHost;
 /**
@@ -458,12 +458,12 @@ export interface ChangeQuiet {
 }
 /**
  * InstalledServices is the response to GET /api/settings/units: the services
- * on the machine Roost runs on, to pick the ones to watch from. Only admins
+ * on the machine Bield runs on, to pick the ones to watch from. Only admins
  * can see it.
  */
 export interface InstalledServices {
   /**
-   * Available is false if Roost can't ask systemd on its machine, which
+   * Available is false if Bield can't ask systemd on its machine, which
    * is the case on a machine that doesn't run it.
    */
   available: boolean;
@@ -478,7 +478,7 @@ export interface InstalledServices {
 export interface InstalledService {
   /**
    * Key is how the settings name it: its name, or "user:" and its name for
-   * a unit of the user Roost runs as.
+   * a unit of the user Bield runs as.
    */
   key: string;
   name: string;
@@ -492,7 +492,7 @@ export interface InstalledService {
 }
 /**
  * Snapshot is the data of each "snapshot" event on GET /api/stream: what
- * Roost knows at one moment. The hub builds one each time something changes,
+ * Bield knows at one moment. The hub builds one each time something changes,
  * at most once a second, and at least every few seconds. The stream sends the
  * latest as soon as it opens, then each new one, and the web app keeps the
  * latest.
@@ -504,12 +504,12 @@ export interface Snapshot {
   generatedAt: string /* RFC 3339 */;
   hub: Hub;
   /**
-   * Collectors are the jobs that gather what Roost knows, in a fixed order.
+   * Collectors are the jobs that gather what Bield knows, in a fixed order.
    */
   collectors: Collector[];
   uplink: Uplink;
   /**
-   * Devices are the nodes on the tailnet: Roost's own first, then servers,
+   * Devices are the nodes on the tailnet: Bield's own first, then servers,
    * laptops, desktops, tablets, phones and others, each by name.
    */
   devices: Device[];
@@ -528,12 +528,12 @@ export interface Snapshot {
    */
   alerts: Alert[];
   /**
-   * Containers are the Docker containers on the machine Roost runs on, by
+   * Containers are the Docker containers on the machine Bield runs on, by
    * name. GET /api/devices/{id}/docker/containers has any machine's.
    */
   containers: Container[];
   /**
-   * Units are the systemd units Roost watches on the machine it runs on,
+   * Units are the systemd units Bield watches on the machine it runs on,
    * and the ones that failed, the system's first, by name.
    */
   units: Unit[];
@@ -544,11 +544,11 @@ export interface Snapshot {
   lastEventId: number /* int64 */;
 }
 /**
- * Hub is the Roost server itself.
+ * Hub is the Bield server itself.
  */
 export interface Hub {
   /**
-   * Name is what Roost is called, which the app shows in its header. Admins
+   * Name is what Bield is called, which the app shows in its header. Admins
    * can change it in the settings.
    */
   name: string;
@@ -562,8 +562,8 @@ export interface Hub {
    */
   version: string;
   /**
-   * DNSName is the MagicDNS name of Roost's node, such as
-   * roost.example.ts.net.
+   * DNSName is the MagicDNS name of Bield's node, such as
+   * bield.example.ts.net.
    */
   dnsName: string;
   /**
@@ -583,13 +583,13 @@ export interface Hub {
    */
   thresholds: Thresholds;
   /**
-   * Demo is whether this Roost runs a demo, whose tailnet is made up. It
+   * Demo is whether this Bield runs a demo, whose tailnet is made up. It
    * can't open terminals or files, or change Docker, and the app says so.
    */
   demo: boolean;
 }
 /**
- * A Collector is a job that gathers what Roost knows, such as polling
+ * A Collector is a job that gathers what Bield knows, such as polling
  * Tailscale for the tailnet's status.
  */
 export interface Collector {
@@ -601,7 +601,7 @@ export interface Collector {
   /**
    * Error is why the latest run failed, while State is
    * CollectorStateFailing. Only admins get it, since it can name paths and
-   * addresses on Roost's machine.
+   * addresses on Bield's machine.
    */
   error?: string;
   /**
@@ -629,7 +629,7 @@ export const CollectorStateWaiting = "waiting";
  */
 export type CollectorState = typeof CollectorStateOK | typeof CollectorStateFailing | typeof CollectorStateWaiting;
 /**
- * Uplink is how Roost's machine reaches the internet and Tailscale's DERP
+ * Uplink is how Bield's machine reaches the internet and Tailscale's DERP
  * relays, from Tailscale's latest connectivity check.
  */
 export interface Uplink {
@@ -648,7 +648,7 @@ export interface Uplink {
   ipv4: boolean;
   ipv6: boolean;
   /**
-   * PublicIP is the address the internet sees Roost's machine at, IPv4 if
+   * PublicIP is the address the internet sees Bield's machine at, IPv4 if
    * it has one. Only admins get it.
    */
   publicIp?: string;
@@ -702,7 +702,7 @@ export interface Device {
   os: string;
   /**
    * Kind is what sort of machine it is: the kind an admin set, or else
-   * Roost's guess.
+   * Bield's guess.
    */
   kind: DeviceKind;
   ips: string[];
@@ -716,7 +716,7 @@ export interface Device {
    */
   lastSeen?: string /* RFC 3339 */;
   /**
-   * Self marks Roost's own node.
+   * Self marks Bield's own node.
    */
   self?: boolean;
   status: Status;
@@ -727,8 +727,8 @@ export interface Device {
   statusReason: string;
   path: Path;
   /**
-   * RxBytes and TxBytes count the traffic between Roost's node and this
-   * one since Roost's node started.
+   * RxBytes and TxBytes count the traffic between Bield's node and this
+   * one since Bield's node started.
    */
   rxBytes: number /* int64 */;
   txBytes: number /* int64 */;
@@ -742,54 +742,54 @@ export interface Device {
    */
   created?: string /* RFC 3339 */;
   /**
-   * ExitNode reports whether Roost's traffic to the internet goes through
+   * ExitNode reports whether Bield's traffic to the internet goes through
    * this node.
    */
   exitNode?: boolean;
   /**
-   * MeasuredBy says where Metrics and Info come from. It's empty if Roost
+   * MeasuredBy says where Metrics and Info come from. It's empty if Bield
    * doesn't measure the device.
    */
   measuredBy?: MeasuredBy;
   /**
-   * Metrics are the device's latest metrics, if Roost measures it. Roost
+   * Metrics are the device's latest metrics, if Bield measures it. Bield
    * measures its own machine on Linux. Other machines need the agent.
    */
   metrics?: Metrics;
   /**
-   * Info is what the machine is, if Roost measures it.
+   * Info is what the machine is, if Bield measures it.
    */
   info?: DeviceInfo;
   /**
-   * Agent is the device's agent, if one enrolled or reported. Roost
+   * Agent is the device's agent, if one enrolled or reported. Bield
    * measures the device with it once it reports.
    */
   agent?: Agent;
   settings: DeviceSettings;
   /**
-   * SSH is how Roost logs in to the device, if it can: Linux, macOS and
+   * SSH is how Bield logs in to the device, if it can: Linux, macOS and
    * FreeBSD machines. Only admins get it.
    */
   ssh?: DeviceSSH;
   /**
-   * TailscaleSSH reports whether the device runs Tailscale SSH, which Roost
+   * TailscaleSSH reports whether the device runs Tailscale SSH, which Bield
    * can log in to without a key, if the tailnet policy lets it.
    */
   tailscaleSsh?: boolean;
   /**
-   * Docker reports whether Roost can read the Docker on the device: on the
-   * machine Roost runs on, if it has a Docker socket, and on another, if
-   * Roost has SSH access and found one there. Viewers get it too, since
-   * they can see Docker's overview, but not how Roost logs in.
+   * Docker reports whether Bield can read the Docker on the device: on the
+   * machine Bield runs on, if it has a Docker socket, and on another, if
+   * Bield has SSH access and found one there. Viewers get it too, since
+   * they can see Docker's overview, but not how Bield logs in.
    */
   docker: boolean;
 }
 /**
- * MeasuredBy says how Roost measures a device.
+ * MeasuredBy says how Bield measures a device.
  */
 /**
- * MeasuredByHub means the device is the machine Roost runs on, which
- * Roost measures itself.
+ * MeasuredByHub means the device is the machine Bield runs on, which
+ * Bield measures itself.
  */
 export const MeasuredByHub = "hub";
 /**
@@ -797,7 +797,7 @@ export const MeasuredByHub = "hub";
  */
 export const MeasuredByAgent = "agent";
 /**
- * The ways Roost measures a device.
+ * The ways Bield measures a device.
  */
 export type MeasuredBy = typeof MeasuredByHub | typeof MeasuredByAgent;
 /**
@@ -821,14 +821,14 @@ export interface Agent {
    */
   stale?: boolean;
   /**
-   * Outdated reports whether the agent is older than the one Roost serves.
+   * Outdated reports whether the agent is older than the one Bield serves.
    * A new install command updates it.
    */
   outdated?: boolean;
   /**
    * EnrolledAt is when the agent enrolled. It's missing if it isn't
    * enrolled, such as an agent from before enrollment, whose heartbeats
-   * Roost refuses.
+   * Bield refuses.
    */
   enrolledAt?: string /* RFC 3339 */;
   /**
@@ -838,7 +838,7 @@ export interface Agent {
   enrolledBy?: string;
 }
 /**
- * Status is the state of something Roost watches, such as a device.
+ * Status is the state of something Bield watches, such as a device.
  */
 export const StatusOnline = "online";
 /**
@@ -866,7 +866,7 @@ export const DeviceKindOther = "other";
  */
 export type DeviceKind = typeof DeviceKindServer | typeof DeviceKindLaptop | typeof DeviceKindDesktop | typeof DeviceKindTablet | typeof DeviceKindPhone | typeof DeviceKindOther;
 /**
- * Path is how traffic gets from Roost's node to a device.
+ * Path is how traffic gets from Bield's node to a device.
  */
 export interface Path {
   kind: PathKind;
@@ -905,10 +905,10 @@ export interface Path {
   unanswered?: boolean;
 }
 /**
- * PathKind says how traffic gets from Roost's node to a device.
+ * PathKind says how traffic gets from Bield's node to a device.
  */
 /**
- * PathKindSelf is Roost's own node.
+ * PathKindSelf is Bield's own node.
  */
 export const PathKindSelf = "self";
 /**
@@ -1028,7 +1028,7 @@ export interface DeviceSettings {
   displayName: string;
   /**
    * Kind is what sort of machine an admin says the device is. If it's
-   * empty, Roost guesses.
+   * empty, Bield guesses.
    */
   kind?: DeviceKind;
   /**
@@ -1098,7 +1098,7 @@ export interface DeviceHistory {
   step: number /* int64 */;
   /**
    * CPU is the average percentage of time the CPUs were busy, and Memory
-   * the average percentage of memory used, for each step in which Roost
+   * the average percentage of memory used, for each step in which Bield
    * measured the device. A value is null if the device didn't report it.
    */
   cpu: Point[];
@@ -1110,7 +1110,7 @@ export interface DeviceHistory {
   netRx: Point[];
   netTx: Point[];
   /**
-   * RTT is the average round trip from Roost's node in milliseconds, for
+   * RTT is the average round trip from Bield's node in milliseconds, for
    * each step in which the device was pinged. The value is null if no
    * ping in the step got a reply.
    */
@@ -1134,7 +1134,7 @@ export interface Point {
  */
 export interface AgentSetup {
   /**
-   * Version is the version of the agent that Roost serves.
+   * Version is the version of the agent that Bield serves.
    */
   version: string;
   /**
@@ -1173,7 +1173,7 @@ export interface AgentRun {
 /**
  * AgentSecret is the response to POST /api/agent/enroll: the secret the
  * agent sends with each heartbeat from then on. It's not tagged
- * roost:"secret", since only the machine that enrolled gets it.
+ * bield:"secret", since only the machine that enrolled gets it.
  */
 export interface AgentSecret {
   secret: string;
@@ -1185,7 +1185,7 @@ export interface AgentSecret {
  */
 export interface DeviceUsage {
   /**
-   * Sample is missing if Roost has none.
+   * Sample is missing if Bield has none.
    */
   sample?: UsageSample;
   /**
@@ -1329,7 +1329,7 @@ export interface UsageHistory {
    */
   step: number /* int64 */;
   /**
-   * Minutes is how many minutes Roost stored in the range. It stores one a
+   * Minutes is how many minutes Bield stored in the range. It stores one a
    * minute while it gets samples from the device.
    */
   minutes: number /* int */;
@@ -1376,7 +1376,7 @@ export interface UsageSeries {
 }
 /**
  * A Check probes something from the hub every so often: a URL, a TCP port or
- * a host name that an admin set up, or a peer, which Roost pings.
+ * a host name that an admin set up, or a peer, which Bield pings.
  */
 export interface Check {
   /**
@@ -1424,7 +1424,7 @@ export interface Check {
    */
   paused?: boolean;
   /**
-   * DeviceID is the device a ping check pings. Roost makes a ping check for
+   * DeviceID is the device a ping check pings. Bield makes a ping check for
    * each peer, and they can't be changed.
    */
   deviceId?: string;
@@ -1467,7 +1467,7 @@ export const CheckKindTCP = "tcp";
  */
 export const CheckKindDNS = "dns";
 /**
- * CheckKindPing is Roost's ping of a peer over the tailnet, every
+ * CheckKindPing is Bield's ping of a peer over the tailnet, every
  * minute. It fails when the peer misses two pings in a row, as on the
  * device's page, since a peer can miss one now and then.
  */
@@ -1585,7 +1585,7 @@ export interface CheckInput {
    */
   name: string;
   /**
-   * Kind is http, tcp or dns. Roost makes the ping checks.
+   * Kind is http, tcp or dns. Bield makes the ping checks.
    */
   kind: CheckKind;
   /**
@@ -1645,14 +1645,14 @@ export interface HealthHistory {
    */
   step: number /* int64 */;
   /**
-   * Score is the average health score for each step that has one. Roost
+   * Score is the average health score for each step that has one. Bield
    * samples it every minute.
    */
   score: Point[];
 }
 /**
  * An Alert is a condition that needs attention, such as a disk that's nearly
- * full, from when Roost saw it until it cleared. It resolves by itself when
+ * full, from when Bield saw it until it cleared. It resolves by itself when
  * the condition clears.
  */
 export interface Alert {
@@ -1670,12 +1670,12 @@ export interface Alert {
   state: AlertState;
   /**
    * Title and Detail say what's wrong, such as "Disk 91% full on laptop".
-   * While the alert is open, they say what Roost sees now.
+   * While the alert is open, they say what Bield sees now.
    */
   title: string;
   detail: string;
   /**
-   * OpenedAt is when Roost first saw the condition, and LastSeen when it
+   * OpenedAt is when Bield first saw the condition, and LastSeen when it
    * last did.
    */
   openedAt: string /* RFC 3339 */;
@@ -1743,7 +1743,7 @@ export const AlertSourceContainer = "container";
  */
 export const AlertSourceUnit = "unit";
 /**
- * AlertSourceCollector is one of Roost's collectors that keeps failing.
+ * AlertSourceCollector is one of Bield's collectors that keeps failing.
  */
 export const AlertSourceCollector = "collector";
 /**
@@ -1807,7 +1807,7 @@ export interface AddNote {
   text: string;
 }
 /**
- * Event is a line in the activity log: something Roost saw happen, or
+ * Event is a line in the activity log: something Bield saw happen, or
  * something someone did.
  */
 export interface Event {
@@ -1864,11 +1864,11 @@ export const EventKindCheck = "check";
  */
 export const EventKindContainer = "container";
 /**
- * EventKindAccess is a change to who has a role in Roost.
+ * EventKindAccess is a change to who has a role in Bield.
  */
 export const EventKindAccess = "access";
 /**
- * EventKindSettings is a change an admin made to Roost's settings.
+ * EventKindSettings is a change an admin made to Bield's settings.
  */
 export const EventKindSettings = "settings";
 /**
@@ -1887,7 +1887,7 @@ export const EventKindTerminal = "terminal";
  */
 export const EventKindFiles = "files";
 /**
- * EventKindNotification is a notification Roost sent to a channel, or
+ * EventKindNotification is a notification Bield sent to a channel, or
  * couldn't, and a channel an admin added, changed or deleted.
  */
 export const EventKindNotification = "notification";
@@ -2018,7 +2018,7 @@ export interface Unit {
    */
   memory?: number /* uint64 */;
   /**
-   * Watched reports whether Roost watches it. Other units are only
+   * Watched reports whether Bield watches it. Other units are only
    * listed while they've failed.
    */
   watched: boolean;
@@ -2035,7 +2035,7 @@ export interface Unit {
  */
 export const UnitScopeSystem = "system";
 /**
- * UnitScopeUser is the user Roost runs as.
+ * UnitScopeUser is the user Bield runs as.
  */
 export const UnitScopeUser = "user";
 /**
@@ -2043,26 +2043,26 @@ export const UnitScopeUser = "user";
  */
 export type UnitScope = typeof UnitScopeSystem | typeof UnitScopeUser;
 /**
- * DeviceSSH is how Roost logs in to a device over SSH, with its own key,
- * for terminals, files and Docker. The machine Roost runs on can be two
+ * DeviceSSH is how Bield logs in to a device over SSH, with its own key,
+ * for terminals, files and Docker. The machine Bield runs on can be two
  * nodes, which share it.
  */
 export interface DeviceSSH {
   state: SSHState;
   /**
-   * User is the account Roost logs in as, and Port where sshd listens.
+   * User is the account Bield logs in as, and Port where sshd listens.
    * They're empty until an admin sets up access.
    */
   user?: string;
   port?: number /* int */;
   /**
-   * Hub marks the machine Roost runs on, where Roost logs in on the
+   * Hub marks the machine Bield runs on, where Bield logs in on the
    * loopback address, and can add its key for the user it runs as.
    */
   hub?: boolean;
   /**
    * HostKey is the SHA256 fingerprint of the machine's host key, which
-   * Roost pinned the first time it logged in.
+   * Bield pinned the first time it logged in.
    */
   hostKey?: string;
   /**
@@ -2071,42 +2071,42 @@ export interface DeviceSSH {
    */
   offeredKey?: string;
   /**
-   * Error says why Roost can't log in, while the State is
+   * Error says why Bield can't log in, while the State is
    * SSHStateFailing or SSHStateHostKeyChanged.
    */
   error?: string;
   /**
-   * Method is how Roost logged in the last time it did, while the State is
+   * Method is how Bield logged in the last time it did, while the State is
    * SSHStateOK.
    */
   method?: SSHMethod;
   /**
    * Policy is the change to the tailnet policy that Tailscale SSH on the
-   * machine needs before it lets Roost in, while the State is
+   * machine needs before it lets Bield in, while the State is
    * SSHStateFailing and the policy is why.
    */
   policy?: SSHPolicy;
   /**
-   * CheckedAt is when Roost last checked the machine, if it has.
+   * CheckedAt is when Bield last checked the machine, if it has.
    */
   checkedAt?: string /* RFC 3339 */;
   /**
    * Tmux says whether the machine has tmux, which keeps terminals running
-   * after their tab closes, and Docker whether Roost's user can open its
+   * after their tab closes, and Docker whether Bield's user can open its
    * Docker socket. Each is missing until a check finds out.
    */
   tmux?: boolean;
   docker?: boolean;
 }
 /**
- * SSHState says whether Roost can log in to a device.
+ * SSHState says whether Bield can log in to a device.
  */
 /**
  * SSHStateNotSetUp means no admin has set up access yet.
  */
 export const SSHStateNotSetUp = "not-set-up";
 /**
- * SSHStateUnchecked means Roost hasn't logged in since it started, or
+ * SSHStateUnchecked means Bield hasn't logged in since it started, or
  * since the access changed.
  */
 export const SSHStateUnchecked = "unchecked";
@@ -2114,7 +2114,7 @@ export const SSHStateOK = "ok";
 export const SSHStateFailing = "failing";
 /**
  * SSHStateHostKeyChanged means the machine offered another host key
- * than the one Roost pinned, so Roost won't log in until an admin
+ * than the one Bield pinned, so Bield won't log in until an admin
  * resets it, such as after the machine was reinstalled.
  */
 export const SSHStateHostKeyChanged = "host-key-changed";
@@ -2123,25 +2123,25 @@ export const SSHStateHostKeyChanged = "host-key-changed";
  */
 export type SSHState = typeof SSHStateNotSetUp | typeof SSHStateUnchecked | typeof SSHStateOK | typeof SSHStateFailing | typeof SSHStateHostKeyChanged;
 /**
- * SSHMethod says how Roost logged in to a device.
+ * SSHMethod says how Bield logged in to a device.
  */
 /**
- * SSHMethodKey is a login with Roost's key, which an admin put in the
+ * SSHMethodKey is a login with Bield's key, which an admin put in the
  * machine's authorized_keys.
  */
 export const SSHMethodKey = "key";
 /**
  * SSHMethodTailscale is a login to the machine's Tailscale SSH, which
- * let Roost in without a key.
+ * let Bield in without a key.
  */
 export const SSHMethodTailscale = "tailscale";
 /**
- * The ways Roost logs in.
+ * The ways Bield logs in.
  */
 export type SSHMethod = typeof SSHMethodKey | typeof SSHMethodTailscale;
 /**
  * SSHPolicy is what the tailnet policy needs before a device's Tailscale SSH
- * lets Roost in.
+ * lets Bield in.
  */
 export interface SSHPolicy {
   /**
@@ -2149,34 +2149,34 @@ export interface SSHPolicy {
    */
   refusal: SSHRefusal;
   /**
-   * Snippet is a rule for the "ssh" section of the policy that lets Roost
+   * Snippet is a rule for the "ssh" section of the policy that lets Bield
    * log in as the user an admin set up, without a browser check.
    */
   snippet: string;
 }
 /**
- * SSHRefusal says why Tailscale SSH turned Roost away.
+ * SSHRefusal says why Tailscale SSH turned Bield away.
  */
 /**
- * SSHRefusalCheck means the rule that covers Roost has the action
- * "check", which asks for a visit to a URL that Roost can't make.
+ * SSHRefusalCheck means the rule that covers Bield has the action
+ * "check", which asks for a visit to a URL that Bield can't make.
  */
 export const SSHRefusalCheck = "check";
 /**
- * SSHRefusalNode means no rule lets Roost SSH to the machine.
+ * SSHRefusalNode means no rule lets Bield SSH to the machine.
  */
 export const SSHRefusalNode = "node";
 /**
- * SSHRefusalUser means a rule lets Roost in, but not as the user an
+ * SSHRefusalUser means a rule lets Bield in, but not as the user an
  * admin set up.
  */
 export const SSHRefusalUser = "user";
 /**
- * The ways the tailnet policy can turn Roost away.
+ * The ways the tailnet policy can turn Bield away.
  */
 export type SSHRefusal = typeof SSHRefusalCheck | typeof SSHRefusalNode | typeof SSHRefusalUser;
 /**
- * SSHSetup is the response to GET /api/devices/{id}/ssh: how to let Roost
+ * SSHSetup is the response to GET /api/devices/{id}/ssh: how to let Bield
  * log in to a device. Only admins can see it.
  */
 export interface SSHSetup {
@@ -2186,19 +2186,19 @@ export interface SSHSetup {
    */
   command: string;
   /**
-   * AuthorizedKey is Roost's key, which only works from Roost's tailnet
-   * addresses, and on the machine Roost runs on, from the loopback
+   * AuthorizedKey is Bield's key, which only works from Bield's tailnet
+   * addresses, and on the machine Bield runs on, from the loopback
    * addresses too. Agent and X11 forwarding are off for it.
    */
   authorizedKey: string;
   /**
-   * HubUser is the user Roost runs as, on the machine Roost runs on,
+   * HubUser is the user Bield runs as, on the machine Bield runs on,
    * which POST /api/devices/{id}/ssh/authorize logs in as.
    */
   hubUser?: string;
 }
 /**
- * SetSSH is the body of PUT /api/devices/{id}/ssh, which sets up how Roost
+ * SetSSH is the body of PUT /api/devices/{id}/ssh, which sets up how Bield
  * logs in to a device and answers with its DeviceSSH. Changing the port
  * forgets the pinned host key. DELETE removes the access.
  */
@@ -2211,11 +2211,11 @@ export interface SetSSH {
 }
 /**
  * TrustHostKey is the body of PUT /api/devices/{id}/ssh/host-key, which
- * pins the host key a device offered in place of the one Roost pinned, and
+ * pins the host key a device offered in place of the one Bield pinned, and
  * answers with the device's DeviceSSH. Fingerprint is DeviceSSH.OfferedKey,
- * the one an admin looked at: if the device offers another by then, Roost
+ * the one an admin looked at: if the device offers another by then, Bield
  * refuses with a 409, so it pins exactly the key the admin saw. DELETE
- * forgets the pinned key instead, so Roost pins whichever key the device
+ * forgets the pinned key instead, so Bield pins whichever key the device
  * offers next.
  */
 export interface TrustHostKey {
@@ -2250,7 +2250,7 @@ export interface TerminalSession {
   createdAt?: string /* RFC 3339 */;
   activeAt?: string /* RFC 3339 */;
   /**
-   * Attached is how many terminals are attached, in Roost or not.
+   * Attached is how many terminals are attached, in Bield or not.
    */
   attached: number /* int */;
   windows: number /* int */;
@@ -2382,7 +2382,7 @@ export interface FileEntry {
 /**
  * FileListing is the response to GET /api/devices/{id}/files/list?path=: a
  * folder and what's in it, in no order. Without a path, it's the home folder
- * of the user Roost logs in as.
+ * of the user Bield logs in as.
  */
 export interface FileListing {
   /**
@@ -2392,7 +2392,7 @@ export interface FileListing {
   path: string;
   parent?: string;
   /**
-   * Home is the home folder of the user Roost logs in as.
+   * Home is the home folder of the user Bield logs in as.
    */
   home: string;
   entries: FileEntry[];
@@ -3073,7 +3073,7 @@ export interface DockerNetworkContainer {
  * DockerHistory is the response to GET
  * /api/devices/{id}/docker/containers/{id}/history?range=, where the range
  * is 1h, 6h, 24h or 7d: what the container used, averaged over each step.
- * Roost records it once a minute, by the container's name.
+ * Bield records it once a minute, by the container's name.
  */
 export interface DockerHistory {
   from: string /* RFC 3339 */;
@@ -3144,7 +3144,7 @@ export interface DockerStreamFailure {
   message: string;
 }
 /**
- * ChannelKind is a sort of place that Roost sends notifications to.
+ * ChannelKind is a sort of place that Bield sends notifications to.
  */
 /**
  * ChannelKindNtfy publishes to a topic on ntfy.sh or on an ntfy server
@@ -3183,7 +3183,7 @@ export interface NotificationChannels {
   channels: NotificationChannel[];
 }
 /**
- * NotificationChannel is a place where Roost sends notifications. It leaves
+ * NotificationChannel is a place where Bield sends notifications. It leaves
  * out its secrets, such as a webhook's address or a password, and says which
  * of them are saved.
  */
@@ -3203,16 +3203,16 @@ export interface NotificationChannel {
   config: ChannelConfig;
   /**
    * Secrets are the secret fields that have a value: "url", "token" or
-   * "password". Roost never sends their values.
+   * "password". Bield never sends their values.
    */
   secrets: string[];
   /**
    * Summary says where the channel sends, without a secret, such as
-   * "ntfy.sh/roost-alerts".
+   * "ntfy.sh/bield-alerts".
    */
   summary: string;
   /**
-   * Last is the latest time Roost sent to it since Roost started.
+   * Last is the latest time Bield sent to it since Bield started.
    */
   last?: ChannelDelivery;
 }
@@ -3251,7 +3251,7 @@ export interface ChannelConfig {
   to?: string[];
 }
 /**
- * ChannelDelivery is what happened when Roost last sent to a channel.
+ * ChannelDelivery is what happened when Bield last sent to a channel.
  */
 export interface ChannelDelivery {
   at: string /* RFC 3339 */;
@@ -3274,7 +3274,7 @@ export interface ChannelInput {
   name: string;
   kind: ChannelKind;
   /**
-   * Enabled is whether Roost sends to it.
+   * Enabled is whether Bield sends to it.
    */
   enabled: boolean;
   /**

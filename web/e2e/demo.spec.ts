@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // What every page says when it can't load its data.
-const loadError = /Couldn't load|Can't reach Roost/;
+const loadError = /Couldn't load|Can't reach Bield/;
 
 /** The text, where it's shown: some pages have a list for phones and a table for wider screens. */
 function shown(page: Page, text: string | RegExp, exact = false) {
@@ -35,7 +35,7 @@ async function visit(page: Page, path: string) {
 test('the overview shows the demo tailnet', async ({ page }) => {
 	const problems = await visit(page, '/');
 
-	await expect(page).toHaveTitle(/Roost demo/);
+	await expect(page).toHaveTitle(/Bield demo/);
 	await expect(page.getByText(loadError)).toHaveCount(0);
 	// Alex's machines, with their state.
 	await expect(shown(page, 'Garage Pi', true)).toBeVisible();

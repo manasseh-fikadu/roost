@@ -15,32 +15,32 @@ import (
 	"strings"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/config"
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/config"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
-const backupUsage = `Usage: roost backup [--data-dir directory] [file]
+const backupUsage = `Usage: bield backup [--data-dir directory] [file]
 
-Saves Roost's data to a .tar.gz file, named roost-backup-<date>.tar.gz in the
+Saves Bield's data to a .tar.gz file, named bield-backup-<date>.tar.gz in the
 current directory unless you give another. With "-" instead of a file name, it
-writes the archive to standard output. It works while Roost is running. The
-archive holds the database, Roost's Tailscale node and its SSH key, so keep it
+writes the archive to standard output. It works while Bield is running. The
+archive holds the database, Bield's Tailscale node and its SSH key, so keep it
 private. A file is never replaced if it exists.
 
-To restore it, stop Roost, extract the file into the data directory, and start
-Roost. See docs/upgrading.md.
+To restore it, stop Bield, extract the file into the data directory, and start
+Bield. See docs/upgrading.md.
 `
 
 // dbName is the database's file name in the data directory, and in a backup.
-const dbName = "roost.db"
+const dbName = "bield.db"
 
-// backup runs "roost backup".
+// backup runs "bield backup".
 func backup(ctx context.Context, args []string, stdout, stderr io.Writer) error {
-	fs := flag.NewFlagSet("roost backup", flag.ContinueOnError)
+	fs := flag.NewFlagSet("bield backup", flag.ContinueOnError)
 	fs.SetOutput(stderr)
 	fs.Usage = func() { fmt.Fprint(stderr, backupUsage) }
 	dataDir := envDataDir()
-	fs.StringVar(&dataDir, "data-dir", dataDir, "`directory` that holds Roost's data (env ROOST_DATA_DIR)")
+	fs.StringVar(&dataDir, "data-dir", dataDir, "`directory` that holds Bield's data (env BIELD_DATA_DIR)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -49,21 +49,21 @@ func backup(ctx context.Context, args []string, stdout, stderr io.Writer) error 
 		return errUsage
 	}
 	if dataDir == "" {
-		return errors.New("no data directory: set --data-dir or ROOST_DATA_DIR")
+		return errors.New("no data directory: set --data-dir or BIELD_DATA_DIR")
 	}
 	dst := fs.Arg(0)
 	if dst == "-" {
 		return writeBackup(ctx, dataDir, "", stdout)
 	}
 	if dst == "" {
-		dst = "roost-backup-" + time.Now().Format("20060102-150405") + ".tar.gz"
+		dst = "bield-backup-" + time.Now().Format("20060102-150405") + ".tar.gz"
 	}
 	size, err := writeBackupFile(ctx, dataDir, dst)
 	if err != nil {
 		return err
 	}
 	fmt.Fprintf(stdout, "Saved %s (%s)\n", dst, byteCount(size))
-	fmt.Fprintln(stderr, "It holds Roost's keys, so keep it private.")
+	fmt.Fprintln(stderr, "It holds Bield's keys, so keep it private.")
 	return nil
 }
 
@@ -111,7 +111,7 @@ func writeBackup(ctx context.Context, dataDir, dst string, out io.Writer) (err e
 	if dst != "" {
 		snapDir = filepath.Dir(dst)
 	}
-	snap, err := os.CreateTemp(snapDir, ".roost-backup-*.db")
+	snap, err := os.CreateTemp(snapDir, ".bield-backup-*.db")
 	if err != nil {
 		return err
 	}
@@ -220,9 +220,9 @@ func byteCount(n int64) string {
 	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "kMGTPE"[exp])
 }
 
-// envDataDir returns the data directory ROOST_DATA_DIR names, or the default.
+// envDataDir returns the data directory BIELD_DATA_DIR names, or the default.
 func envDataDir() string {
-	if dir := os.Getenv("ROOST_DATA_DIR"); dir != "" {
+	if dir := os.Getenv("BIELD_DATA_DIR"); dir != "" {
 		return dir
 	}
 	return config.DefaultDataDir()

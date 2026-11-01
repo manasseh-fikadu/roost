@@ -1,5 +1,5 @@
 <!--
-	The second step of the setup: what Roost is called, and who can change
+	The second step of the setup: what Bield is called, and who can change
 	things. The name is saved by the page when the admin goes on.
 -->
 <script lang="ts">
@@ -28,7 +28,7 @@
 </script>
 
 <div class="space-y-4">
-	<Card title="Name your Roost" description="Shown in the sidebar and in the title of every page.">
+	<Card title="Name your Bield" description="Shown in the sidebar and in the title of every page.">
 		<form
 			class="max-w-md p-4"
 			onsubmit={(e) => {
@@ -72,8 +72,8 @@
 			</ul>
 			<p class="border-t border-line px-4 py-3 text-[12.5px] text-fg-subtle">
 				{a.whoCanView === WhoCanViewTailnet
-					? 'Anyone who signs in from the tailnet can view Roost.'
-					: 'Only the people with a role can open Roost.'}
+					? 'Anyone who signs in from the tailnet can view Bield.'
+					: 'Only the people with a role can open Bield.'}
 				Add people, or change who can view it, in
 				<a
 					href="{resolve('/settings')}?tab=access"

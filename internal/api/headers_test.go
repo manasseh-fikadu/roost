@@ -9,7 +9,7 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/api"
 )
 
 // A page like SvelteKit's: one inline script that starts the app, and some
@@ -132,7 +132,7 @@ func TestHeaders_ui(t *testing.T) {
 	t.Run("the terminal's socket", func(t *testing.T) {
 		t.Parallel()
 		rec := serve(h, newRequest(t, http.MethodGet, "/terminal", laptopIP))
-		want := "connect-src 'self' ws://" + roostHost + " wss://" + roostHost
+		want := "connect-src 'self' ws://" + bieldHost + " wss://" + bieldHost
 		if got := directive(rec.Header().Get("Content-Security-Policy"), "connect-src"); got != want {
 			t.Errorf("connect-src = %q, want %q", got, want)
 		}

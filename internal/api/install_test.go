@@ -14,9 +14,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
 )
 
 // TestInstallScripts runs the install and uninstall commands the way an admin
@@ -36,7 +36,7 @@ func TestInstallScripts(t *testing.T) {
 
 	tn := tailnettest.New(tailnet.Status{
 		State: tailnet.StateRunning,
-		Self:  tailnet.Device{ID: "roost", DNSName: "localhost", IPs: []netip.Addr{roostIP}, Owner: alice, Online: true},
+		Self:  tailnet.Device{ID: "bield", DNSName: "localhost", IPs: []netip.Addr{bieldIP}, Owner: alice, Online: true},
 		Peers: []tailnet.Device{
 			{ID: "laptop", DNSName: "laptop.example.ts.net", IPs: []netip.Addr{netip.MustParseAddr("127.0.0.1")}, Owner: alice, Online: true},
 		},
@@ -60,14 +60,14 @@ func TestInstallScripts(t *testing.T) {
 	}
 	run := func(command string) (string, error) {
 		t.Helper()
-		//nolint:gosec // G204: the commands are the ones Roost gives admins.
+		//nolint:gosec // G204: the commands are the ones Bield gives admins.
 		cmd := exec.CommandContext(t.Context(), "bash", "-c", command)
 		cmd.Env = append(os.Environ(), "HOME="+home, "PATH="+bin+":"+os.Getenv("PATH"))
 		cmd.WaitDelay = 10 * time.Second
 		out, err := cmd.CombinedOutput()
 		return string(out), err
 	}
-	confDir := filepath.Join(home, ".config", "roost-agent")
+	confDir := filepath.Join(home, ".config", "bield-agent")
 	envFile := filepath.Join(confDir, "env")
 	// An env from an older agent that anyone could read, which the install
 	// has to lock down.
@@ -147,12 +147,12 @@ func TestInstallScripts(t *testing.T) {
 	if _, ok := opts.Agents.Reports()["laptop"]; !ok {
 		t.Error("the install didn't send a first heartbeat")
 	}
-	if calls, err := os.ReadFile(filepath.Clean(stubLog)); err != nil || !strings.Contains(string(calls), "systemctl --user restart roost-agent.service") {
+	if calls, err := os.ReadFile(filepath.Clean(stubLog)); err != nil || !strings.Contains(string(calls), "systemctl --user restart bield-agent.service") {
 		t.Errorf("systemctl calls = %q, %v; want the service restarted", calls, err)
 	}
 
 	out, err := run(uninstall)
-	if err != nil || !strings.Contains(out, "Roost forgot this machine's agent.") {
+	if err != nil || !strings.Contains(out, "Bield forgot this machine's agent.") {
 		t.Fatalf("the uninstall command failed: %v\n%s", err, out)
 	}
 	if _, err := os.Stat(confDir); !os.IsNotExist(err) {
@@ -162,12 +162,12 @@ func TestInstallScripts(t *testing.T) {
 		t.Errorf("enrollments after uninstalling = %v, %v, want none", enrolled, err)
 	}
 	if _, ok := opts.Agents.Reports()["laptop"]; ok {
-		t.Error("Roost still has the laptop's report after uninstalling")
+		t.Error("Bield still has the laptop's report after uninstalling")
 	}
 
 	// Uninstalling left the code working on this machine, so the agent can
 	// go back on. Once an admin revokes it, the same command can't bring it
-	// back, and uninstalling says Roost doesn't know it anymore.
+	// back, and uninstalling says Bield doesn't know it anymore.
 	if out, err := run(code.InstallCommand); err != nil || !strings.Contains(out, "Done.") {
 		t.Fatalf("installing again after uninstalling failed: %v\n%s", err, out)
 	}
@@ -178,16 +178,16 @@ func TestInstallScripts(t *testing.T) {
 		t.Errorf("installing again after revoking: %v\n%s", err, out)
 	}
 	out, err = run(uninstall)
-	if err != nil || !strings.Contains(out, "Roost doesn't know this agent's secret: it was revoked") {
+	if err != nil || !strings.Contains(out, "Bield doesn't know this agent's secret: it was revoked") {
 		t.Errorf("uninstalling after revoking: %v\n%s", err, out)
 	}
 	if _, err := os.Stat(confDir); !os.IsNotExist(err) {
 		t.Errorf("Stat(%s) after uninstalling a revoked agent: %v, want it gone", confDir, err)
 	}
 
-	// A code Roost doesn't know installs nothing, and says why.
+	// A code Bield doesn't know installs nothing, and says why.
 	out, err = run("curl -fsSL http://localhost:" + port + "/api/agent/install/NOPE | bash")
-	if err == nil || !strings.Contains(out, "Roost won't install the agent: Roost doesn't know the code") {
+	if err == nil || !strings.Contains(out, "Bield won't install the agent: Bield doesn't know the code") {
 		t.Errorf("installing with an unknown code: %v\n%s", err, out)
 	}
 	if _, err := os.Stat(confDir); !os.IsNotExist(err) {
@@ -195,7 +195,7 @@ func TestInstallScripts(t *testing.T) {
 	}
 }
 
-// TestRunRemote runs the script that Roost sends over SSH to install or remove
+// TestRunRemote runs the script that Bield sends over SSH to install or remove
 // the agent, with sh as sshd would, against a server that serves a script.
 func TestRunRemote(t *testing.T) {
 	if _, err := exec.LookPath("curl"); err != nil {
@@ -226,7 +226,7 @@ func TestRunRemote(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			t.Parallel()
-			//nolint:gosec // G204: the script is Roost's own, and the URL is the test server's.
+			//nolint:gosec // G204: the script is Bield's own, and the URL is the test server's.
 			cmd := exec.CommandContext(t.Context(), "sh", "-c", api.RunRemote, "sh", srv.URL+tt.path, srv.URL)
 			// Unset, as in a session without a login.
 			cmd.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=" + t.TempDir()}

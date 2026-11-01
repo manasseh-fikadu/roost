@@ -2,7 +2,7 @@
 
 package main
 
-// TestLoad runs Roost against a big demo and says what it costs: its CPU and
+// TestLoad runs Bield against a big demo and says what it costs: its CPU and
 // memory while nothing looks at it, while browsers have it open, and while
 // they ask for a lot. It's not a unit test: it takes minutes, so it only builds
 // with the load tag. See docs/benchmark.md for how to run it, and read its
@@ -25,7 +25,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/config"
+	"github.com/manasseh-fikadu/bield/internal/config"
 )
 
 func loadEnv(name string, fallback float64) float64 {
@@ -62,9 +62,9 @@ func rss() float64 {
 }
 
 func TestLoad(t *testing.T) {
-	devices := int(loadEnv("ROOST_LOAD_DEVICES", 200))
-	days := loadEnv("ROOST_LOAD_DAYS", 7)
-	window := time.Duration(loadEnv("ROOST_LOAD_SECONDS", 30)) * time.Second
+	devices := int(loadEnv("BIELD_LOAD_DEVICES", 200))
+	days := loadEnv("BIELD_LOAD_DAYS", 7)
+	window := time.Duration(loadEnv("BIELD_LOAD_SECONDS", 30)) * time.Second
 	cfg := config.Config{
 		Demo: true, DemoListen: "127.0.0.1:0", DemoDevices: devices, DemoDays: days,
 		DataDir: filepath.Join(t.TempDir(), "data"),
@@ -74,11 +74,11 @@ func TestLoad(t *testing.T) {
 	// Seeding takes longer than waitFor waits.
 	var url string
 	for url == "" {
-		if m := regexp.MustCompile(`roost is running.* url=(\S+)`).FindStringSubmatch(log.String()); m != nil {
+		if m := regexp.MustCompile(`bield is running.* url=(\S+)`).FindStringSubmatch(log.String()); m != nil {
 			url = m[1]
 		}
 		if time.Since(began) > 15*time.Minute {
-			t.Fatalf("Roost didn't start in 15 minutes:\n%s", log)
+			t.Fatalf("Bield didn't start in 15 minutes:\n%s", log)
 		}
 		time.Sleep(time.Second)
 	}

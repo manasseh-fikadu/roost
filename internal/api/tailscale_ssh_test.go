@@ -8,12 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/ssh/sshtest"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/ssh/sshtest"
 )
 
 // tailscaleSSHEnv is an sshEnv whose laptop runs Tailscale SSH, as the
-// tailnet's status and the laptop's sshd both say, with no key for Roost.
+// tailnet's status and the laptop's sshd both say, with no key for Bield.
 func tailscaleSSHEnv(t *testing.T, policy sshtest.Policy) *sshEnv {
 	t.Helper()
 	e := newSSHEnv(t, testStore(t), nil)
@@ -76,7 +76,7 @@ func TestSSH_tailscaleRefused(t *testing.T) {
 			if got.State != api.SSHStateFailing || got.Method != "" || got.Policy == nil || got.Policy.Refusal != tt.refusal {
 				t.Fatalf("POST check = %+v, want failing, with the refusal %s", got, tt.refusal)
 			}
-			// Roost and the laptop are both alice's, so the rule is for her own machines.
+			// Bield and the laptop are both alice's, so the rule is for her own machines.
 			want := "{\n  \"action\": \"accept\",\n  \"src\": [\"alice@example.com\"],\n" +
 				"  \"dst\": [\"autogroup:self\"],\n  \"users\": [\"alice\"]\n}"
 			if got.Policy.Snippet != want {
@@ -86,13 +86,13 @@ func TestSSH_tailscaleRefused(t *testing.T) {
 	}
 }
 
-var codeInURL = regexp.MustCompile(`http://roost\.example\.ts\.net/api/agent/install/([A-Z0-9]+)`)
+var codeInURL = regexp.MustCompile(`http://bield\.example\.ts\.net/api/agent/install/([A-Z0-9]+)`)
 
 func TestAgent_installOverSSH(t *testing.T) {
 	t.Parallel()
 	e := newSSHEnv(t, testStore(t), nil)
 
-	// Without SSH access, Roost makes no code.
+	// Without SSH access, Bield makes no code.
 	if rec := send(t, e.h, http.MethodPost, "/api/devices/laptop/agent/install", laptopIP, ""); rec.Code != http.StatusConflict {
 		t.Fatalf("POST install without access = %d %s, want 409", rec.Code, rec.Body)
 	}
@@ -114,14 +114,14 @@ func TestAgent_installOverSSH(t *testing.T) {
 	}
 	m := codeInURL.FindStringSubmatch(command)
 	if m == nil {
-		t.Fatalf("the command was %q, want it to download from Roost with a code", command)
+		t.Fatalf("the command was %q, want it to download from Bield with a code", command)
 	}
 	// The code is good for the laptop, and for no other machine.
 	if err := e.st.CheckEnrollmentCode(t.Context(), m[1], "laptop", time.Now()); err != nil {
 		t.Errorf("the code from the command: %v, want it good for the laptop", err)
 	}
-	if !strings.Contains(command, "'http://roost.example.ts.net'") {
-		t.Errorf("the command was %q, want Roost's address too, for the error", command)
+	if !strings.Contains(command, "'http://bield.example.ts.net'") {
+		t.Errorf("the command was %q, want Bield's address too, for the error", command)
 	}
 
 	// A script that fails shows what it printed.
@@ -171,7 +171,7 @@ func TestAgent_uninstallOverSSH(t *testing.T) {
 	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &got) != nil || !got.OK {
 		t.Fatalf("POST uninstall = %d %s, want 200 and ok", rec.Code, rec.Body)
 	}
-	if !strings.Contains(command, "'http://roost.example.ts.net/api/agent/uninstall.sh'") {
+	if !strings.Contains(command, "'http://bield.example.ts.net/api/agent/uninstall.sh'") {
 		t.Errorf("the command was %q, want it to download the uninstall script", command)
 	}
 	if strings.Contains(command, "/api/agent/install/") {

@@ -4,7 +4,7 @@
 # Docker image. `goreleaser release --snapshot --clean` tries it without a tag.
 version: 2
 
-project_name: roost
+project_name: bield
 
 before:
   hooks:
@@ -12,9 +12,9 @@ before:
     - make web
 
 builds:
-  - id: roost
-    main: ./cmd/roost
-    binary: roost
+  - id: bield
+    main: ./cmd/bield
+    binary: bield
     tags: [ui]
     flags: [-trimpath]
     # The same stamp the Makefile makes, such as v0.1.0.
@@ -26,10 +26,10 @@ builds:
     mod_timestamp: "{{ .CommitTimestamp }}"
 
 archives:
-  - id: roost
+  - id: bield
     formats: [tar.gz]
     # install.sh builds this name from `uname`, so change them together.
-    name_template: "roost_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "bield_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files: [LICENSE, README.md]
 
 checksum:
@@ -37,7 +37,7 @@ checksum:
   algorithm: sha256
 
 dockers_v2:
-  - images: [ghcr.io/manasseh-fikadu/roost]
+  - images: [ghcr.io/manasseh-fikadu/bield]
     dockerfile: Dockerfile
     platforms: [linux/amd64, linux/arm64]
     # A release candidate doesn't move latest or the minor version.
@@ -46,10 +46,10 @@ dockers_v2:
       - "{{ if not .Prerelease }}{{ .Major }}.{{ .Minor }}{{ end }}"
       - "{{ if not .Prerelease }}latest{{ end }}"
     labels:
-      org.opencontainers.image.title: Roost
+      org.opencontainers.image.title: Bield
       org.opencontainers.image.description: A self-hosted control plane for every machine on your tailnet
-      org.opencontainers.image.source: https://github.com/manasseh-fikadu/roost
-      org.opencontainers.image.url: https://github.com/manasseh-fikadu/roost
+      org.opencontainers.image.source: https://github.com/manasseh-fikadu/bield
+      org.opencontainers.image.url: https://github.com/manasseh-fikadu/bield
       org.opencontainers.image.licenses: AGPL-3.0-only
       org.opencontainers.image.version: "{{ .Version }}"
       org.opencontainers.image.revision: "{{ .FullCommit }}"
@@ -87,10 +87,10 @@ release:
 
     ```sh
     # On a Linux server with systemd
-    curl -fsSL https://raw.githubusercontent.com/manasseh-fikadu/roost/v{{ .Version }}/install.sh | sudo ROOST_VERSION=v{{ .Version }} bash
+    curl -fsSL https://raw.githubusercontent.com/manasseh-fikadu/bield/v{{ .Version }}/install.sh | sudo BIELD_VERSION=v{{ .Version }} bash
 
     # In Docker
-    docker pull ghcr.io/manasseh-fikadu/roost:{{ .Version }}
+    docker pull ghcr.io/manasseh-fikadu/bield:{{ .Version }}
     ```
 
-    Verify a download with `sha256sum --check --ignore-missing checksums.txt`. To upgrade or roll back, see [Upgrading](https://github.com/manasseh-fikadu/roost/blob/v{{ .Version }}/docs/upgrading.md).
+    Verify a download with `sha256sum --check --ignore-missing checksums.txt`. To upgrade or roll back, see [Upgrading](https://github.com/manasseh-fikadu/bield/blob/v{{ .Version }}/docs/upgrading.md).

@@ -110,9 +110,9 @@
 				<span class="block text-[13px] font-medium text-fg">Alert when offline</span>
 				<span class="block text-[12px] text-fg-subtle">
 					{#if offlineMinutes}
-						Roost raises an alert once it's been offline for {plural(offlineMinutes, 'minute')}.
+						Bield raises an alert once it's been offline for {plural(offlineMinutes, 'minute')}.
 					{:else}
-						Roost raises an alert once it's been offline for a while.
+						Bield raises an alert once it's been offline for a while.
 					{/if}
 				</span>
 			</label>

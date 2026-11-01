@@ -64,8 +64,8 @@ export function parseAlertTab(s: string | null): AlertTab {
 }
 
 /**
- * Whether a device is the machine Roost runs on. In embedded mode, that
- * machine is two nodes: Roost's own, and the machine's.
+ * Whether a device is the machine Bield runs on. In embedded mode, that
+ * machine is two nodes: Bield's own, and the machine's.
  */
 export function onHub(d: Device): boolean {
 	return d.measuredBy === 'hub';
@@ -222,7 +222,7 @@ function overall(statuses: Status[]): Status {
 
 /**
  * The services on the hub, for the network map: each compose project, each
- * container in none, and each systemd unit Roost watches or that failed.
+ * container in none, and each systemd unit Bield watches or that failed.
  * One whose check fails needs attention.
  */
 export function mapServices(

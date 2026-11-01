@@ -1,10 +1,10 @@
 # Speed with 200 devices and 90 days of history
 
-Roost keeps device history as raw samples for 48 hours, then as averages of 5 minutes (for up to 14 days) and of an hour (for as long as the settings say, up to 90 days). The goal was a Roost that stays small with 200 devices and a quarter of history. This page says how to measure that, and what it found.
+Bield keeps device history as raw samples for 48 hours, then as averages of 5 minutes (for up to 14 days) and of an hour (for as long as the settings say, up to 90 days). The goal was a Bield that stays small with 200 devices and a quarter of history. This page says how to measure that, and what it found.
 
 ## What is summed up
 
-Every 30 seconds Roost records each device's CPU, memory, disk, load, network, temperature and battery, and every minute the round-trip time of a ping. Every 5 minutes, it folds the samples whose time is over into buckets (`metrics_rollup` and `pings_rollup` in the database), and the 5-minute buckets into buckets of an hour, weighing each by the samples in it. Once a bucket exists, the raw samples it sums up can go: Roost deletes them after 48 hours, and never before they're in a bucket.
+Every 30 seconds Bield records each device's CPU, memory, disk, load, network, temperature and battery, and every minute the round-trip time of a ping. Every 5 minutes, it folds the samples whose time is over into buckets (`metrics_rollup` and `pings_rollup` in the database), and the 5-minute buckets into buckets of an hour, weighing each by the samples in it. Once a bucket exists, the raw samples it sums up can go: Bield deletes them after 48 hours, and never before they're in a bucket.
 
 | What | Kept for |
 | --- | --- |
@@ -21,10 +21,10 @@ Two commands, both on a demo with made-up devices (see [Demo mode](demo.md)):
 
 ```sh
 make bench   # the store's queries and the usage recorder, one at a time
-make load    # the whole of Roost, in a browser's eyes
+make load    # the whole of Bield, in a browser's eyes
 ```
 
-`make load` starts Roost in demo mode in the test process, waits for it, and says what it costs while nothing looks at it, while 10 browsers hold its live stream, and while someone clicks through the devices' pages. `ROOST_LOAD_DEVICES` (200), `ROOST_LOAD_DAYS` (7) and `ROOST_LOAD_SECONDS` (30, for each measurement) change it. Add `-cpuprofile cpu.out` to the `go test` command in the Makefile, and read the profile with `go tool pprof`. A demo seeds its history before it starts, which takes most of the time: about 80 seconds for 200 devices and 90 days.
+`make load` starts Bield in demo mode in the test process, waits for it, and says what it costs while nothing looks at it, while 10 browsers hold its live stream, and while someone clicks through the devices' pages. `BIELD_LOAD_DEVICES` (200), `BIELD_LOAD_DAYS` (7) and `BIELD_LOAD_SECONDS` (30, for each measurement) change it. Add `-cpuprofile cpu.out` to the `go test` command in the Makefile, and read the profile with `go tool pprof`. A demo seeds its history before it starts, which takes most of the time: about 80 seconds for 200 devices and 90 days.
 
 The numbers below are from a VPS with 4 slow virtual CPUs (2.0 GHz, about 3.6 times slower than a recent laptop), so a laptop does better.
 
@@ -53,7 +53,7 @@ Where the time went, and what changed:
   | Round-trip times, 24 hours | 5.3 ms | 1.1 ms |
   | Round-trip times, 90 days | 12.6 ms | 3.6 ms |
 
-- **Storing what runs on each machine.** Roost deflates each device's minute of processes before it stores it, and made a new compressor each time, which allocates over a megabyte. For 200 devices that is up to 240 MB of garbage a minute, and the compressor was the biggest cost of the usage recorder. It reuses them now: 777 µs and 1.2 MB for a minute became 430 µs and 59 KB.
+- **Storing what runs on each machine.** Bield deflates each device's minute of processes before it stores it, and made a new compressor each time, which allocates over a megabyte. For 200 devices that is up to 240 MB of garbage a minute, and the compressor was the biggest cost of the usage recorder. It reuses them now: 777 µs and 1.2 MB for a minute became 430 µs and 59 KB.
 
 What's left, and fine at this size:
 
@@ -65,4 +65,4 @@ Clicking through a device's pages costs about 7 ms of CPU for each request, and 
 
 ## What this doesn't measure
 
-The demo's machines run in Roost's own process, so what it costs includes making them up: their heartbeats, their fake SSH and Docker. An agent's heartbeat goes straight to the registry, without the HTTP request, Tailscale's identity lookup and the encryption a real one has, and Roost's connection to a real tailnet isn't there either. Those cost something for each agent every 15 seconds that this leaves out. The percentages are an upper bound for what Roost itself does with the data, and a lower bound for a real tailnet.
+The demo's machines run in Bield's own process, so what it costs includes making them up: their heartbeats, their fake SSH and Docker. An agent's heartbeat goes straight to the registry, without the HTTP request, Tailscale's identity lookup and the encryption a real one has, and Bield's connection to a real tailnet isn't there either. Those cost something for each agent every 15 seconds that this leaves out. The percentages are an upper bound for what Bield itself does with the data, and a lower bound for a real tailnet.

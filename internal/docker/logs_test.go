@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/docker"
 )
 
 // frame returns text as a frame of a multiplexed stream.

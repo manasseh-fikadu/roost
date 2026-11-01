@@ -1,5 +1,5 @@
 -- The checks admins set up, which the hub runs every so often: an HTTP
--- request, a TCP connection or a DNS lookup. Roost also shows its pings of
+-- request, a TCP connection or a DNS lookup. Bield also shows its pings of
 -- each peer as a check, but those aren't stored here.
 CREATE TABLE checks (
     id            TEXT PRIMARY KEY,

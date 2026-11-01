@@ -300,12 +300,12 @@ func (p *Poller) checkConnectivity(ctx context.Context) time.Duration {
 	return ConnectivityInterval
 }
 
-// PathKind says how traffic gets from Roost's node to a device.
+// PathKind says how traffic gets from Bield's node to a device.
 type PathKind string
 
 // The kinds of Path.
 const (
-	// PathSelf is Roost's own node.
+	// PathSelf is Bield's own node.
 	PathSelf PathKind = "self"
 	// PathDirect is a peer-to-peer WireGuard connection.
 	PathDirect PathKind = "direct"
@@ -317,7 +317,7 @@ const (
 	PathOffline PathKind = "offline"
 )
 
-// Path is how traffic gets from Roost's node to a device.
+// Path is how traffic gets from Bield's node to a device.
 type Path struct {
 	Kind PathKind
 	// Endpoint is the device's ip:port on a direct path.

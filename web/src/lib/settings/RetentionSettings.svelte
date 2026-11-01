@@ -1,5 +1,5 @@
 <!--
-	How many days Roost keeps each kind of history. Keeping something for fewer
+	How many days Bield keeps each kind of history. Keeping something for fewer
 	days than before deletes data, so that asks first.
 -->
 <script lang="ts">
@@ -89,7 +89,7 @@
 
 <FormCard
 	title="Retention"
-	description="How long Roost keeps history. It deletes older data within the hour."
+	description="How long Bield keeps history. It deletes older data within the hour."
 	dirty={draft.dirty}
 	{saving}
 	{problem}
@@ -130,7 +130,7 @@
 <Dialog
 	bind:open={confirming}
 	title="Delete older history?"
-	description="Roost will delete history older than the new limits within the hour. You can't undo this."
+	description="Bield will delete history older than the new limits within the hour. You can't undo this."
 >
 	<ul class="space-y-1 text-[13px] text-fg-muted">
 		{#each shrinking as kind (kind.label)}

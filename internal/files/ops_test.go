@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/files"
+	"github.com/manasseh-fikadu/bield/internal/files"
 )
 
 // hostile are file names that shells read as more than one word, as syntax

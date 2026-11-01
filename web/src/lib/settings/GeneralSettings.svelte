@@ -1,4 +1,4 @@
-<!-- The name Roost goes by and the address people and agents reach it at. -->
+<!-- The name Bield goes by and the address people and agents reach it at. -->
 <script lang="ts">
 	import { changeSettings } from '#lib/api/client.js';
 	import type { SettingsView } from '#lib/api/types.js';
@@ -19,7 +19,7 @@
 	let saving = $state(false);
 
 	const problem = $derived(
-		draft.value.name.trim() === '' ? 'Give Roost a name.' : publicUrlProblem(draft.value.publicUrl)
+		draft.value.name.trim() === '' ? 'Give Bield a name.' : publicUrlProblem(draft.value.publicUrl)
 	);
 
 	async function save() {
@@ -40,7 +40,7 @@
 
 <FormCard
 	title="General"
-	description="How Roost presents itself."
+	description="How Bield presents itself."
 	dirty={draft.dirty}
 	{saving}
 	{problem}
@@ -53,11 +53,11 @@
 		</Field>
 		<Field
 			label="Public URL"
-			hint="Where people and agents reach Roost, if that isn't the address you opened it at. Roost writes it into the agent install command and, later, into notification links. Leave it empty to use the address of each request."
+			hint="Where people and agents reach Bield, if that isn't the address you opened it at. Bield writes it into the agent install command and, later, into notification links. Leave it empty to use the address of each request."
 		>
 			<Input
 				bind:value={draft.value.publicUrl}
-				placeholder="https://roost.example.ts.net"
+				placeholder="https://bield.example.ts.net"
 				inputmode="url"
 				autocomplete="off"
 				autocapitalize="off"

@@ -1,4 +1,4 @@
-// Command roost runs Roost, a self-hosted control plane for the machines on a tailnet.
+// Command bield runs Bield, a self-hosted control plane for the machines on a tailnet.
 package main
 
 import (
@@ -16,16 +16,16 @@ import (
 // version is set at build time with -ldflags "-X main.version=...".
 var version string
 
-const usageText = `Usage: roost <command> [flags]
+const usageText = `Usage: bield <command> [flags]
 
 Commands:
-  serve        Run the Roost hub
-  admin        Add or list Roost's admins
-  backup       Save a copy of Roost's data
-  healthcheck  Check that a running Roost answers (for Docker)
+  serve        Run the Bield hub
+  admin        Add or list Bield's admins
+  backup       Save a copy of Bield's data
+  healthcheck  Check that a running Bield answers (for Docker)
   version      Print the version
 
-Run "roost <command> -h" to see a command's flags.
+Run "bield <command> -h" to see a command's flags.
 `
 
 // errUsage means the usage text has already been printed.
@@ -40,7 +40,7 @@ func main() {
 	case errors.Is(err, errUsage):
 		os.Exit(2)
 	default:
-		fmt.Fprintln(os.Stderr, "roost:", err)
+		fmt.Fprintln(os.Stderr, "bield:", err)
 		os.Exit(1)
 	}
 }
@@ -66,7 +66,7 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		fmt.Fprint(stdout, usageText)
 		return nil
 	default:
-		fmt.Fprintf(stderr, "roost: unknown command %q\n\n%s", args[0], usageText)
+		fmt.Fprintf(stderr, "bield: unknown command %q\n\n%s", args[0], usageText)
 		return errUsage
 	}
 }

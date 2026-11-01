@@ -88,14 +88,14 @@
 	/**
 	 * Asks the hub again who the caller is, and reloads `me` if their role
 	 * changed, so the sidebar and pages follow. The hub ends the stream when
-	 * a role changes. An answer that Roost couldn't find out their role isn't
+	 * a role changes. An answer that Bield couldn't find out their role isn't
 	 * a change: the next drop asks again.
 	 */
 	async function checkRole() {
 		try {
 			const me = await getMe();
 			if (me.role !== page.data.me?.role && !lookupFailed(me)) {
-				await invalidate('roost:me');
+				await invalidate('bield:me');
 			}
 		} catch {
 			// The hub is down or restarting. The stream keeps trying.
@@ -169,7 +169,7 @@
 				role="status"
 				class="border-b border-amber/25 bg-amber/5 px-4 py-2 text-[13px] text-amber-fg sm:px-6"
 			>
-				Can't reach Roost{live.receivedAt > 0
+				Can't reach Bield{live.receivedAt > 0
 					? `, so this is what it sent at ${clock(live.receivedAt)}`
 					: ''}. Trying again.
 			</p>
@@ -182,7 +182,7 @@
 		>
 			{#if forbidden}
 				<EmptyState title="Only admins can open {title}" icon={LockKeyhole}>
-					An admin can make you one with <code class="font-mono text-fg-muted">roost admin add</code
+					An admin can make you one with <code class="font-mono text-fg-muted">bield admin add</code
 					>.
 				</EmptyState>
 			{:else if demoOff}

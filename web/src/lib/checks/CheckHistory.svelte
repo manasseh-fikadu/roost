@@ -102,7 +102,7 @@
 	</div>
 {:else if failed}
 	<p class="grid h-40 place-items-center text-[13px] text-fg-subtle">
-		Couldn't load the history. Roost tries again in a minute.
+		Couldn't load the history. Bield tries again in a minute.
 	</p>
 {:else}
 	<Skeleton class="h-72" />

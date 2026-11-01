@@ -10,33 +10,33 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/alerts"
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/checks"
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/notify"
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
-	"github.com/manasseh-fikadu/roost/internal/usage"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/alerts"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/checks"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/notify"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/usage"
 )
 
-// The test tailnet: Roost's node, alice's laptop (alice is an admin), bob's
+// The test tailnet: Bield's node, alice's laptop (alice is an admin), bob's
 // phone (bob is a viewer), carol's tablet (carol has no role), and a tagged
 // server. strangerIP isn't on it.
 const (
-	roostHost = "roost.example.ts.net"
+	bieldHost = "bield.example.ts.net"
 	alice     = "alice@example.com"
 	bob       = "bob@example.com"
 	carol     = "carol@example.com"
 )
 
 var (
-	roostIP    = netip.MustParseAddr("100.64.0.1")
-	roostIPv6  = netip.MustParseAddr("fd7a:115c:a1e0::1")
+	bieldIP    = netip.MustParseAddr("100.64.0.1")
+	bieldIPv6  = netip.MustParseAddr("fd7a:115c:a1e0::1")
 	laptopIP   = netip.MustParseAddr("100.64.0.2")
 	phoneIP    = netip.MustParseAddr("100.64.0.3")
 	serverIP   = netip.MustParseAddr("100.64.0.4")
@@ -47,7 +47,7 @@ var (
 func testTailnet() *tailnettest.Tailnet {
 	return tailnettest.New(tailnet.Status{
 		State: tailnet.StateRunning,
-		Self:  tailnet.Device{ID: "roost", DNSName: roostHost, IPs: []netip.Addr{roostIP, roostIPv6}, Owner: alice, Online: true},
+		Self:  tailnet.Device{ID: "bield", DNSName: bieldHost, IPs: []netip.Addr{bieldIP, bieldIPv6}, Owner: alice, Online: true},
 		Peers: []tailnet.Device{
 			{ID: "laptop", DNSName: "laptop.example.ts.net", IPs: []netip.Addr{laptopIP}, Owner: alice, Online: true},
 			{ID: "phone", DNSName: "phone.example.ts.net", IPs: []netip.Addr{phoneIP}, Owner: bob, Online: true},
@@ -58,10 +58,10 @@ func testTailnet() *tailnettest.Tailnet {
 }
 
 // testStore returns a new store in which alice is an admin, bob is a viewer,
-// and only they can view Roost.
+// and only they can view Bield.
 func testStore(t *testing.T) *store.Store {
 	t.Helper()
-	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "roost.db"), store.Options{})
+	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "bield.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,18 +134,18 @@ func newNotifier(st *store.Store, a *alerts.Engine, prefs *settings.Cache, newSe
 	return notify.NewDispatcher(notify.Options{Store: st, Open: a.Open, Settings: prefs, NewSender: newSender})
 }
 
-// newRequest returns a request for target on Roost, from the device at ip.
+// newRequest returns a request for target on Bield, from the device at ip.
 func newRequest(t *testing.T, method, target string, from netip.Addr) *http.Request {
 	t.Helper()
 	return newRequestBody(t, method, target, from, nil)
 }
 
-// newRequestBody returns a request with body for target on Roost, from the
+// newRequestBody returns a request with body for target on Bield, from the
 // device at ip. A request that changes things gets the CSRF header.
 func newRequestBody(t *testing.T, method, target string, from netip.Addr, body io.Reader) *http.Request {
 	t.Helper()
 	req := httptest.NewRequestWithContext(t.Context(), method, target, body)
-	req.Host = roostHost
+	req.Host = bieldHost
 	req.RemoteAddr = netip.AddrPortFrom(from, 40000).String()
 	if body != nil {
 		req.Header.Set(api.CSRFHeader, "1")

@@ -20,9 +20,9 @@ function ok(name: string): Collector {
 
 function snapshot(over: Partial<Snapshot> = {}): Snapshot {
 	return {
-		hub: { name: 'Roost', setupDone: false, tailnet: 'example.com' },
+		hub: { name: 'Bield', setupDone: false, tailnet: 'example.com' },
 		collectors: [ok('Tailscale status'), ok('Docker'), ok('systemd units')],
-		devices: [device('roost', true), device('laptop'), device('server')],
+		devices: [device('bield', true), device('laptop'), device('server')],
 		containers: [{}, {}],
 		units: [{}, {}, {}],
 		...over
@@ -47,7 +47,7 @@ describe('setupChecks', () => {
 		expect(c.tailscale).toMatchObject({
 			status: 'online',
 			detail:
-				'Roost is its own machine on the tailnet · tailnet example.com · 2 other devices found'
+				'Bield is its own machine on the tailnet · tailnet example.com · 2 other devices found'
 		});
 		expect(c.signin).toMatchObject({
 			status: 'online',
@@ -55,11 +55,11 @@ describe('setupChecks', () => {
 		});
 		expect(c.docker).toMatchObject({
 			status: 'online',
-			detail: 'Roost can read Docker · 2 containers'
+			detail: 'Bield can read Docker · 2 containers'
 		});
 		expect(c.systemd).toMatchObject({
 			status: 'online',
-			detail: 'Roost can read systemd · 3 units watched'
+			detail: 'Bield can read systemd · 3 units watched'
 		});
 		expect(Object.values(c).every((x) => x.hint === undefined)).toBe(true);
 	});
@@ -88,18 +88,18 @@ describe('setupChecks', () => {
 
 	test('no tailnet name for a viewer, and one device found', () => {
 		const s = snapshot({
-			hub: { name: 'Roost', setupDone: false, tailnet: '' } as Snapshot['hub'],
-			devices: [device('roost', true), device('laptop')]
+			hub: { name: 'Bield', setupDone: false, tailnet: '' } as Snapshot['hub'],
+			devices: [device('bield', true), device('laptop')]
 		});
 		expect(byId(setupChecks(s, alice, 'embedded')).tailscale.detail).toBe(
-			'Roost is its own machine on the tailnet · 1 other device found'
+			'Bield is its own machine on the tailnet · 1 other device found'
 		);
 	});
 
 	test('a Headscale tailnet names its control server', () => {
 		const s = snapshot({
 			hub: {
-				name: 'Roost',
+				name: 'Bield',
 				setupDone: false,
 				tailnet: 'headscale',
 				controlUrl: 'https://hs.example.com:8443'
@@ -108,27 +108,27 @@ describe('setupChecks', () => {
 		expect(byId(setupChecks(s, alice, 'embedded')).tailscale).toMatchObject({
 			status: 'online',
 			detail:
-				'Roost is its own machine on the tailnet · control server hs.example.com:8443 · tailnet headscale · 2 other devices found'
+				'Bield is its own machine on the tailnet · control server hs.example.com:8443 · tailnet headscale · 2 other devices found'
 		});
 	});
 
 	test('an empty Headscale tailnet says how to log a machine in', () => {
 		const s = snapshot({
 			hub: {
-				name: 'Roost',
+				name: 'Bield',
 				setupDone: false,
 				tailnet: '',
 				controlUrl: 'http://hs:8080'
 			} as Snapshot['hub'],
-			devices: [device('roost', true)]
+			devices: [device('bield', true)]
 		});
 		const t = byId(setupChecks(s, alice, 'embedded')).tailscale;
 		expect(t.status).toBe('attention');
 		expect(t.hint).toContain('tailscale up --login-server http://hs:8080');
 	});
 
-	test('a tailnet with only Roost on it needs a hint', () => {
-		const s = snapshot({ devices: [device('roost', true)] });
+	test('a tailnet with only Bield on it needs a hint', () => {
+		const s = snapshot({ devices: [device('bield', true)] });
 		const t = byId(setupChecks(s, alice, 'embedded')).tailscale;
 		expect(t.status).toBe('attention');
 		expect(t.detail).toEndWith('0 other devices found');
@@ -146,7 +146,7 @@ describe('setupChecks', () => {
 		const t = byId(setupChecks(s, alice, mode)).tailscale;
 		expect(t).toMatchObject({
 			status: 'attention',
-			detail: "Roost can't read the tailnet: no socket"
+			detail: "Bield can't read the tailnet: no socket"
 		});
 		expect(t.hint).toContain(hint);
 	});
@@ -183,7 +183,7 @@ describe('setupChecks', () => {
 
 	test('Docker and systemd failing', () => {
 		const err =
-			"list the containers: can't reach Docker: Roost can't use /var/run/docker.sock; add the user Roost runs as to the docker group, and restart Roost";
+			"list the containers: can't reach Docker: Bield can't use /var/run/docker.sock; add the user Bield runs as to the docker group, and restart Bield";
 		const s = snapshot({
 			collectors: [
 				ok('Tailscale status'),
@@ -194,7 +194,7 @@ describe('setupChecks', () => {
 		const c = byId(setupChecks(s, alice, 'host'));
 		expect(c.docker).toMatchObject({
 			status: 'attention',
-			detail: "Roost can't open the Docker socket: permission denied."
+			detail: "Bield can't open the Docker socket: permission denied."
 		});
 		expect(c.docker.hint).toContain('usermod -aG docker');
 		expect(c.systemd).toMatchObject({ status: 'attention', detail: 'exit status 1' });
@@ -217,7 +217,7 @@ describe('setupChecks', () => {
 
 describe('dockerDetail', () => {
 	test.each([
-		['Roost can’t use /x; add the user Roost runs as to the docker group', 'permission denied'],
+		['Bield can’t use /x; add the user Bield runs as to the docker group', 'permission denied'],
 		['there’s no socket at /var/run/docker.sock', 'no Docker socket'],
 		['nothing listens on /var/run/docker.sock', 'nothing answers'],
 		['dial failed: timeout', 'dial failed: timeout'],
@@ -229,7 +229,7 @@ describe('dockerDetail', () => {
 
 describe('dockerHint', () => {
 	test.each([
-		['Roost can’t use /x; add the user Roost runs as to the docker group', 'usermod'],
+		['Bield can’t use /x; add the user Bield runs as to the docker group', 'usermod'],
 		['there’s no socket at /var/run/docker.sock', 'isn’t installed'],
 		['nothing listens on /var/run/docker.sock', 'systemctl start docker'],
 		['something else', 'Make sure Docker runs']
@@ -265,7 +265,7 @@ describe('shouldOpenSetup', () => {
 		want: boolean;
 	}>([
 		{
-			name: 'an admin of a new Roost',
+			name: 'an admin of a new Bield',
 			admin: true,
 			hub: { setupDone: false },
 			sent: false,

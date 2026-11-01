@@ -82,7 +82,7 @@
 		}
 		const over = `over the last ${rangeName(range)}`;
 		const out: Chart[] = [];
-		// A device Roost doesn't measure may still have history from before.
+		// A device Bield doesn't measure may still have history from before.
 		if (device.measuredBy || hasData(h.cpu, h.memory, h.netRx, h.netTx)) {
 			const empty = `Nothing measured in the last ${rangeName(range)}.`;
 			out.push({
@@ -157,7 +157,7 @@
 	</div>
 {:else if failed}
 	<p class="grid h-40 place-items-center text-[13px] text-fg-subtle">
-		Couldn't load the history. Roost tries again in a minute.
+		Couldn't load the history. Bield tries again in a minute.
 	</p>
 {:else}
 	<Skeleton class="h-40" />

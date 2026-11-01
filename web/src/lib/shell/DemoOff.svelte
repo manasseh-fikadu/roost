@@ -17,7 +17,7 @@
 </script>
 
 <EmptyState title="{what} are turned off in this demo" icon={FlaskConical}>
-	The machines here are made up, so there's nothing to open. On your own tailnet, Roost opens a real
+	The machines here are made up, so there's nothing to open. On your own tailnet, Bield opens a real
 	shell and real files on every machine you set up SSH access for.
 	<div class="mt-4">
 		<a href={resolve('/devices')} class={buttonClass('secondary', 'sm')}>Back to the devices</a>

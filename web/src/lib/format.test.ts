@@ -105,7 +105,7 @@ describe('osLabel', () => {
 		{ name: 'macOS as it is', os: 'macOS', want: 'macOS' },
 		{ name: 'iOS', os: 'iOS', want: 'iOS' },
 		{ name: 'Android', os: 'android', want: 'Android' },
-		{ name: 'one Roost doesn’t know', os: 'plan9', want: 'plan9' },
+		{ name: 'one Bield doesn’t know', os: 'plan9', want: 'plan9' },
 		{ name: 'none', os: '', want: 'Unknown OS' }
 	])('$name', ({ os, want }) => {
 		expect(osLabel(os)).toBe(want);

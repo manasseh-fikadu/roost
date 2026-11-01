@@ -3,7 +3,7 @@
 CREATE TABLE device_settings (
     device_id     TEXT PRIMARY KEY,
     display_name  TEXT NOT NULL DEFAULT '', -- '' shows the name the device reports
-    kind          TEXT NOT NULL DEFAULT '', -- '' lets Roost guess from the device
+    kind          TEXT NOT NULL DEFAULT '', -- '' lets Bield guess from the device
     alert_offline INTEGER,                  -- 0 or 1, or NULL for the default
     notes         TEXT NOT NULL DEFAULT ''
 ) STRICT;

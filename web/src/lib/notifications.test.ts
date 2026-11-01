@@ -19,9 +19,9 @@ function channel(over: Partial<NotificationChannel> = {}): NotificationChannel {
 		enabled: true,
 		minSeverity: 'warning',
 		onResolve: true,
-		config: { topic: 'roost' },
+		config: { topic: 'bield' },
 		secrets: [],
-		summary: 'ntfy.sh/roost',
+		summary: 'ntfy.sh/bield',
 		...over
 	};
 }
@@ -62,7 +62,7 @@ describe('inputOf', () => {
 			to: ['x@y.co', 'z@y.co']
 		});
 		const ntfy = newDraft('ntfy');
-		ntfy.topic = 'roost';
+		ntfy.topic = 'bield';
 		ntfy.port = 25;
 		expect(inputOf(ntfy).config.port).toBeUndefined();
 		expect(inputOf(ntfy).config.security).toBeUndefined();
@@ -107,9 +107,9 @@ describe('channelProblem', () => {
 		};
 		expect(make('ntfy', {})).toContain('topic');
 		expect(make('ntfy', { topic: 'a/b' })).toContain('topic');
-		expect(make('ntfy', { topic: 'roost' })).toBe('');
-		expect(make('ntfy', { topic: 'roost', server: 'ntfy.sh' })).toContain('web address');
-		expect(make('ntfy', { topic: 'roost', username: 'alice' })).toContain('password');
+		expect(make('ntfy', { topic: 'bield' })).toBe('');
+		expect(make('ntfy', { topic: 'bield', server: 'ntfy.sh' })).toContain('web address');
+		expect(make('ntfy', { topic: 'bield', username: 'alice' })).toContain('password');
 		expect(make('discord', {})).toContain('webhook');
 		expect(make('discord', { url: 'https://discord.com/api/webhooks/1/a' })).toBe('');
 		expect(make('slack', {})).toContain('webhook');

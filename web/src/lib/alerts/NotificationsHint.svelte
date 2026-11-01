@@ -1,6 +1,6 @@
 <!--
 	Under "No open alerts": if no notification channel is on, how to get the
-	next alert without opening Roost. It says nothing once there's a channel
+	next alert without opening Bield. It says nothing once there's a channel
 	on. Only admins can see channels, so wrap it in <AdminOnly>.
 -->
 <script lang="ts">
@@ -8,7 +8,7 @@
 	import { getChannels } from '#lib/api/client.js';
 	import { buttonClass } from '#lib/ui/button.js';
 
-	/** Whether there's a channel that's on, or null until Roost says. */
+	/** Whether there's a channel that's on, or null until Bield says. */
 	let on = $state<boolean | null>(null);
 
 	$effect(() => {

@@ -10,7 +10,7 @@ CREATE TABLE enrollment_codes (
 ) STRICT;
 
 -- The secret of each enrolled agent, by the Tailscale node ID of the machine
--- it runs on. Roost takes the agent's heartbeats only from that node.
+-- it runs on. Bield takes the agent's heartbeats only from that node.
 CREATE TABLE enrollments (
     node_id     TEXT PRIMARY KEY,
     secret_hash BLOB NOT NULL UNIQUE, -- SHA-256 of the secret

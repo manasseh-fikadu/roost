@@ -1,8 +1,8 @@
-// Package ssh is how Roost logs in to the tailnet's machines over SSH, for
-// terminals, files and Docker. Roost has its own key (see LoadKey), and an
-// admin adds it to a machine's authorized_keys, for the account Roost should
+// Package ssh is how Bield logs in to the tailnet's machines over SSH, for
+// terminals, files and Docker. Bield has its own key (see LoadKey), and an
+// admin adds it to a machine's authorized_keys, for the account Bield should
 // log in as. A machine that runs Tailscale SSH needs no key, if the tailnet
-// policy lets Roost in (see Method and Refusal). Roost trusts the host key a
+// policy lets Bield in (see Method and Refusal). Bield trusts the host key a
 // machine offers the first time, and refuses one that changes until an admin
 // resets it.
 //
@@ -32,8 +32,8 @@ import (
 
 	gossh "golang.org/x/crypto/ssh"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 const (
@@ -45,7 +45,7 @@ const (
 
 	// connectTimeout is how long connecting and logging in can take.
 	connectTimeout = 15 * time.Second
-	// keepaliveEvery is how often Roost checks that a connection is still
+	// keepaliveEvery is how often Bield checks that a connection is still
 	// there, and keepaliveMisses how many checks in a row can go
 	// unanswered before it gives up on it.
 	keepaliveEvery  = 15 * time.Second
@@ -61,20 +61,20 @@ const (
 	maxChecks = 4
 )
 
-// Errors that say why Roost can't log in to a device.
+// Errors that say why Bield can't log in to a device.
 var (
 	ErrStarting      = errors.New("the hub is starting, so it doesn't know the tailnet yet")
 	ErrNoDevice      = errors.New("no device with this ID is on the tailnet")
 	ErrUnsupported   = errors.New("SSH access works on Linux, macOS and FreeBSD machines")
 	ErrOffline       = errors.New("the device is offline")
 	ErrNotSetUp      = errors.New("SSH access isn't set up for this device")
-	ErrNotHub        = errors.New("only the machine Roost runs on can authorize Roost itself")
+	ErrNotHub        = errors.New("only the machine Bield runs on can authorize Bield itself")
 	ErrBadUser       = errors.New("the user must be a login name, such as alice")
 	ErrBadPort       = errors.New("the port must be from 1 to 65535")
 	ErrHostKeyChange = errors.New("the machine's host key changed")
 	// ErrNoChangedKey means there's no changed host key to trust: it
-	// didn't change, or Roost hasn't seen it change since it started.
-	ErrNoChangedKey = errors.New("the device's host key hasn't changed, as far as Roost has seen")
+	// didn't change, or Bield hasn't seen it change since it started.
+	ErrNoChangedKey = errors.New("the device's host key hasn't changed, as far as Bield has seen")
 	// ErrOfferedKeyChanged means the machine offers another host key than
 	// the one an admin looked at.
 	ErrOfferedKeyChanged = errors.New("the machine now offers another host key than the one you looked at")
@@ -83,23 +83,23 @@ var (
 	ErrNoSession         = errors.New("no tmux session with this name is running")
 )
 
-// State says whether Roost can log in to a machine.
+// State says whether Bield can log in to a machine.
 type State string
 
 // The states of an Access.
 const (
-	// StateUnchecked means Roost hasn't tried since it started or since the
+	// StateUnchecked means Bield hasn't tried since it started or since the
 	// access changed.
 	StateUnchecked State = "unchecked"
 	StateOK        State = "ok"
 	StateFailing   State = "failing"
 	// StateHostKeyChanged means the machine offered a different host key
-	// from the one Roost pinned, so Roost won't log in until an admin
+	// from the one Bield pinned, so Bield won't log in until an admin
 	// resets it.
 	StateHostKeyChanged State = "host-key-changed"
 )
 
-// Access is how Roost logs in to a machine, and what it found the last time
+// Access is how Bield logs in to a machine, and what it found the last time
 // it did.
 type Access struct {
 	User string
@@ -111,16 +111,16 @@ type Access struct {
 	// Error says why the last try failed, while the State is StateFailing
 	// or StateHostKeyChanged.
 	Error string
-	// Method is how Roost logged in the last time it did, or "" if it hasn't
+	// Method is how Bield logged in the last time it did, or "" if it hasn't
 	// since it started, or while it can't.
 	Method Method
-	// Refusal says why the machine's Tailscale SSH turned Roost away, while
+	// Refusal says why the machine's Tailscale SSH turned Bield away, while
 	// the State is StateFailing and the tailnet policy needs a change.
 	Refusal Refusal
-	// CheckedAt is when Roost last checked the machine, or zero.
+	// CheckedAt is when Bield last checked the machine, or zero.
 	CheckedAt time.Time
 	// Tmux and Docker say whether the machine has tmux, and a Docker
-	// socket Roost's user can open, or are nil until a check finds out.
+	// socket Bield's user can open, or are nil until a check finds out.
 	Tmux, Docker *bool
 	// DockerSocket is the Docker socket the check found, if any.
 	DockerSocket string
@@ -133,20 +133,20 @@ type Access struct {
 
 // Options configures NewManager.
 type Options struct {
-	// KeyDir is where Roost keeps its key, which it makes there the first
+	// KeyDir is where Bield keeps its key, which it makes there the first
 	// time it needs it. Required.
 	KeyDir string
-	// Store keeps how Roost logs in to each machine. Required.
+	// Store keeps how Bield logs in to each machine. Required.
 	Store *store.Store
-	// Tailnet returns what Roost last learned about the tailnet. Required.
+	// Tailnet returns what Bield last learned about the tailnet. Required.
 	Tailnet func() tailnet.Snapshot
-	// Dial connects to an address on the tailnet, through Roost's node.
+	// Dial connects to an address on the tailnet, through Bield's node.
 	// Required.
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
-	// DialLocal connects to an address on the machine Roost runs on, such
+	// DialLocal connects to an address on the machine Bield runs on, such
 	// as 127.0.0.1:22. If it's nil, it's a net.Dialer's.
 	DialLocal func(ctx context.Context, network, addr string) (net.Conn, error)
-	// HostMode reports whether Roost uses the machine's own Tailscale, so
+	// HostMode reports whether Bield uses the machine's own Tailscale, so
 	// its node is the machine. Otherwise its node is its own, and the
 	// machine may be a peer marked SameMachine.
 	HostMode bool
@@ -198,7 +198,7 @@ func NewManager(opts Options) *Manager {
 	return m
 }
 
-// Load reads how Roost logs in to each machine.
+// Load reads how Bield logs in to each machine.
 func (m *Manager) Load(ctx context.Context) error {
 	access, err := m.opts.Store.SSHAccess(ctx)
 	if err != nil {
@@ -222,7 +222,7 @@ func (m *Manager) changed() {
 }
 
 // AccessID returns the ID that d's SSH access is kept under: store.HubID
-// for the machine Roost runs on, which can be two nodes, Roost's own (self)
+// for the machine Bield runs on, which can be two nodes, Bield's own (self)
 // and the machine's, and otherwise d's ID.
 func AccessID(d tailnet.Device, self bool) string {
 	if self || d.SameMachine {
@@ -231,8 +231,8 @@ func AccessID(d tailnet.Device, self bool) string {
 	return d.ID
 }
 
-// Supported reports whether Roost can log in to d over SSH. self marks
-// Roost's own node.
+// Supported reports whether Bield can log in to d over SSH. self marks
+// Bield's own node.
 func Supported(d tailnet.Device, self bool) bool {
 	if self || d.SameMachine {
 		return slices.Contains([]string{"linux", "darwin", "freebsd"}, runtime.GOOS)
@@ -240,7 +240,7 @@ func Supported(d tailnet.Device, self bool) bool {
 	return slices.Contains([]string{"linux", "macOS", "freebsd"}, d.OS)
 }
 
-// Access returns how Roost logs in to each machine that has SSH access set
+// Access returns how Bield logs in to each machine that has SSH access set
 // up, by access ID (see AccessID), and what it last found.
 func (m *Manager) Access() map[string]Access {
 	m.mu.Lock()
@@ -275,15 +275,15 @@ func fingerprint(key string) string {
 	return gossh.FingerprintSHA256(pub)
 }
 
-// A target is a device that Roost can log in to, and where.
+// A target is a device that Bield can log in to, and where.
 type target struct {
 	// id is its access ID, deviceID the ID of the device it was asked for
 	// by, and name what to call it in messages.
 	id, deviceID, name string
-	// hub marks the machine Roost runs on.
+	// hub marks the machine Bield runs on.
 	hub bool
 	// addrs are where its sshd may listen, in order. If one refuses the
-	// connection, Roost tries the next.
+	// connection, Bield tries the next.
 	addrs []address
 }
 
@@ -321,9 +321,9 @@ func (m *Manager) target(deviceID string) (target, error) {
 		t.addrs = []address{{ip, m.opts.Dial}}
 		return t, nil
 	}
-	// On its own machine, Roost logs in on the loopback address. If sshd
+	// On its own machine, Bield logs in on the loopback address. If sshd
 	// only listens on the machine's tailnet address, it tries that next.
-	t.hub, t.name = true, "the machine Roost runs on"
+	t.hub, t.name = true, "the machine Bield runs on"
 	t.addrs = []address{{netip.AddrFrom4([4]byte{127, 0, 0, 1}), m.opts.DialLocal}}
 	machine, ok := st.Self, m.opts.HostMode
 	if !ok {
@@ -359,17 +359,17 @@ func tailnetIP(d tailnet.Device) (netip.Addr, bool) {
 	return netip.Addr{}, false
 }
 
-// Key returns Roost's key, making it the first time.
+// Key returns Bield's key, making it the first time.
 func (m *Manager) Key() (*Key, error) {
 	m.keyMu.Lock()
 	defer m.keyMu.Unlock()
 	if m.key != nil {
 		return m.key, nil
 	}
-	comment := "roost"
+	comment := "bield"
 	if st := m.opts.Tailnet().Status; st != nil {
 		if name, _, _ := strings.Cut(st.Self.DNSName, "."); name != "" {
-			comment = "roost@" + name
+			comment = "bield@" + name
 		}
 	}
 	key, err := LoadKey(m.opts.KeyDir, comment)
@@ -380,21 +380,21 @@ func (m *Manager) Key() (*Key, error) {
 	return key, nil
 }
 
-// Setup is how to let Roost log in to a machine.
+// Setup is how to let Bield log in to a machine.
 type Setup struct {
 	// AuthorizedKey is the line for the machine's authorized_keys.
 	AuthorizedKey string
 	// Command adds AuthorizedKey to the authorized_keys of the user who
 	// runs it.
 	Command string
-	// Hub marks the machine Roost runs on, where AuthorizeHere can add the
-	// key for Roost's own user, called HubUser.
+	// Hub marks the machine Bield runs on, where AuthorizeHere can add the
+	// key for Bield's own user, called HubUser.
 	Hub     bool
 	HubUser string
 }
 
-// Setup returns how to let Roost log in to a device. The key only works
-// from Roost's tailnet addresses, and on the machine Roost runs on, from
+// Setup returns how to let Bield log in to a device. The key only works
+// from Bield's tailnet addresses, and on the machine Bield runs on, from
 // the loopback addresses too.
 func (m *Manager) Setup(deviceID string) (Setup, error) {
 	t, err := m.target(deviceID)
@@ -419,7 +419,7 @@ func (m *Manager) Setup(deviceID string) (Setup, error) {
 	return s, nil
 }
 
-// from returns the addresses Roost logs in from: its node's on the tailnet,
+// from returns the addresses Bield logs in from: its node's on the tailnet,
 // and on its own machine, the loopback addresses.
 func (m *Manager) from(hub bool) []netip.Addr {
 	var from []netip.Addr
@@ -435,9 +435,9 @@ func (m *Manager) from(hub bool) []netip.Addr {
 // userName is what a login name on a Unix machine can be.
 var userName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_.-]{0,31}$`)
 
-// SetUp saves how Roost logs in to a device: as user, on port. Changing the
+// SetUp saves how Bield logs in to a device: as user, on port. Changing the
 // port forgets the pinned host key, since another sshd may answer there.
-// Roost checks the machine soon after. by is the admin's login.
+// Bield checks the machine soon after. by is the admin's login.
 func (m *Manager) SetUp(ctx context.Context, deviceID, username string, port int, by string) (Access, error) {
 	switch {
 	case !userName.MatchString(username):
@@ -466,8 +466,8 @@ func (m *Manager) SetUp(ctx context.Context, deviceID, username string, port int
 	return m.viewLocked(t.id, a), nil
 }
 
-// AuthorizeHere lets Roost log in to the machine it runs on as the user it
-// runs as, on port 22: it adds Roost's key to that user's authorized_keys,
+// AuthorizeHere lets Bield log in to the machine it runs on as the user it
+// runs as, on port 22: it adds Bield's key to that user's authorized_keys,
 // and sets up access with it. It reports whether it added the key, which
 // may be there already. by is the admin's login.
 func (m *Manager) AuthorizeHere(ctx context.Context, deviceID, by string) (Access, bool, error) {
@@ -480,7 +480,7 @@ func (m *Manager) AuthorizeHere(ctx context.Context, deviceID, by string) (Acces
 	}
 	u, err := user.Current()
 	if err != nil {
-		return Access{}, false, fmt.Errorf("find out which user Roost runs as: %w", err)
+		return Access{}, false, fmt.Errorf("find out which user Bield runs as: %w", err)
 	}
 	key, err := m.Key()
 	if err != nil {
@@ -488,14 +488,14 @@ func (m *Manager) AuthorizeHere(ctx context.Context, deviceID, by string) (Acces
 	}
 	added, err := key.AuthorizeHere(key.AuthorizedKey(m.from(true)))
 	if err != nil {
-		return Access{}, false, fmt.Errorf("add Roost's key to %s's authorized_keys: %w", u.Username, err)
+		return Access{}, false, fmt.Errorf("add Bield's key to %s's authorized_keys: %w", u.Username, err)
 	}
 	a, err := m.SetUp(ctx, deviceID, u.Username, DefaultPort, by)
 	return a, added, err
 }
 
-// Remove forgets how Roost logs in to a device, and closes its connections
-// and terminals. Roost's key stays in the machine's authorized_keys until
+// Remove forgets how Bield logs in to a device, and closes its connections
+// and terminals. Bield's key stays in the machine's authorized_keys until
 // someone takes it out.
 func (m *Manager) Remove(ctx context.Context, deviceID string) error {
 	id, err := m.accessID(deviceID)
@@ -520,7 +520,7 @@ func (m *Manager) Remove(ctx context.Context, deviceID string) error {
 // pinned, once an admin has looked at its fingerprint: the one in
 // Access.OfferedKey. It pins exactly that key, and returns
 // ErrOfferedKeyChanged if the device offers another by now, so what an admin
-// trusts is what they saw. It returns ErrNoChangedKey if Roost isn't
+// trusts is what they saw. It returns ErrNoChangedKey if Bield isn't
 // refusing a changed key from the device.
 func (m *Manager) TrustHostKey(ctx context.Context, deviceID, fingerprint string) (Access, error) {
 	id, err := m.accessID(deviceID)
@@ -589,7 +589,7 @@ func (m *Manager) accessID(deviceID string) (string, error) {
 	return t.id, err
 }
 
-// resetLocked closes a machine's connections and terminals, since how Roost
+// resetLocked closes a machine's connections and terminals, since how Bield
 // logs in to it changed, forgets what it found, and checks it again soon.
 func (m *Manager) resetLocked(id string) {
 	if p := m.pool[id]; p != nil {
@@ -691,7 +691,7 @@ func (m *Manager) checkHostKey(ctx context.Context, t target, offered gossh.Publ
 		// leaves a line to check the key against.
 		event := store.Event{
 			At: now, Level: "info", Kind: "ssh", DeviceID: t.deviceID,
-			Message: "Roost pinned the SSH host key of " + t.name + " the first time it connected, " + gossh.FingerprintSHA256(offered),
+			Message: "Bield pinned the SSH host key of " + t.name + " the first time it connected, " + gossh.FingerprintSHA256(offered),
 		}
 		if err := m.opts.Store.AddEvents(context.WithoutCancel(ctx), event); err != nil {
 			m.log.Warn("add to the activity log", "error", err)
@@ -700,14 +700,14 @@ func (m *Manager) checkHostKey(ctx context.Context, t target, offered gossh.Publ
 		return nil
 	}
 	want, got := fingerprint(a.HostKey), gossh.FingerprintSHA256(offered)
-	err := fmt.Errorf("%w: Roost pinned %s, and %s offered %s; if the machine was reinstalled, reset the host key",
+	err := fmt.Errorf("%w: Bield pinned %s, and %s offered %s; if the machine was reinstalled, reset the host key",
 		ErrHostKeyChange, want, t.name, got)
 	v := m.checks[t.id]
 	if v.State != StateHostKeyChanged || v.OfferedKey != got {
 		m.log.Warn("refused an SSH host key that changed", "device", t.id, "pinned", want, "offered", got)
 		event := store.Event{
 			At: time.Now(), Level: "error", Kind: "ssh", DeviceID: t.deviceID,
-			Message: "The SSH host key of " + t.name + " changed, so Roost won't log in to it until an admin resets it",
+			Message: "The SSH host key of " + t.name + " changed, so Bield won't log in to it until an admin resets it",
 		}
 		if err := m.opts.Store.AddEvents(context.WithoutCancel(ctx), event); err != nil {
 			m.log.Warn("add to the activity log", "error", err)
@@ -721,7 +721,7 @@ func (m *Manager) checkHostKey(ctx context.Context, t target, offered gossh.Publ
 	return err
 }
 
-// firstHostKeys are the host key algorithms Roost asks for before it pins
+// firstHostKeys are the host key algorithms Bield asks for before it pins
 // one, in OpenSSH's order, so it pins the key that ssh would show.
 var firstHostKeys = []string{
 	gossh.KeyAlgoED25519, gossh.KeyAlgoECDSA256, gossh.KeyAlgoECDSA384, gossh.KeyAlgoECDSA521,
@@ -755,13 +755,13 @@ func (m *Manager) connectError(t target, a store.SSHAccess, err error, banners [
 	}
 	switch {
 	case strings.Contains(msg, "unable to authenticate"):
-		msg = "Roost's key isn't in the authorized_keys of " + a.User + " on " + t.name
+		msg = "Bield's key isn't in the authorized_keys of " + a.User + " on " + t.name
 	case refused(err):
 		msg = "nothing is listening for SSH on port " + strconv.Itoa(a.Port) + " of " + t.name
 	case errors.Is(err, context.DeadlineExceeded) || errors.Is(err, syscall.ETIMEDOUT) || isTimeout(err):
 		msg = "timed out connecting to port " + strconv.Itoa(a.Port) + " of " + t.name
 	case errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETUNREACH):
-		msg = "Roost can't reach " + t.name + " on the tailnet"
+		msg = "Bield can't reach " + t.name + " on the tailnet"
 	}
 	return &ConnectError{Msg: msg, Err: err}
 }
@@ -771,12 +771,12 @@ func isTimeout(err error) bool {
 	return errors.As(err, &ne) && ne.Timeout()
 }
 
-// ConnectError means Roost couldn't log in to a machine.
+// ConnectError means Bield couldn't log in to a machine.
 type ConnectError struct {
 	// Msg says why, for people.
 	Msg string
 	Err error
-	// Refusal is set if the machine's Tailscale SSH turned Roost away because
+	// Refusal is set if the machine's Tailscale SSH turned Bield away because
 	// of the tailnet policy.
 	Refusal Refusal
 }

@@ -1,6 +1,6 @@
 #!/bin/bash
 # SPDX-License-Identifier: MIT
-# Removes the Roost agent for the current user, and asks the hub to forget
+# Removes the Bield agent for the current user, and asks the hub to forget
 # it. The hub serves this script to anyone.
 set -euo pipefail
 
@@ -23,16 +23,16 @@ if [ -r "$CONF_DIR/env" ] && command -v curl >/dev/null; then
     # shellcheck source=/dev/null
     . "$CONF_DIR/env"
     printf 'header = "Authorization: Bearer %s"\n' "${SECRET:-}" |
-      curl -sS -m 10 -K - -o /dev/null -w '%{http_code}' -X DELETE -H 'X-Roost: agent' \
+      curl -sS -m 10 -K - -o /dev/null -w '%{http_code}' -X DELETE -H 'X-Bield: agent' \
         "${SERVER_URL:?}/api/agent/enrollment"
   ) || true
   case "$status" in
-    2??) echo "Roost forgot this machine's agent." ;;
+    2??) echo "Bield forgot this machine's agent." ;;
     # An admin revoked the agent, or it's from before enrollment and has no
-    # secret of its own. Roost forgot a revoked agent already.
-    401) echo "Roost doesn't know this agent's secret: it was revoked, or it's from before enrollment. If Roost's Agents page still lists it, revoke it there." ;;
-    000 | "") echo "Couldn't reach Roost, so revoke the agent on its Agents page." >&2 ;;
-    *) echo "Roost answered HTTP $status, so revoke the agent on its Agents page." >&2 ;;
+    # secret of its own. Bield forgot a revoked agent already.
+    401) echo "Bield doesn't know this agent's secret: it was revoked, or it's from before enrollment. If Bield's Agents page still lists it, revoke it there." ;;
+    000 | "") echo "Couldn't reach Bield, so revoke the agent on its Agents page." >&2 ;;
+    *) echo "Bield answered HTTP $status, so revoke the agent on its Agents page." >&2 ;;
   esac
 fi
 

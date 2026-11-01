@@ -2,8 +2,8 @@
 
 /**
  * Copies text to the clipboard. The clipboard API needs a secure context,
- * which Roost's HTTPS name on a Tailscale tailnet is, but a Headscale tailnet
- * has no certificates and Roost is served over plain HTTP there. Without the
+ * which Bield's HTTPS name on a Tailscale tailnet is, but a Headscale tailnet
+ * has no certificates and Bield is served over plain HTTP there. Without the
  * API, this copies through a selected textarea. It throws if the browser
  * refuses.
  */

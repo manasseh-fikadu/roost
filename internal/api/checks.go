@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/checks"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/checks"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 const (
@@ -91,7 +91,7 @@ func endpoint(c store.Check) string {
 	return u.Scheme + "://" + u.Host
 }
 
-// newPingCheck returns the check of Roost's pings of d, as the API shows
+// newPingCheck returns the check of Bield's pings of d, as the API shows
 // it. It fails when d stops answering pings, as d's page says, which takes
 // two missed pings in a row.
 func newPingCheck(d Device, p checks.PingStatus) Check {
@@ -331,7 +331,7 @@ func (h *handler) pingCheck(w http.ResponseWriter, r *http.Request, id string) b
 		return false
 	}
 	h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{
-		Error: "Roost pings every peer on its own, so its ping checks can't be changed or run",
+		Error: "Bield pings every peer on its own, so its ping checks can't be changed or run",
 	})
 	return true
 }

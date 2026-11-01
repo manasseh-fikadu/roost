@@ -6,15 +6,15 @@ import (
 	"net"
 	"strings"
 
-	"github.com/manasseh-fikadu/roost/internal/ssh/sshtest"
+	"github.com/manasseh-fikadu/bield/internal/ssh/sshtest"
 )
 
 // dockerSocket is where the made-up machines keep Docker's socket.
 const dockerSocket = "/var/run/docker.sock"
 
 // sshd is the machines' SSH servers: a sshtest.Server for each, which lets in
-// Roost's key, tells Roost what the machine has, and serves its Docker. It's
-// all that Roost reaches over SSH in a demo.
+// Bield's key, tells Bield what the machine has, and serves its Docker. It's
+// all that Bield reaches over SSH in a demo.
 type sshd struct {
 	d       *Demo
 	servers map[string]*sshtest.Server // by tailnet address
@@ -46,7 +46,7 @@ func (s *sshd) listen() {
 		}
 		srv.Handle(func(e *sshtest.Exec) int {
 			// The check that finds out what a machine offers is the only
-			// command Roost runs by itself.
+			// command Bield runs by itself.
 			if strings.Contains(e.Command, "command -v tmux") {
 				if m.os == "linux" {
 					fmt.Fprintln(e.Stdout, "tmux")
@@ -68,7 +68,7 @@ func (s *sshd) route(ctx context.Context, network, addr string) (net.Conn, error
 	return sshtest.Route(s.servers)(ctx, network, addr)
 }
 
-// dialLocal connects to the SSH server of the machine Roost runs on.
+// dialLocal connects to the SSH server of the machine Bield runs on.
 func (s *sshd) dialLocal(ctx context.Context, network, addr string) (net.Conn, error) {
 	return s.hub.Dial(ctx, network, addr)
 }
@@ -83,7 +83,7 @@ func (s *sshd) close() {
 	}
 }
 
-// AuthorizeSSH lets Roost log in to every machine with the key in an
+// AuthorizeSSH lets Bield log in to every machine with the key in an
 // authorized_keys line.
 func (d *Demo) AuthorizeSSH(line string) {
 	seen := map[*sshtest.Server]bool{}
@@ -95,13 +95,13 @@ func (d *Demo) AuthorizeSSH(line string) {
 	}
 }
 
-// DialLocal connects to an address on the machine Roost pretends to run on,
+// DialLocal connects to an address on the machine Bield pretends to run on,
 // such as its SSH server, for ssh.Options.
 func (d *Demo) DialLocal(ctx context.Context, network, addr string) (net.Conn, error) {
 	return d.sshd.dialLocal(ctx, network, addr)
 }
 
-// HubDocker connects to the Docker of the machine Roost pretends to run on,
+// HubDocker connects to the Docker of the machine Bield pretends to run on,
 // for docker.NewClient. It returns nil if that machine has none.
 func (d *Demo) HubDocker() func(ctx context.Context, network, addr string) (net.Conn, error) {
 	if eng := d.engines[d.machines[0].id]; eng != nil {

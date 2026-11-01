@@ -12,7 +12,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
+	"github.com/manasseh-fikadu/bield/internal/hostmetrics"
 )
 
 const gib = 1 << 30

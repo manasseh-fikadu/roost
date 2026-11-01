@@ -1,4 +1,4 @@
-// Package api serves Roost's HTTP API and its web UI.
+// Package api serves Bield's HTTP API and its web UI.
 package api
 
 import (
@@ -13,18 +13,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/alerts"
-	"github.com/manasseh-fikadu/roost/internal/checks"
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/files"
-	"github.com/manasseh-fikadu/roost/internal/notify"
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/systemd"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/usage"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/alerts"
+	"github.com/manasseh-fikadu/bield/internal/checks"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/files"
+	"github.com/manasseh-fikadu/bield/internal/notify"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/systemd"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/usage"
 )
 
 // maxBody is the largest request body the API reads.
@@ -41,12 +41,12 @@ type Options struct {
 	DevUI *url.URL
 	// WhoIs asks Tailscale who is at a connection's remote address. Required.
 	WhoIs func(ctx context.Context, remoteAddr string) (*tailnet.Identity, error)
-	// Snapshot returns what Roost last learned about the tailnet, including
+	// Snapshot returns what Bield last learned about the tailnet, including
 	// its own node. It's reported by GET /api/debug/tailnet. Required.
 	Snapshot func() tailnet.Snapshot
 	// Feed builds the snapshots GET /api/stream sends. Required.
 	Feed *Feed
-	// Store holds who has a role in Roost. Required.
+	// Store holds who has a role in Bield. Required.
 	Store *store.Store
 	// Agents keeps what agents report in their heartbeats. Required.
 	Agents *agents.Registry
@@ -64,22 +64,22 @@ type Options struct {
 	Settings *settings.Cache
 	// Notify sends the notifications. Required.
 	Notify *notify.Dispatcher
-	// Systemd watches the units on Roost's machine. It's nil if Roost can't
+	// Systemd watches the units on Bield's machine. It's nil if Bield can't
 	// ask systemd there.
 	Systemd *systemd.Collector
-	// Tailscale is how Roost joined the tailnet, which the settings show.
+	// Tailscale is how Bield joined the tailnet, which the settings show.
 	Tailscale TailscaleMode
 	// MaxUpload is the most bytes one uploaded file may have, or 0 for the
 	// default of 10 GiB. It's there so a runaway upload can't fill a machine's
 	// disk, not to tell people what to put on it.
 	MaxUpload int64
-	// Demo says the tailnet is made up. Roost then answers to any host name,
+	// Demo says the tailnet is made up. Bield then answers to any host name,
 	// since there's no tailnet address to hold it to, and refuses what needs a
 	// real machine: terminals, files, changes to Docker, SSH access and who
 	// has a role (see demoRefused).
 	Demo bool
 	// AppURL is where the app is on the tailnet, such as
-	// https://roost.example.ts.net, which the agent sends its heartbeats to.
+	// https://bield.example.ts.net, which the agent sends its heartbeats to.
 	// If it's empty, it's worked out from each request.
 	AppURL string
 	// Stopping is closed when the server starts to shut down, which ends
@@ -144,12 +144,12 @@ func (h *handler) routes(rt *router) {
 	rt.write("POST /api/devices/{id}/ssh/authorize", h.authorizeSSH)
 	rt.write("PUT /api/devices/{id}/ssh/host-key", h.trustHostKey)
 	rt.write("DELETE /api/devices/{id}/ssh/host-key", h.resetHostKey)
-	// A WebSocket, which guard only lets in from Roost's own pages.
+	// A WebSocket, which guard only lets in from Bield's own pages.
 	rt.read("GET /api/devices/{id}/terminal", admins, h.terminal)
 	rt.read("GET /api/devices/{id}/terminal/sessions", admins, h.terminalSessions)
 	rt.write("DELETE /api/devices/{id}/terminal/sessions/{name}", h.killSession)
 
-	// A file's content is served from Roost's own origin, so the raw route
+	// A file's content is served from Bield's own origin, so the raw route
 	// sandboxes it. All of these are for admins, who can open shells already.
 	rt.read("GET /api/devices/{id}/files/list", admins, h.listFiles)
 	rt.read("GET /api/devices/{id}/files/stat", admins, h.statFile)
@@ -166,7 +166,7 @@ func (h *handler) routes(rt *router) {
 	rt.write("POST /api/devices/{id}/files/copy", h.transferFiles("Copied", (*files.Remote).Copy))
 	rt.write("POST /api/devices/{id}/files/delete", h.deleteFiles)
 
-	// Everyone who can view Roost sees Docker's overview. What can carry a
+	// Everyone who can view Bield sees Docker's overview. What can carry a
 	// secret is for admins: logs, processes and the whole inspection, and the
 	// fields of a container that hold environment variables and commands
 	// (see the types). Starting and stopping is for admins, and logged.
@@ -282,7 +282,7 @@ func (h *handler) debugTailnet(w http.ResponseWriter, r *http.Request) {
 }
 
 // writeJSON answers r with v as JSON. Unless the caller is an admin, fields
-// tagged roost:"secret" are left empty (see redact).
+// tagged bield:"secret" are left empty (see redact).
 func (h *handler) writeJSON(w http.ResponseWriter, r *http.Request, status int, v any) {
 	if callerOf(r).level < admins {
 		v = redact(v)

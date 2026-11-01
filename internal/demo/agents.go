@@ -8,16 +8,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/agent"
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/usage"
+	"github.com/manasseh-fikadu/bield/agent"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/usage"
 )
 
 // agentEvery is how often an agent sends a heartbeat, as agent.sh does.
 const agentEvery = 15 * time.Second
 
-// Sinks is where the machines report to, which Roost's pieces take as they
+// Sinks is where the machines report to, which Bield's pieces take as they
 // do from a real agent's request.
 type Sinks struct {
 	Agents *agents.Registry
@@ -31,9 +31,9 @@ type counters struct {
 }
 
 // Report plays the machines' agents until ctx ends: each machine that has one
-// and is on the tailnet sends a heartbeat every agentEvery, and Roost's own
+// and is on the tailnet sends a heartbeat every agentEvery, and Bield's own
 // machine reports its processes. A machine that left the tailnet reported once,
-// when it left, so Roost shows what its agent last said.
+// when it left, so Bield shows what its agent last said.
 func (d *Demo) Report(ctx context.Context, s Sinks) {
 	var wg sync.WaitGroup
 	wg.Go(func() { d.reportHub(ctx, s) })
@@ -73,7 +73,7 @@ func (d *Demo) Report(ctx context.Context, s Sinks) {
 	wg.Wait()
 }
 
-// reportHub records what runs on Roost's own machine, as the sampler of
+// reportHub records what runs on Bield's own machine, as the sampler of
 // /proc does.
 func (d *Demo) reportHub(ctx context.Context, s Sinks) {
 	hub := d.machines[0]

@@ -7,11 +7,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/api"
 )
 
 // A machine that tries codes or secrets in a loop is slowed down before
-// Roost looks at what it sent.
+// Bield looks at what it sent.
 func TestRateLimit_enroll(t *testing.T) {
 	t.Parallel()
 	st := testStore(t)

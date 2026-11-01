@@ -83,7 +83,7 @@
 	{/if}
 </Card>
 <p class="mt-4 text-[13px] text-fg-subtle">
-	Roost measures the machine it runs on. Install the
+	Bield measures the machine it runs on. Install the
 	<a
 		href={resolve('/devices/agents')}
 		class="text-fg-muted underline decoration-line-heavy underline-offset-4 hover:text-fg">agent</a

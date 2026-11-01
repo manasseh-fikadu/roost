@@ -1,10 +1,10 @@
 name: Bug report
-description: Something in Roost doesn't work the way it should.
+description: Something in Bield doesn't work the way it should.
 labels: [bug]
 body:
   - type: markdown
     attributes:
-      value: Found a security problem? Please report it privately, as the [security policy](https://github.com/manasseh-fikadu/roost/security/policy) explains, not here.
+      value: Found a security problem? Please report it privately, as the [security policy](https://github.com/manasseh-fikadu/bield/security/policy) explains, not here.
   - type: textarea
     id: what-happened
     attributes:
@@ -22,18 +22,18 @@ body:
   - type: input
     id: version
     attributes:
-      label: Roost version
-      description: The output of `roost version`.
+      label: Bield version
+      description: The output of `bield version`.
     validations:
       required: true
   - type: textarea
     id: setup
     attributes:
       label: Setup
-      description: The OS and architecture of the hub (and of the device, if the bug involves one), how you installed Roost, and whether it runs its own Tailscale node or uses the host's.
+      description: The OS and architecture of the hub (and of the device, if the bug involves one), how you installed Bield, and whether it runs its own Tailscale node or uses the host's.
   - type: textarea
     id: logs
     attributes:
       label: Logs
-      description: Relevant output from `roost serve` or the agent. Remove anything private first, such as hostnames, IP addresses and tokens.
+      description: Relevant output from `bield serve` or the agent. Remove anything private first, such as hostnames, IP addresses and tokens.
       render: text

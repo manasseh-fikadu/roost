@@ -14,14 +14,14 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/alerts"
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/systemd"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/alerts"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/hostmetrics"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/systemd"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
 func getSettings(t *testing.T, h http.Handler) api.SettingsView {
@@ -61,19 +61,19 @@ func TestSettings(t *testing.T) {
 	if v.Tailscale != api.TailscaleModeHost {
 		t.Errorf("tailscale = %q, want host", v.Tailscale)
 	}
-	if v.Settings.General.Name != "Roost" || v.Settings.Thresholds.DiskWarn != defaults.Thresholds.DiskWarn ||
+	if v.Settings.General.Name != "Bield" || v.Settings.Thresholds.DiskWarn != defaults.Thresholds.DiskWarn ||
 		!v.Settings.Rules.CPU || v.Settings.Retention.HistoryDays != 7 || !slices.Equal(v.Settings.WatchedUnits, defaults.WatchedUnits) {
-		t.Errorf("settings of a new Roost = %+v, want the defaults", v.Settings)
+		t.Errorf("settings of a new Bield = %+v, want the defaults", v.Settings)
 	}
 	if fmt.Sprint(v.Defaults) != fmt.Sprint(v.Settings) {
 		t.Errorf("defaults = %+v, want %+v", v.Defaults, v.Settings)
 	}
 
 	// A request changes the fields it has, and no others.
-	v = patchSettings(t, h, `{"general": {"name": "  Home lab ", "publicUrl": "https://roost.example.com/"},
+	v = patchSettings(t, h, `{"general": {"name": "  Home lab ", "publicUrl": "https://bield.example.com/"},
 		"thresholds": {"diskWarn": 70, "diskCritical": 90, "memoryWarn": 80, "cpuWarn": 75, "cpuWindowMinutes": 15,
 			"offlineMinutes": 30, "keyExpiryDays": 7, "checkFailures": 3}}`)
-	if v.Settings.General != (api.GeneralSettings{Name: "Home lab", PublicURL: "https://roost.example.com"}) {
+	if v.Settings.General != (api.GeneralSettings{Name: "Home lab", PublicURL: "https://bield.example.com"}) {
 		t.Errorf("general = %+v, want the name trimmed and the URL without its slash", v.Settings.General)
 	}
 	if got := v.Settings.Thresholds; got.CPUWindowMinutes != 15 || got.DiskWarn != 70 || got.CheckFailures != 3 {
@@ -85,17 +85,17 @@ func TestSettings(t *testing.T) {
 		t.Errorf("settings after turning off one rule = %+v, want the other rules and the earlier changes kept", v.Settings)
 	}
 	v = patchSettings(t, h, `{"general": {"name": "Lab"}, "thresholds": {"memoryWarn": 60}}`)
-	if v.Settings.General != (api.GeneralSettings{Name: "Lab", PublicURL: "https://roost.example.com"}) || v.Settings.Thresholds.MemoryWarn != 60 ||
+	if v.Settings.General != (api.GeneralSettings{Name: "Lab", PublicURL: "https://bield.example.com"}) || v.Settings.Thresholds.MemoryWarn != 60 ||
 		v.Settings.Thresholds.DiskWarn != 70 {
 		t.Errorf("settings after changing two fields = %+v, want the rest kept", v.Settings)
 	}
 	patchSettings(t, h, `{"general": {"name": "Home lab"}, "thresholds": {"memoryWarn": 80}}`)
 	// Finishing the setup is a setting too, and leaves the rest of General alone.
 	if v.Settings.General.SetupDone {
-		t.Error("the setup is done in a new Roost, want it to wait for an admin")
+		t.Error("the setup is done in a new Bield, want it to wait for an admin")
 	}
 	v = patchSettings(t, h, `{"general": {"setupDone": true}}`)
-	if want := (api.GeneralSettings{Name: "Home lab", PublicURL: "https://roost.example.com", SetupDone: true}); v.Settings.General != want {
+	if want := (api.GeneralSettings{Name: "Home lab", PublicURL: "https://bield.example.com", SetupDone: true}); v.Settings.General != want {
 		t.Errorf("general after finishing the setup = %+v, want %+v", v.Settings.General, want)
 	}
 	patchSettings(t, h, `{"general": {"setupDone": false}}`)
@@ -134,21 +134,21 @@ func TestSettings(t *testing.T) {
 	}
 	slices.Reverse(got)
 	want := []string{
-		`Renamed Roost to "Home lab" by ` + alice,
+		`Renamed Bield to "Home lab" by ` + alice,
 		"Changed the public URL by " + alice,
 		"Changed the alert thresholds: disk warning 85% → 70%, critical disk 95% → 90%, memory 92% → 80%, CPU 90% → 75%, " +
 			"CPU window 5 minutes → 15 minutes, offline after 10 minutes → 30 minutes, key expiry warning 14 days → 7 days, " +
 			"failing checks 2 failures → 3 failures by " + alice,
 		"Turned off alerts for CPU by " + alice,
-		`Renamed Roost to "Lab" by ` + alice,
+		`Renamed Bield to "Lab" by ` + alice,
 		"Changed the alert thresholds: memory 80% → 60% by " + alice,
-		`Renamed Roost to "Home lab" by ` + alice,
+		`Renamed Bield to "Home lab" by ` + alice,
 		"Changed the alert thresholds: memory 60% → 80% by " + alice,
 		"Finished the first-run setup by " + alice,
 		"Turned the first-run setup back on by " + alice,
 		"Changed the watched systemd units: started watching nginx.service, user:app.service, stopped watching " +
 			"ssh.service, sshd.service, docker.service, tailscaled.service and 1 more by " + alice,
-		"Changed how long Roost keeps history: activity log 30 days → 90 days, device history 7 days → 14 days, " +
+		"Changed how long Bield keeps history: activity log 30 days → 90 days, device history 7 days → 14 days, " +
 			"check results 7 days → 30 days by " + alice,
 		"Changed the watched systemd units: stopped watching nginx.service, user:app.service by " + alice,
 	}
@@ -177,8 +177,8 @@ func TestSettings_errors(t *testing.T) {
 		{"a viewer", "phone", `{}`, http.StatusForbidden, ""},
 		{"no name", "laptop", `{"general": {"name": "   "}}`, http.StatusBadRequest, "the name can't be empty"},
 		{"a long name", "laptop", `{"general": {"name": "` + strings.Repeat("x", 41) + `"}}`, http.StatusBadRequest, "up to 40 characters"},
-		{"a public URL with a path", "laptop", `{"general": {"name": "Roost", "publicUrl": "https://example.com/roost"}}`, http.StatusBadRequest, "public URL"},
-		{"a public URL that isn't one", "laptop", `{"general": {"name": "Roost", "publicUrl": "roost"}}`, http.StatusBadRequest, "public URL"},
+		{"a public URL with a path", "laptop", `{"general": {"name": "Bield", "publicUrl": "https://example.com/bield"}}`, http.StatusBadRequest, "public URL"},
+		{"a public URL that isn't one", "laptop", `{"general": {"name": "Bield", "publicUrl": "bield"}}`, http.StatusBadRequest, "public URL"},
 		{"a threshold of nothing", "laptop", `{"thresholds": {"diskWarn": 0}}`, http.StatusBadRequest, "percentage above 0"},
 		{"a warning past the critical level", "laptop", `{"thresholds": {"diskWarn": 99}}`, http.StatusBadRequest, "can't be critical"},
 		{"a critical disk before the warning", "laptop", `{"thresholds": ` + replace(`"diskCritical": 95`, `"diskCritical": 80`) + `}`, http.StatusBadRequest, "can't be critical"},
@@ -186,7 +186,7 @@ func TestSettings_errors(t *testing.T) {
 		{"a unit with a space", "laptop", `{"watchedUnits": ["my app"]}`, http.StatusBadRequest, "isn't the name of a systemd unit"},
 		{"a unit systemd refuses", "laptop", `{"watchedUnits": ["ssh.service", "a!b.service"]}`, http.StatusBadRequest, "isn't the name of a systemd unit"},
 		{"a year and a day of activity", "laptop", `{"retention": {"activityDays": 366, "historyDays": 7, "checksDays": 7}}`, http.StatusBadRequest, "from 1 to 365"},
-		{"a field Roost doesn't have", "laptop", `{"thresholds": ` + replace(`"checkFailures": 2`, `"checkFailures": 2, "bogus": 1`) + `}`, http.StatusBadRequest, "can't read the request"},
+		{"a field Bield doesn't have", "laptop", `{"thresholds": ` + replace(`"checkFailures": 2`, `"checkFailures": 2, "bogus": 1`) + `}`, http.StatusBadRequest, "can't read the request"},
 		{"a name of the wrong type", "laptop", `{"general": {"name": 7, "publicUrl": ""}}`, http.StatusBadRequest, "can't read the request"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -205,22 +205,22 @@ func TestSettings_errors(t *testing.T) {
 
 func TestSettings_publicURL(t *testing.T) {
 	t.Parallel()
-	h := api.New(withTailnet(t, testTailnet(), api.Options{AppURL: "https://" + roostHost}))
+	h := api.New(withTailnet(t, testTailnet(), api.Options{AppURL: "https://" + bieldHost}))
 	uninstall := func() string {
 		var setup api.AgentSetup
 		get(t, h, "/api/agent", laptopIP, &setup)
 		return setup.UninstallCommand
 	}
-	if got := uninstall(); !strings.Contains(got, "https://"+roostHost+"/api/agent/uninstall.sh") {
-		t.Fatalf("uninstall command = %q, want Roost's address on the tailnet", got)
+	if got := uninstall(); !strings.Contains(got, "https://"+bieldHost+"/api/agent/uninstall.sh") {
+		t.Fatalf("uninstall command = %q, want Bield's address on the tailnet", got)
 	}
-	patchSettings(t, h, `{"general": {"name": "Roost", "publicUrl": "https://roost.example.com:8443"}}`)
-	if got := uninstall(); !strings.Contains(got, "https://roost.example.com:8443/api/agent/uninstall.sh") {
+	patchSettings(t, h, `{"general": {"name": "Bield", "publicUrl": "https://bield.example.com:8443"}}`)
+	if got := uninstall(); !strings.Contains(got, "https://bield.example.com:8443/api/agent/uninstall.sh") {
 		t.Errorf("uninstall command = %q, want the public URL", got)
 	}
-	patchSettings(t, h, `{"general": {"name": "Roost", "publicUrl": ""}}`)
-	if got := uninstall(); !strings.Contains(got, "https://"+roostHost+"/api/agent/uninstall.sh") {
-		t.Errorf("uninstall command after clearing the public URL = %q, want Roost's address on the tailnet", got)
+	patchSettings(t, h, `{"general": {"name": "Bield", "publicUrl": ""}}`)
+	if got := uninstall(); !strings.Contains(got, "https://"+bieldHost+"/api/agent/uninstall.sh") {
+		t.Errorf("uninstall command after clearing the public URL = %q, want Bield's address on the tailnet", got)
 	}
 }
 
@@ -284,7 +284,7 @@ func ruleFeed(t *testing.T, st *store.Store) *api.Feed {
 	now := time.Now()
 	status := &tailnet.Status{
 		State: tailnet.StateRunning,
-		Self:  tailnet.Device{ID: "roost", HostName: "roost", DNSName: roostHost, IPs: []netip.Addr{roostIP}, OS: "linux", Online: true},
+		Self:  tailnet.Device{ID: "bield", HostName: "bield", DNSName: bieldHost, IPs: []netip.Addr{bieldIP}, OS: "linux", Online: true},
 		Peers: []tailnet.Device{
 			{ID: "server", HostName: "server", OS: "linux", LastSeen: now.Add(-30 * time.Minute)},
 			{ID: "nas", HostName: "nas", OS: "linux", Online: true, KeyExpiry: now.Add(10 * 24 * time.Hour)},
@@ -332,16 +332,16 @@ func TestFeed_settingsChangeAlerts(t *testing.T) {
 
 	snap := look()
 	want := []string{
-		"critical: Disk 96% full on roost",
-		"warning: CPU 97% busy on roost",
-		"warning: Memory 95% used on roost",
+		"critical: Disk 96% full on bield",
+		"warning: CPU 97% busy on bield",
+		"warning: Memory 95% used on bield",
 		"warning: Tailscale key of nas expires in 10 days",
 		"warning: server is offline",
 	}
 	if got := alertSummary(snap.Alerts); !slices.Equal(got, want) {
 		t.Fatalf("alerts by default =\n%q\nwant\n%q", got, want)
 	}
-	if s := statuses(snap)["roost"]; !strings.Contains(s, "Disk 96% full") || !strings.Contains(s, "CPU 97% for 5m") {
+	if s := statuses(snap)["bield"]; !strings.Contains(s, "Disk 96% full") || !strings.Contains(s, "CPU 97% for 5m") {
 		t.Errorf("the hub's status = %q, want its disk and CPU, over 5m", s)
 	}
 
@@ -349,11 +349,11 @@ func TestFeed_settingsChangeAlerts(t *testing.T) {
 	cfg.Thresholds.DiskWarn, cfg.Thresholds.DiskCritical, cfg.Thresholds.MemoryWarn = 97, 99, 99
 	cfg.Thresholds.CPUWindowMinutes, cfg.Thresholds.KeyExpiryDays, cfg.Thresholds.OfflineMinutes = 15, 7, 20
 	snap = look()
-	want = []string{"warning: CPU 97% busy on roost", "warning: server is offline"}
+	want = []string{"warning: CPU 97% busy on bield", "warning: server is offline"}
 	if got := alertSummary(snap.Alerts); !slices.Equal(got, want) {
 		t.Errorf("alerts after raising the thresholds =\n%q\nwant\n%q", got, want)
 	}
-	if s := statuses(snap)["roost"]; s != "attention: CPU 97% for 15m" {
+	if s := statuses(snap)["bield"]; s != "attention: CPU 97% for 15m" {
 		t.Errorf("the hub's status = %q, want only CPU, over 15m", s)
 	}
 	for _, a := range snap.Alerts {
@@ -361,7 +361,7 @@ func TestFeed_settingsChangeAlerts(t *testing.T) {
 			t.Errorf("CPU alert detail = %q, want the window", a.Detail)
 		}
 	}
-	if snap.Hub.Thresholds.CPUWindowMinutes != 15 || snap.Hub.Name != "Roost" || snap.Hub.SetupDone {
+	if snap.Hub.Thresholds.CPUWindowMinutes != 15 || snap.Hub.Name != "Bield" || snap.Hub.SetupDone {
 		t.Errorf("hub = %+v, want the settings' thresholds, and the setup waiting", snap.Hub)
 	}
 	cfg.General.SetupDone = true
@@ -372,9 +372,9 @@ func TestFeed_settingsChangeAlerts(t *testing.T) {
 	// A device's own thresholds beat the settings'. The server has been gone
 	// 30 minutes: the settings say 20 and its own say an hour.
 	own["server"] = store.ThresholdOverrides{OfflineMinutes: new(60)}
-	own["roost"] = store.ThresholdOverrides{CPUWarn: new(99.0), DiskWarn: new(50.0), DiskCritical: new(90.0)}
+	own["bield"] = store.ThresholdOverrides{CPUWarn: new(99.0), DiskWarn: new(50.0), DiskCritical: new(90.0)}
 	snap = look()
-	want = []string{"critical: Disk 96% full on roost"}
+	want = []string{"critical: Disk 96% full on bield"}
 	if got := alertSummary(snap.Alerts); !slices.Equal(got, want) {
 		t.Errorf("alerts with a device's own thresholds =\n%q\nwant\n%q", got, want)
 	}
@@ -382,7 +382,7 @@ func TestFeed_settingsChangeAlerts(t *testing.T) {
 		t.Errorf("server's status = %q, want offline whatever its alert says", got)
 	}
 	for _, d := range snap.Devices {
-		if d.ID == "roost" && !reflect.DeepEqual(d.Settings.Thresholds, api.DeviceThresholds{CPUWarn: new(99.0), DiskWarn: new(50.0), DiskCritical: new(90.0)}) {
+		if d.ID == "bield" && !reflect.DeepEqual(d.Settings.Thresholds, api.DeviceThresholds{CPUWarn: new(99.0), DiskWarn: new(50.0), DiskCritical: new(90.0)}) {
 			t.Errorf("the hub's own thresholds = %+v, want what was set", d.Settings.Thresholds)
 		}
 	}
@@ -394,7 +394,7 @@ func TestFeed_settingsChangeAlerts(t *testing.T) {
 	if got := alertSummary(snap.Alerts); len(got) != 0 {
 		t.Errorf("alerts with the rules off = %q, want none", got)
 	}
-	if got := statuses(snap)["roost"]; got != "online: This hub" {
+	if got := statuses(snap)["bield"]; got != "online: This hub" {
 		t.Errorf("the hub's status with its rules off = %q, want it online", got)
 	}
 	cfg.Rules = settings.Defaults().Rules
@@ -459,7 +459,7 @@ func TestSettings_corrupt(t *testing.T) {
 	if err := st.SetKV(t.Context(), "settings", `{"retention":{"activityDays":"x"}}`); err != nil {
 		t.Fatal(err)
 	}
-	// Roost carries on with the defaults, and an admin can write over what it
+	// Bield carries on with the defaults, and an admin can write over what it
 	// can't read.
 	if v := getSettings(t, h); v.Settings.Retention.ActivityDays != 30 {
 		t.Errorf("settings that can't be read = %+v, want the defaults", v.Settings)
@@ -472,15 +472,15 @@ func TestSettings_corrupt(t *testing.T) {
 	}
 }
 
-// The machine Roost runs on is two nodes in embedded mode, Roost's own and a
-// peer. Roost measures it once, so what an admin set on either node counts
+// The machine Bield runs on is two nodes in embedded mode, Bield's own and a
+// peer. Bield measures it once, so what an admin set on either node counts
 // for both.
 func TestFeed_settingsOfTheHubMachine(t *testing.T) {
 	t.Parallel()
 	now := time.Now()
 	status := &tailnet.Status{
 		State: tailnet.StateRunning,
-		Self:  tailnet.Device{ID: "roost", HostName: "roost", DNSName: roostHost, IPs: []netip.Addr{roostIP}, OS: "linux", Online: true},
+		Self:  tailnet.Device{ID: "bield", HostName: "bield", DNSName: bieldHost, IPs: []netip.Addr{bieldIP}, OS: "linux", Online: true},
 		Peers: []tailnet.Device{{ID: "host", HostName: "host", OS: "linux", Online: true, SameMachine: true}},
 	}
 	cpu := 97.0
@@ -506,13 +506,13 @@ func TestFeed_settingsOfTheHubMachine(t *testing.T) {
 		own  map[string]store.ThresholdOverrides
 		want []string
 	}{
-		"nothing of its own": {nil, []string{"critical: Disk 96% full on roost", "warning: CPU 97% busy on roost"}},
+		"nothing of its own": {nil, []string{"critical: Disk 96% full on bield", "warning: CPU 97% busy on bield"}},
 		"on the peer":        {map[string]store.ThresholdOverrides{"host": {DiskWarn: new(99.0), CPUWarn: new(99.0)}}, nil},
-		"on Roost's node":    {map[string]store.ThresholdOverrides{"roost": {DiskWarn: new(99.0), CPUWarn: new(99.0)}}, nil},
-		// Roost's own node wins where both say something.
+		"on Bield's node":    {map[string]store.ThresholdOverrides{"bield": {DiskWarn: new(99.0), CPUWarn: new(99.0)}}, nil},
+		// Bield's own node wins where both say something.
 		"on both": {map[string]store.ThresholdOverrides{
-			"roost": {DiskWarn: new(50.0), DiskCritical: new(60.0)}, "host": {DiskWarn: new(99.0), CPUWarn: new(99.0)},
-		}, []string{"critical: Disk 96% full on roost"}},
+			"bield": {DiskWarn: new(50.0), DiskCritical: new(60.0)}, "host": {DiskWarn: new(99.0), CPUWarn: new(99.0)},
+		}, []string{"critical: Disk 96% full on bield"}},
 	} {
 		snap := look(tt.own)
 		if got := alertSummary(snap.Alerts); !slices.Equal(got, tt.want) {
@@ -538,7 +538,7 @@ func TestFeed_turningARuleOffResolvesItsAlerts(t *testing.T) {
 			now := time.Now()
 			status := &tailnet.Status{
 				State: tailnet.StateRunning,
-				Self:  tailnet.Device{ID: "roost", HostName: "roost", DNSName: roostHost, IPs: []netip.Addr{roostIP}, OS: "linux", Online: true},
+				Self:  tailnet.Device{ID: "bield", HostName: "bield", DNSName: bieldHost, IPs: []netip.Addr{bieldIP}, OS: "linux", Online: true},
 			}
 			host := hostmetrics.Reading{Sample: &hostmetrics.Sample{
 				At: now.Add(-hostAge), Mem: hostmetrics.Usage{Used: 50, Total: 100}, Disk: &hostmetrics.Usage{Used: 96 << 30, Total: 100 << 30},
@@ -549,7 +549,7 @@ func TestFeed_turningARuleOffResolvesItsAlerts(t *testing.T) {
 				Alerts:  engine, Store: st,
 			}).Latest()
 		}
-		if got := alertSummary(build(0).Alerts); !slices.Equal(got, []string{"critical: Disk 96% full on roost"}) {
+		if got := alertSummary(build(0).Alerts); !slices.Equal(got, []string{"critical: Disk 96% full on bield"}) {
 			t.Fatalf("alerts = %q, want the disk's", got)
 		}
 
@@ -571,7 +571,7 @@ func TestFeed_turningARuleOffResolvesItsAlerts(t *testing.T) {
 		if err := settings.Save(t.Context(), st, s); err != nil {
 			t.Fatal(err)
 		}
-		if got := alertSummary(build(0).Alerts); !slices.Equal(got, []string{"critical: Disk 96% full on roost"}) {
+		if got := alertSummary(build(0).Alerts); !slices.Equal(got, []string{"critical: Disk 96% full on bield"}) {
 			t.Errorf("alerts with the rule on again = %q, want the disk's", got)
 		}
 	})

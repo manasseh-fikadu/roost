@@ -7,8 +7,8 @@ import (
 	"time"
 )
 
-// HubID is the device ID that the history of the machine Roost runs on is
-// kept under. That machine can be Roost's own node, or a peer in embedded
+// HubID is the device ID that the history of the machine Bield runs on is
+// kept under. That machine can be Bield's own node, or a peer in embedded
 // mode, and the node can change, but its history stays in one place.
 const HubID = "hub"
 
@@ -74,7 +74,7 @@ type MetricsBucket struct {
 // starts at a multiple of size since the Unix epoch.
 //
 // Raw samples only go back RawKeep, so the history is read from the buckets that
-// Roost folds them into, if size is a multiple of their length: five minutes,
+// Bield folds them into, if size is a multiple of their length: five minutes,
 // or an hour. That's faster too, and the raw samples only fill in what isn't
 // in a bucket yet.
 func (s *Store) MetricsHistory(ctx context.Context, deviceID string, since time.Time, size time.Duration) ([]MetricsBucket, error) {

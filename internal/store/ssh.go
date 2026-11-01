@@ -11,11 +11,11 @@ import (
 // ErrNoSSHAccess means SSH access isn't set up for the device.
 var ErrNoSSHAccess = errors.New("SSH access isn't set up for this device")
 
-// SSHAccess is how Roost logs in to a machine over SSH.
+// SSHAccess is how Bield logs in to a machine over SSH.
 type SSHAccess struct {
-	// DeviceID is the device's ID, or HubID for the machine Roost runs on.
+	// DeviceID is the device's ID, or HubID for the machine Bield runs on.
 	DeviceID string
-	// User is the account Roost logs in as, and Port is where sshd listens.
+	// User is the account Bield logs in as, and Port is where sshd listens.
 	User string
 	Port int
 	// HostKey is the machine's host key as in known_hosts, such as
@@ -24,12 +24,12 @@ type SSHAccess struct {
 	HostKey  string
 	PinnedAt time.Time
 	// CreatedAt is when it was set up, and CreatedBy the login of the admin
-	// who did, or "" if Roost did.
+	// who did, or "" if Bield did.
 	CreatedAt time.Time
 	CreatedBy string
 }
 
-// SSHAccess returns how Roost logs in to every machine that has SSH access
+// SSHAccess returns how Bield logs in to every machine that has SSH access
 // set up, by device ID.
 func (s *Store) SSHAccess(ctx context.Context) (map[string]SSHAccess, error) {
 	rows, err := s.db.QueryContext(ctx,
@@ -61,7 +61,7 @@ func (s *Store) SSHAccess(ctx context.Context) (map[string]SSHAccess, error) {
 	return out, nil
 }
 
-// SetSSHAccess saves how Roost logs in to a machine, replacing what was
+// SetSSHAccess saves how Bield logs in to a machine, replacing what was
 // saved for it.
 func (s *Store) SetSSHAccess(ctx context.Context, a SSHAccess) error {
 	var pinned sql.NullInt64
@@ -81,7 +81,7 @@ func (s *Store) SetSSHAccess(ctx context.Context, a SSHAccess) error {
 	return nil
 }
 
-// DeleteSSHAccess forgets how Roost logs in to a machine. It returns
+// DeleteSSHAccess forgets how Bield logs in to a machine. It returns
 // ErrNoSSHAccess if nothing was saved for it.
 func (s *Store) DeleteSSHAccess(ctx context.Context, deviceID string) error {
 	res, err := s.db.ExecContext(ctx, "DELETE FROM ssh_access WHERE device_id = ?", deviceID)

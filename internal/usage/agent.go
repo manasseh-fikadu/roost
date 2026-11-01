@@ -10,7 +10,7 @@ import (
 )
 
 // Limits on what an agent can report. The agent sends at most 24 groups and
-// 24 processes, so more isn't from Roost's agent.
+// 24 processes, so more isn't from Bield's agent.
 const (
 	agentMaxItems = 60
 	maxKey        = 160

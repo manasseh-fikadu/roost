@@ -12,7 +12,7 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/docker"
 )
 
 // engine is a fake Docker Engine that serves a few containers and counts
@@ -400,7 +400,7 @@ func TestHost_WatchAfterClose(t *testing.T) {
 }
 
 // A machine whose clock is far off still has its counters used: they're as
-// old as Roost's clock says, not the machine's.
+// old as Bield's clock says, not the machine's.
 func TestHost_EntriesWithAnotherClock(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {

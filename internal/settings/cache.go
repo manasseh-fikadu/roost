@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // cacheFor is how long a Cache trusts what it read from the store.

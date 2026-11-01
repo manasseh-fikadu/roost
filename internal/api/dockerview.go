@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/docker"
 )
 
 // secretLabel matches the names of labels that may hold a credential.

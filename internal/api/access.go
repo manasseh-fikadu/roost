@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // access answers GET /api/access.
@@ -12,7 +12,7 @@ func (h *handler) access(w http.ResponseWriter, r *http.Request) {
 	h.writeAccess(w, r)
 }
 
-// changeAccess answers PATCH /api/access, which changes who can view Roost.
+// changeAccess answers PATCH /api/access, which changes who can view Bield.
 func (h *handler) changeAccess(w http.ResponseWriter, r *http.Request) {
 	var body ChangeAccess
 	if !h.readJSON(w, r, &body) {
@@ -33,14 +33,14 @@ func (h *handler) changeAccess(w http.ResponseWriter, r *http.Request) {
 		}
 		changed, err := h.opts.Store.SetWhoCanView(r.Context(), who)
 		if err != nil {
-			h.fail(w, r, "change who can view Roost", err)
+			h.fail(w, r, "change who can view Bield", err)
 			return
 		}
 		if changed {
-			h.log.Info("changed who can view Roost", "by", callerOf(r).who.LoginName, "who_can_view", who)
-			msg := "Let only the users with a role view Roost"
+			h.log.Info("changed who can view Bield", "by", callerOf(r).who.LoginName, "who_can_view", who)
+			msg := "Let only the users with a role view Bield"
 			if who == store.Tailnet {
-				msg = "Let anyone on the tailnet view Roost"
+				msg = "Let anyone on the tailnet view Bield"
 			}
 			h.logAction(r, EventKindAccess, "", msg)
 		}
@@ -128,11 +128,11 @@ func (h *handler) roleChanged(w http.ResponseWriter, r *http.Request, err error)
 	return true
 }
 
-// writeAccess answers with who has a role in Roost and who else can view it.
+// writeAccess answers with who has a role in Bield and who else can view it.
 func (h *handler) writeAccess(w http.ResponseWriter, r *http.Request) {
 	who, users, err := h.opts.Store.Access(r.Context())
 	if err != nil {
-		h.fail(w, r, "look up who can view Roost", err)
+		h.fail(w, r, "look up who can view Bield", err)
 		return
 	}
 	a := Access{WhoCanView: WhoCanViewListed, Users: make([]User, len(users))}

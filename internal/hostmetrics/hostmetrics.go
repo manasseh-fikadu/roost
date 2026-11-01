@@ -1,4 +1,4 @@
-// Package hostmetrics measures the machine Roost runs on: CPU, memory, swap,
+// Package hostmetrics measures the machine Bield runs on: CPU, memory, swap,
 // disk, load, network, temperature and uptime. It reads them from /proc and
 // /sys, so it only works on Linux. Other machines need the agent.
 package hostmetrics
@@ -69,7 +69,7 @@ type Usage struct {
 	Used, Total uint64
 }
 
-// Info is what the machine is. It doesn't change while Roost runs.
+// Info is what the machine is. It doesn't change while Bield runs.
 type Info struct {
 	Hostname string
 	// OSVersion is the distribution's name and version, such as

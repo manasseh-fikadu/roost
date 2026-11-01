@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 // TestSeed_olderHistoryIsInBuckets checks that the history that reaches back
@@ -13,10 +13,10 @@ import (
 // the buckets and the samples make an unbroken run.
 func TestSeed_olderHistoryIsInBuckets(t *testing.T) {
 	t.Parallel()
-	// Roost's own machine and one more are enough to see it.
+	// Bield's own machine and one more are enough to see it.
 	d := New(Options{Devices: 2, Listen: "127.0.0.1:0"})
 	t.Cleanup(d.Close)
-	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "roost.db"), store.Options{})
+	st, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "bield.db"), store.Options{})
 	if err != nil {
 		t.Fatal(err)
 	}

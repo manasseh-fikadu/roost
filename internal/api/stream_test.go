@@ -14,16 +14,16 @@ import (
 	"testing/synctest"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/agents"
-	"github.com/manasseh-fikadu/roost/internal/alerts"
-	"github.com/manasseh-fikadu/roost/internal/api"
-	"github.com/manasseh-fikadu/roost/internal/checks"
-	"github.com/manasseh-fikadu/roost/internal/docker"
-	"github.com/manasseh-fikadu/roost/internal/settings"
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
-	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
-	"github.com/manasseh-fikadu/roost/internal/usage"
+	"github.com/manasseh-fikadu/bield/internal/agents"
+	"github.com/manasseh-fikadu/bield/internal/alerts"
+	"github.com/manasseh-fikadu/bield/internal/api"
+	"github.com/manasseh-fikadu/bield/internal/checks"
+	"github.com/manasseh-fikadu/bield/internal/docker"
+	"github.com/manasseh-fikadu/bield/internal/settings"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/tailnet/tailnettest"
+	"github.com/manasseh-fikadu/bield/internal/usage"
 )
 
 func TestStream(t *testing.T) {
@@ -37,7 +37,7 @@ func TestStream(t *testing.T) {
 	}{
 		{name: "admin", from: laptopIP, gzip: true, tailnet: "example.com", netcheckErr: "no DERP map"},
 		// A personal tailnet is named after its owner's email address, and an
-		// error can name paths and addresses on Roost's machine.
+		// error can name paths and addresses on Bield's machine.
 		{name: "viewer", from: phoneIP, gzip: true},
 		{name: "without gzip", from: laptopIP, tailnet: "example.com", netcheckErr: "no DERP map"},
 	} {
@@ -68,7 +68,7 @@ func TestStream(t *testing.T) {
 				synctest.Wait()
 				first := nextSnapshot(t, events)
 				want := api.Hub{
-					Name: "Roost", Version: "v1.2.3", DNSName: roostHost, Tailnet: tt.tailnet,
+					Name: "Bield", Version: "v1.2.3", DNSName: bieldHost, Tailnet: tt.tailnet,
 					Thresholds: api.Thresholds(settings.Defaults().Thresholds),
 				}
 				if first.Hub != want {
@@ -91,12 +91,12 @@ func TestStream(t *testing.T) {
 						t.Errorf("collector %d = %+v, want %+v", i, c, want)
 					}
 				}
-				// Roost's node, then servers, laptops and the rest, by name.
-				if got, want := deviceIDs(first), []string{"roost", "server", "laptop", "phone", "tablet"}; !slices.Equal(got, want) {
+				// Bield's node, then servers, laptops and the rest, by name.
+				if got, want := deviceIDs(first), []string{"bield", "server", "laptop", "phone", "tablet"}; !slices.Equal(got, want) {
 					t.Fatalf("devices = %q, want %q", got, want)
 				}
-				if d := first.Devices[0]; d.Name != "roost" || !d.Self || strings.Join(d.IPs, ",") != roostIP.String()+","+roostIPv6.String() {
-					t.Errorf("first device = %+v, want Roost's node", d)
+				if d := first.Devices[0]; d.Name != "bield" || !d.Self || strings.Join(d.IPs, ",") != bieldIP.String()+","+bieldIPv6.String() {
+					t.Errorf("first device = %+v, want Bield's node", d)
 				}
 
 				// Nothing more until something changes.
@@ -166,7 +166,7 @@ func TestStream_gathersChanges(t *testing.T) {
 }
 
 // A caller whose role changes is cut off, so that their client connects
-// again and Roost checks them again.
+// again and Bield checks them again.
 func TestStream_roleChange(t *testing.T) {
 	st := testStore(t)
 	synctest.Test(t, func(t *testing.T) {

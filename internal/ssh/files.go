@@ -10,14 +10,14 @@ import (
 	gossh "golang.org/x/crypto/ssh"
 )
 
-// ErrNoSFTP is why Roost can't open the files of a machine whose sshd has no
+// ErrNoSFTP is why Bield can't open the files of a machine whose sshd has no
 // SFTP subsystem.
 var ErrNoSFTP = errors.New("the machine's sshd doesn't offer SFTP; turn it on with a Subsystem sftp line in sshd_config")
 
 // SFTP is an SFTP client on a device's shared connection.
 type SFTP struct {
 	*sftp.Client
-	// Home is the home folder of the user Roost logs in as.
+	// Home is the home folder of the user Bield logs in as.
 	Home string
 	// Cache is for what the file manager learns about the machine, such as
 	// its users' names, and keeps as long as the client lasts.

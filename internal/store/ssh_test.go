@@ -6,16 +6,16 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/store"
 )
 
 func TestStore_SSHAccess(t *testing.T) {
 	t.Parallel()
-	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	s := openStore(t, filepath.Join(t.TempDir(), "bield.db"), nil)
 	ctx := t.Context()
 	created := time.UnixMilli(1_700_000_000_000)
 	laptop := store.SSHAccess{DeviceID: "laptop", User: "alice", Port: 22, CreatedAt: created, CreatedBy: "alice@example.com"}
-	hub := store.SSHAccess{DeviceID: store.HubID, User: "roost", Port: 2222, CreatedAt: created}
+	hub := store.SSHAccess{DeviceID: store.HubID, User: "bield", Port: 2222, CreatedAt: created}
 	for _, a := range []store.SSHAccess{laptop, hub} {
 		if err := s.SetSSHAccess(ctx, a); err != nil {
 			t.Fatal(err)

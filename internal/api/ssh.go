@@ -6,14 +6,14 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/manasseh-fikadu/roost/internal/ssh"
-	"github.com/manasseh-fikadu/roost/internal/store"
-	"github.com/manasseh-fikadu/roost/internal/tailnet"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/store"
+	"github.com/manasseh-fikadu/bield/internal/tailnet"
 )
 
-// newDeviceSSH returns how Roost logs in to d, from what the SSH manager
-// says of each machine. self marks Roost's own node, which is roost.
-func newDeviceSSH(d tailnet.Device, self bool, roost tailnet.Device, access map[string]ssh.Access) *DeviceSSH {
+// newDeviceSSH returns how Bield logs in to d, from what the SSH manager
+// says of each machine. self marks Bield's own node, which is bield.
+func newDeviceSSH(d tailnet.Device, self bool, bield tailnet.Device, access map[string]ssh.Access) *DeviceSSH {
 	id := ssh.AccessID(d, self)
 	out := &DeviceSSH{State: SSHStateNotSetUp, Hub: id == store.HubID}
 	a, ok := access[id]
@@ -25,19 +25,19 @@ func newDeviceSSH(d tailnet.Device, self bool, roost tailnet.Device, access map[
 	out.Tmux, out.Docker = a.Tmux, a.Docker
 	out.Method = SSHMethod(a.Method)
 	if a.Refusal != "" {
-		out.Policy = &SSHPolicy{Refusal: SSHRefusal(a.Refusal), Snippet: ssh.PolicySnippet(roost, d, a.User)}
+		out.Policy = &SSHPolicy{Refusal: SSHRefusal(a.Refusal), Snippet: ssh.PolicySnippet(bield, d, a.User)}
 	}
 	return out
 }
 
-// sshOf returns how Roost logs in to the device with an ID, as it is now.
+// sshOf returns how Bield logs in to the device with an ID, as it is now.
 func (h *handler) sshOf(id string) *DeviceSSH {
 	d, _, ok := h.deviceByID(id)
 	if !ok {
 		return &DeviceSSH{State: SSHStateNotSetUp}
 	}
-	roost := h.opts.Snapshot().Status.Self
-	return newDeviceSSH(d, roost.ID == d.ID, roost, h.opts.SSH.Access())
+	bield := h.opts.Snapshot().Status.Self
+	return newDeviceSSH(d, bield.ID == d.ID, bield, h.opts.SSH.Access())
 }
 
 // sshError answers with the status and message for an error from the SSH
@@ -81,7 +81,7 @@ func sshStatus(err error) (int, bool) {
 	return 0, false
 }
 
-// sshSetup answers GET /api/devices/{id}/ssh with how to let Roost log in
+// sshSetup answers GET /api/devices/{id}/ssh with how to let Bield log in
 // to the device.
 func (h *handler) sshSetup(w http.ResponseWriter, r *http.Request) {
 	s, err := h.opts.SSH.Setup(r.PathValue("id"))
@@ -95,7 +95,7 @@ func (h *handler) sshSetup(w http.ResponseWriter, r *http.Request) {
 	h.writeJSON(w, r, http.StatusOK, out)
 }
 
-// setSSH answers PUT /api/devices/{id}/ssh, which sets up how Roost logs in
+// setSSH answers PUT /api/devices/{id}/ssh, which sets up how Bield logs in
 // to the device.
 func (h *handler) setSSH(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
@@ -121,16 +121,16 @@ func (h *handler) setSSH(w http.ResponseWriter, r *http.Request) {
 }
 
 // authorizeSSH answers POST /api/devices/{id}/ssh/authorize, which lets
-// Roost log in to the machine it runs on as the user it runs as.
+// Bield log in to the machine it runs on as the user it runs as.
 func (h *handler) authorizeSSH(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	a, added, err := h.opts.SSH.AuthorizeHere(r.Context(), id, callerOf(r).who.LoginName)
 	if h.sshError(w, r, err) {
 		return
 	}
-	msg := "Set up SSH access to the machine Roost runs on, as " + a.User
+	msg := "Set up SSH access to the machine Bield runs on, as " + a.User
 	if added {
-		msg = "Added Roost's SSH key to the authorized_keys of " + a.User + " on the machine Roost runs on"
+		msg = "Added Bield's SSH key to the authorized_keys of " + a.User + " on the machine Bield runs on"
 	}
 	h.logAction(r, EventKindSSH, id, msg)
 	h.writeJSON(w, r, http.StatusOK, h.sshOf(id))
@@ -183,7 +183,7 @@ func (h *handler) resetHostKey(w http.ResponseWriter, r *http.Request) {
 	}
 	h.logEvent(r, store.Event{
 		Level: string(EventLevelWarning), Kind: string(EventKindSSH), DeviceID: id, Actor: callerOf(r).who.LoginName,
-		Message: "Reset the SSH host key of " + h.deviceName(r, id) + ", so Roost trusts the key it offers next",
+		Message: "Reset the SSH host key of " + h.deviceName(r, id) + ", so Bield trusts the key it offers next",
 	})
 	h.writeJSON(w, r, http.StatusOK, h.sshOf(id))
 }

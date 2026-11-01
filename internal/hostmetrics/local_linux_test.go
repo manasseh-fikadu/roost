@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/manasseh-fikadu/roost/internal/hostmetrics"
+	"github.com/manasseh-fikadu/bield/internal/hostmetrics"
 )
 
 func TestLocal_readsUnderTheRoot(t *testing.T) {

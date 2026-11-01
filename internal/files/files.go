@@ -22,7 +22,7 @@ import (
 
 	"github.com/pkg/sftp"
 
-	"github.com/manasseh-fikadu/roost/internal/ssh"
+	"github.com/manasseh-fikadu/bield/internal/ssh"
 )
 
 // An Error says why a file operation failed, in words for the person who
@@ -113,7 +113,7 @@ type Listing struct {
 	// Path is the folder, with links resolved, and Parent the folder above
 	// it, or "" for the root.
 	Path, Parent string
-	// Home is the home folder of the user Roost logs in as.
+	// Home is the home folder of the user Bield logs in as.
 	Home    string
 	Entries []Entry
 	// Space is the room on the file system that holds the folder, or nil if
@@ -148,7 +148,7 @@ func Open(ctx context.Context, mgr *ssh.Manager, deviceID string) (*Remote, erro
 // Close lets go of the connection.
 func (r *Remote) Close() { r.release() }
 
-// Home returns the home folder of the user Roost logs in as.
+// Home returns the home folder of the user Bield logs in as.
 func (r *Remote) Home() string { return r.sftp.Home }
 
 // ---- paths ----

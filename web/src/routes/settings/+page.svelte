@@ -1,7 +1,7 @@
 <!--
-	Settings: how Roost looks and behaves, and who can use it. Admins only.
+	Settings: how Bield looks and behaves, and who can use it. Admins only.
 	The tab is in the URL, /settings?tab=alerts, so links can point at it. Each
-	tab saves its own part of the settings, and Roost uses a change at once.
+	tab saves its own part of the settings, and Bield uses a change at once.
 -->
 <script lang="ts">
 	import { goto } from '$app/navigation';
@@ -67,7 +67,7 @@
 	}
 </script>
 
-<PageHeader title="Settings" description="How Roost behaves, and who can use it." />
+<PageHeader title="Settings" description="How Bield behaves, and who can use it." />
 
 {#if view}
 	<Tabs bind:value={() => tab, setTab} {tabs}>

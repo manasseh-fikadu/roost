@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/netguard"
+	"github.com/manasseh-fikadu/bield/internal/netguard"
 )
 
 var sentAt = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
@@ -22,7 +22,7 @@ var sentAt = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
 func opened() Message {
 	return Message{
 		Event: Opened, Severity: "critical", Title: "Disk 96% full on <laptop> & co", Detail: "12 GB left on /",
-		AlertID: 12, OpenedAt: sentAt.Add(-2 * time.Hour), At: sentAt, URL: "https://roost.example.ts.net/alerts?alert=12",
+		AlertID: 12, OpenedAt: sentAt.Add(-2 * time.Hour), At: sentAt, URL: "https://bield.example.ts.net/alerts?alert=12",
 		Instance: "Home lab",
 	}
 }
@@ -81,13 +81,13 @@ func (h *hook) header(name string) string {
 func TestNtfy(t *testing.T) {
 	t.Parallel()
 	h := newHook(t)
-	err := ntfy{Config{Server: h.srv.URL, Topic: "roost", Token: "tk_abc"}, NewEnv(nil)}.Send(t.Context(), opened())
+	err := ntfy{Config{Server: h.srv.URL, Topic: "bield", Token: "tk_abc"}, NewEnv(nil)}.Send(t.Context(), opened())
 	if err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
 	got := h.json(t)
-	if got["topic"] != "roost" || got["title"] != "Critical: Disk 96% full on <laptop> & co" || got["priority"] != 5.0 ||
-		got["click"] != "https://roost.example.ts.net/alerts?alert=12" {
+	if got["topic"] != "bield" || got["title"] != "Critical: Disk 96% full on <laptop> & co" || got["priority"] != 5.0 ||
+		got["click"] != "https://bield.example.ts.net/alerts?alert=12" {
 		t.Errorf("body = %v", got)
 	}
 	if msg, _ := got["message"].(string); !strings.Contains(msg, "12 GB left on /") || !strings.Contains(msg, "Critical, open for 2h") ||
@@ -105,7 +105,7 @@ func TestNtfy(t *testing.T) {
 	h2 := newHook(t)
 	m := opened()
 	m.Event, m.ResolvedAt = Resolved, sentAt
-	if err := (ntfy{Config{Server: h2.srv.URL + "/", Topic: "roost", Username: "alice", Password: "pw"}, NewEnv(nil)}).Send(t.Context(), m); err != nil {
+	if err := (ntfy{Config{Server: h2.srv.URL + "/", Topic: "bield", Username: "alice", Password: "pw"}, NewEnv(nil)}).Send(t.Context(), m); err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
 	if got := h2.header("Authorization"); got != "Basic YWxpY2U6cHc=" {
@@ -145,7 +145,7 @@ func TestDiscord(t *testing.T) {
 		t.Fatalf("body = %v, want one embed", got)
 	}
 	e, _ := embeds[0].(map[string]any)
-	if e["title"] != "Critical: Disk 96% full on <laptop> & co" || e["color"] != float64(0xE5484D) || e["url"] != "https://roost.example.ts.net/alerts?alert=12" ||
+	if e["title"] != "Critical: Disk 96% full on <laptop> & co" || e["color"] != float64(0xE5484D) || e["url"] != "https://bield.example.ts.net/alerts?alert=12" ||
 		e["timestamp"] != "2026-11-01T12:00:00Z" {
 		t.Errorf("embed = %v", e)
 	}
@@ -178,7 +178,7 @@ func TestSlack(t *testing.T) {
 	if a["title"] != "Critical: Disk 96% full on &lt;laptop&gt; &amp; co" || a["color"] != "#e5484d" {
 		t.Errorf("attachment = %v", a)
 	}
-	if text, _ := a["text"].(string); !strings.Contains(text, "<https://roost.example.ts.net/alerts?alert=12|Open in Home lab>") {
+	if text, _ := a["text"].(string); !strings.Contains(text, "<https://bield.example.ts.net/alerts?alert=12|Open in Home lab>") {
 		t.Errorf("text = %q, want a link", text)
 	}
 }
@@ -188,7 +188,7 @@ func TestSlack_escapes(t *testing.T) {
 	h := newHook(t)
 	m := opened()
 	m.Title = "<!channel> down & <@U123>"
-	m.URL = "https://roost.example.com/alerts?alert=1&x=a|b>c"
+	m.URL = "https://bield.example.com/alerts?alert=1&x=a|b>c"
 	if err := (slack{Config{URL: h.srv.URL + "/services/T/B/X"}, NewEnv(nil)}).Send(t.Context(), m); err != nil {
 		t.Fatalf("Send() error = %v", err)
 	}
@@ -200,7 +200,7 @@ func TestSlack_escapes(t *testing.T) {
 	atts, _ := got["attachments"].([]any)
 	a, _ := atts[0].(map[string]any)
 	body, _ := a["text"].(string)
-	if !strings.Contains(body, "<https://roost.example.com/alerts?alert=1&amp;x=a%7Cb%3Ec|Open in Home lab>") {
+	if !strings.Contains(body, "<https://bield.example.com/alerts?alert=1&amp;x=a%7Cb%3Ec|Open in Home lab>") {
 		t.Errorf("attachment text = %q, want the link's | and > kept from ending it", body)
 	}
 }
@@ -220,7 +220,7 @@ func TestTelegram(t *testing.T) {
 	text, _ := got["text"].(string)
 	if got["chat_id"] != "-100123" || got["parse_mode"] != "HTML" ||
 		!strings.Contains(text, "<b>Critical: Disk 96% full on &lt;laptop&gt; &amp; co</b>") ||
-		!strings.Contains(text, `<a href="https://roost.example.ts.net/alerts?alert=12">Open in Home lab</a>`) {
+		!strings.Contains(text, `<a href="https://bield.example.ts.net/alerts?alert=12">Open in Home lab</a>`) {
 		t.Errorf("body = %v", got)
 	}
 }
@@ -254,7 +254,7 @@ func TestWebhook(t *testing.T) {
 
 	// A test has no alert in it.
 	h2 := newHook(t)
-	if err := (webhook{Config{URL: h2.srv.URL}, NewEnv(nil)}).Send(t.Context(), Message{Event: Test, Severity: "info", Instance: "Roost", At: sentAt}); err != nil {
+	if err := (webhook{Config{URL: h2.srv.URL}, NewEnv(nil)}).Send(t.Context(), Message{Event: Test, Severity: "info", Instance: "Bield", At: sentAt}); err != nil {
 		t.Fatal(err)
 	}
 	if got := h2.json(t); got["alert"] != nil || got["event"] != "test" {
@@ -357,7 +357,7 @@ func TestMessage_text(t *testing.T) {
 	if got, want := m.Subject(), "Critical: Disk 96% full on <laptop> & co"; got != want {
 		t.Errorf("Subject() = %q, want %q", got, want)
 	}
-	if got, want := m.Text(), "12 GB left on /\n\nCritical, open for 2h\n\nhttps://roost.example.ts.net/alerts?alert=12"; got != want {
+	if got, want := m.Text(), "12 GB left on /\n\nCritical, open for 2h\n\nhttps://bield.example.ts.net/alerts?alert=12"; got != want {
 		t.Errorf("Text() = %q, want %q", got, want)
 	}
 	for _, tt := range []struct {
@@ -380,7 +380,7 @@ func TestMessage_text(t *testing.T) {
 	if got, want := r.Text(), "12 GB left on /\n\nResolved after 1h 30m"; got != want {
 		t.Errorf("Text() of a resolved alert = %q, want %q", got, want)
 	}
-	if got := (Message{Event: Test, Instance: "Roost"}).Text(); !strings.Contains(got, "This is a test") {
+	if got := (Message{Event: Test, Instance: "Bield"}).Text(); !strings.Contains(got, "This is a test") {
 		t.Errorf("Text() of a test = %q", got)
 	}
 }

@@ -1,12 +1,12 @@
-# Roost
+# Bield
 
 The order of work is the checklist in issue #1. Issue #2 has the stack and layout.
 
 ## Commands
 
-- `make dev` runs Vite and the Go server, which serves Roost only on the tailnet and proxies the web UI to Vite (`--dev-ui`). Open the URL in the `roost is running` log line. `ROOST_TAILSCALE=host make dev` uses the machine's Tailscale instead of an embedded node, which needs a login the first time; in host mode, requests from the machine itself are anonymous, so open it from another device. Only admins get the UI through `--dev-ui`. The Go side doesn't reload, so restart after Go changes.
-- `make build` builds `./roost` with the UI embedded, using the `ui` build tag. Plain `go build`, `go test` and `go vet` leave the UI out, so they work without a web build.
-- `make demo` runs the Go server in demo mode (`--demo`) with Vite: a made-up tailnet with 12 machines and a week of history, so it needs no Tailscale and the visitor is an admin. `--demo-devices 200 --demo-days 90` makes it big. Terminals, files and Docker actions answer with a notice there. `make build && make e2e` runs the Playwright smoke test against it, and `make bench` and `make load` measure Roost with 200 devices.
+- `make dev` runs Vite and the Go server, which serves Bield only on the tailnet and proxies the web UI to Vite (`--dev-ui`). Open the URL in the `bield is running` log line. `BIELD_TAILSCALE=host make dev` uses the machine's Tailscale instead of an embedded node, which needs a login the first time; in host mode, requests from the machine itself are anonymous, so open it from another device. Only admins get the UI through `--dev-ui`. The Go side doesn't reload, so restart after Go changes.
+- `make build` builds `./bield` with the UI embedded, using the `ui` build tag. Plain `go build`, `go test` and `go vet` leave the UI out, so they work without a web build.
+- `make demo` runs the Go server in demo mode (`--demo`) with Vite: a made-up tailnet with 12 machines and a week of history, so it needs no Tailscale and the visitor is an admin. `--demo-devices 200 --demo-days 90` makes it big. Terminals, files and Docker actions answer with a notice there. `make build && make e2e` runs the Playwright smoke test against it, and `make bench` and `make load` measure Bield with 200 devices.
 - `make test` runs `go test -race -shuffle=on ./...`, `bun test` for the web app's `.test.ts` files, and `svelte-check`.
 - `make dev` serves every UI component and chart at `/design`, a page production builds answer with a 404.
 - `make lint` runs golangci-lint (configured in `.golangci.yml`), shellcheck and prettier. Run it before committing Go, shell or web changes.
@@ -21,7 +21,7 @@ CI is `.github/workflows/ci.yml`. Its `CI passed` job fails if any other job fai
 
 ## Commits
 
-Roost uses DCO sign-off (see CONTRIBUTING.md). Commit through the `commit-conventional` skill as usual, but with `git commit -s`. In this repo, the `Signed-off-by` trailer is the one exception to that skill's subject-only rule.
+Bield uses DCO sign-off (see CONTRIBUTING.md). Commit through the `commit-conventional` skill as usual, but with `git commit -s`. In this repo, the `Signed-off-by` trailer is the one exception to that skill's subject-only rule.
 
 ## Front end: Svelte 5 and SvelteKit 3
 
