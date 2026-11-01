@@ -15,6 +15,7 @@ import (
 	"testing"
 	"testing/synctest"
 	"time"
+	"unicode"
 
 	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/ssh/sshtest"
@@ -268,6 +269,48 @@ func TestFiles_upload(t *testing.T) {
 	}
 }
 
+// An upload over the limit is refused, from its Content-Length before any of it
+// is read, or else as it streams in, and leaves nothing behind.
+func TestFiles_uploadLimit(t *testing.T) {
+	t.Parallel()
+	e := newFilesEnv(t)
+	opts := e.opts
+	opts.MaxUpload = 10
+	h := api.New(opts)
+	target := "/api/devices/laptop/files/upload?dir=" + url.QueryEscape(e.home) + "&name="
+
+	if rec := send(t, h, http.MethodPut, target+"ok.bin", laptopIP, "0123456789"); rec.Code != http.StatusOK {
+		t.Fatalf("a file of exactly the limit = %d %s, want 200", rec.Code, rec.Body)
+	}
+
+	t.Run("by its length", func(t *testing.T) {
+		req := newRequestBody(t, http.MethodPut, target+"claimed.bin", laptopIP, strings.NewReader("x"))
+		req.ContentLength = 11
+		rec := serve(h, req)
+		if rec.Code != http.StatusRequestEntityTooLarge || !strings.Contains(rec.Body.String(), "up to 10 B") {
+			t.Errorf("a file that says it's 11 bytes = %d %s, want 413", rec.Code, rec.Body)
+		}
+	})
+
+	t.Run("as it comes", func(t *testing.T) {
+		req := newRequestBody(t, http.MethodPut, target+"streamed.bin", laptopIP, io.NopCloser(strings.NewReader("0123456789ABCDEF")))
+		req.ContentLength = -1
+		rec := serve(h, req)
+		if rec.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("a body of 16 bytes of unknown length = %d %s, want 413", rec.Code, rec.Body)
+		}
+	})
+
+	for _, name := range []string{"claimed.bin", "streamed.bin"} {
+		if _, err := os.Stat(filepath.Join(e.home, name)); err == nil {
+			t.Errorf("%s was left behind", name)
+		}
+	}
+	if left, _ := filepath.Glob(filepath.Join(e.home, ".*.part")); len(left) != 0 {
+		t.Errorf("partial files left: %v", left)
+	}
+}
+
 // Uploading a folder is a request for every file in it, and one line in the
 // activity log.
 func TestFiles_uploadAudit(t *testing.T) {
@@ -360,6 +403,114 @@ func TestFiles_write(t *testing.T) {
 	big := strings.Repeat("x", 10<<20+1)
 	if rec := send(t, e.h, http.MethodPut, target, laptopIP, big); rec.Code != http.StatusRequestEntityTooLarge {
 		t.Errorf("write of 10 MB and a byte = %d, want 413", rec.Code)
+	}
+}
+
+// A file's content leaves the machine through the raw route, so the log says
+// who read it: once for a file that is read in pieces, and separately for a
+// download. A HEAD request and a refusal read nothing.
+func TestFiles_rawIsLogged(t *testing.T) {
+	t.Parallel()
+	e := newFilesEnv(t)
+	secret := e.write(t, "secrets.env", "TOKEN=abc\n")
+	target := "/api/devices/laptop/files/raw?path=" + url.QueryEscape(secret)
+
+	// A viewer can't read it, and it isn't logged.
+	if rec := serve(e.h, newRequest(t, http.MethodGet, target, phoneIP)); rec.Code != http.StatusForbidden {
+		t.Fatalf("a viewer's GET = %d, want 403", rec.Code)
+	}
+	if rec := serve(e.h, newRequest(t, http.MethodHead, target, laptopIP)); rec.Code != http.StatusOK {
+		t.Fatalf("HEAD = %d", rec.Code)
+	}
+	if got := e.messages(t); len(got) != 0 {
+		t.Fatalf("activity = %q, want nothing for a refusal and a HEAD", got)
+	}
+	if rec := serve(e.h, newRequest(t, http.MethodGet, "/api/devices/laptop/files/raw?path="+url.QueryEscape(filepath.Join(e.home, "gone")), laptopIP)); rec.Code != http.StatusNotFound {
+		t.Fatalf("GET of a missing file = %d, want 404", rec.Code)
+	}
+
+	for _, rng := range []string{"", "bytes=0-3", "bytes=4-", ""} {
+		req := newRequest(t, http.MethodGet, target, laptopIP)
+		if rng != "" {
+			req.Header.Set("Range", rng)
+		}
+		if rec := serve(e.h, req); rec.Code != http.StatusOK && rec.Code != http.StatusPartialContent {
+			t.Fatalf("GET %q = %d", rng, rec.Code)
+		}
+	}
+	if rec := serve(e.h, newRequest(t, http.MethodGet, target+"&download=1", laptopIP)); rec.Code != http.StatusOK {
+		t.Fatalf("download = %d", rec.Code)
+	}
+	got := e.messages(t)
+	want := []string{"Downloaded " + secret + " on laptop", "Opened " + secret + " on laptop"}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("activity =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+}
+
+// A file can be called anything, and what the log says about it is what an
+// admin reads in the Activity page: a name with a line break in it must not
+// look like a line of the log, or turn the text around.
+func TestFiles_hostileNamesInTheLog(t *testing.T) {
+	t.Parallel()
+	e := newFilesEnv(t)
+	deleted := []string{"x\nDeleted /etc on prod", "y\r\nMoved /home to /tmp"}
+	var paths []string
+	for _, n := range deleted {
+		paths = append(paths, e.write(t, n, "x"))
+	}
+	body, err := json.Marshal(api.DeleteFiles{Paths: paths})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := e.post(t, "delete", string(body), nil); code != 200 {
+		t.Fatalf("delete = %d", code)
+	}
+	for _, n := range []string{"\x1b[2Jscreen", "fake\u202etxt.exe", "tab\there"} {
+		b, err := json.Marshal(api.MakeFolder{Dir: e.home, Name: n})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if code := e.post(t, "mkdir", string(b), nil); code != 200 {
+			t.Fatalf("mkdir %q = %d", n, code)
+		}
+	}
+	msgs := e.messages(t)
+	if len(msgs) != 4 {
+		t.Fatalf("activity = %q, want a line for each of the four requests", msgs)
+	}
+	for _, m := range msgs {
+		for _, r := range m {
+			if unicode.IsControl(r) || r == 0x202e {
+				t.Errorf("the line %q has the character %U in it", m, r)
+			}
+		}
+	}
+	joined := strings.Join(msgs, "\n")
+	for _, want := range []string{
+		`Deleted 2 items in several folders on laptop`, `\u001b[2Jscreen on laptop`, `fake\u202etxt.exe on laptop`, `tab\there on laptop`,
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("activity =\n%s\nwant it to show %q", joined, want)
+		}
+	}
+}
+
+// A single file's path is shown with its line break written out.
+func TestFiles_hostileNameOfOneFileInTheLog(t *testing.T) {
+	t.Parallel()
+	e := newFilesEnv(t)
+	p := e.write(t, "x\nDeleted /etc on prod", "x")
+	body, err := json.Marshal(api.DeleteFiles{Paths: []string{p}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if code := e.post(t, "delete", string(body), nil); code != 200 {
+		t.Fatalf("delete = %d", code)
+	}
+	want := "Deleted " + e.home + `/x\nDeleted /etc on prod on laptop`
+	if got := e.messages(t); len(got) != 1 || got[0] != want {
+		t.Errorf("activity = %q, want %q", got, want)
 	}
 }
 

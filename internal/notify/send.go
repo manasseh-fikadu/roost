@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/manasseh-fikadu/roost/internal/netguard"
 )
 
 // SendTimeout is how long one message has to be sent.
@@ -38,11 +40,13 @@ type Env struct {
 }
 
 // NewEnv returns an Env that dials with dial, or from this machine if dial
-// is nil.
+// is nil. It never connects to a link-local address, where a cloud's metadata
+// service answers (see netguard).
 func NewEnv(dial DialFunc) *Env {
 	if dial == nil {
 		dial = (&net.Dialer{Timeout: 10 * time.Second}).DialContext
 	}
+	dial = DialFunc(netguard.Dial(netguard.DialFunc(dial)))
 	return &Env{
 		Dial: dial,
 		Client: &http.Client{

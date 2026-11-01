@@ -15,6 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/manasseh-fikadu/roost/internal/netguard"
 	"github.com/manasseh-fikadu/roost/internal/store"
 )
 
@@ -59,6 +60,13 @@ type prober struct {
 	lookup LookupFunc
 }
 
+// guarded returns the dial that checks connect with: p.dial, but not to
+// addresses that serve credentials to whoever asks (see netguard). A DNS check
+// doesn't dial, and a name only resolves.
+func (p prober) guarded() DialFunc {
+	return DialFunc(netguard.Dial(netguard.DialFunc(p.dial)))
+}
+
 // run runs c once, giving up after its timeout.
 func (p prober) run(ctx context.Context, c store.Check) Result {
 	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
@@ -92,7 +100,7 @@ func (p prober) http(ctx context.Context, c store.Check) Result {
 	// A new transport for each run doesn't reuse connections, so each run
 	// connects and shakes hands afresh, as a new visitor would.
 	transport := &http.Transport{
-		DialContext:       p.dial,
+		DialContext:       p.guarded(),
 		DisableKeepAlives: true,
 		// An admin chose to skip it, for a server with a certificate of its own.
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: c.Insecure}, //nolint:gosec // G402: see above.
@@ -125,7 +133,7 @@ func (p prober) http(ctx context.Context, c store.Check) Result {
 
 func (p prober) tcp(ctx context.Context, c store.Check) Result {
 	start := time.Now()
-	conn, err := p.dial(ctx, "tcp", c.Target)
+	conn, err := p.guarded()(ctx, "tcp", c.Target)
 	if err != nil {
 		return failed(err)
 	}
@@ -169,7 +177,14 @@ func failed(err error) Result {
 	if ue, ok := errors.AsType[*url.Error](err); ok {
 		err = ue.Err
 	}
-	return Result{Detail: err.Error()}
+	msg := err.Error()
+	// Go quotes what a server that is not HTTP said, such as the banner of an
+	// SSH server on the port of an HTTP check. Viewers read results, and a
+	// banner says what's running there and which version.
+	if strings.Contains(msg, "malformed HTTP") {
+		msg = "the server didn't answer in HTTP"
+	}
+	return Result{Detail: msg}
 }
 
 // resolverLookup returns a LookupFunc that asks the name servers in

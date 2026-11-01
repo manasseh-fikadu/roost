@@ -320,8 +320,10 @@ func TestManager_hostKeyChanged(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(events) != 1 || events[0].Level != "error" || events[0].DeviceID != "laptop" {
-			t.Errorf("events = %+v, want one error about the laptop", events)
+		// Newest first: the refusal, and before it the key pinned the first time.
+		if len(events) != 2 || events[0].Level != "error" || events[0].DeviceID != "laptop" ||
+			events[1].Level != "info" || events[1].DeviceID != "laptop" || !strings.Contains(events[1].Message, first) {
+			t.Errorf("events = %+v, want an error about the laptop after the pinned key %s", events, first)
 		}
 		// Run doesn't try again by itself.
 		time.Sleep(time.Hour)

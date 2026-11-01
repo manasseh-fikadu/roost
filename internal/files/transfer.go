@@ -30,8 +30,8 @@ var ErrAborted = errors.New("the transfer was cut short")
 // sandbox is the Content-Security-Policy of everything served from a
 // machine's files. Roost's origin can open shells on every machine, so
 // nothing served from it may run script: this runs none, even in an SVG
-// opened by itself.
-const sandbox = "sandbox; default-src 'none'; img-src 'self' data: blob:; media-src 'self'; style-src 'unsafe-inline'"
+// opened by itself. Only Roost's own pages may frame it.
+const sandbox = "sandbox; default-src 'none'; img-src 'self' data: blob:; media-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'"
 
 // disposition returns a Content-Disposition with an ASCII name for old
 // browsers and the real one as RFC 5987 says.
@@ -559,7 +559,16 @@ func (r *Remote) Archive(ctx context.Context, dir string, names []string) (*ssh.
 		}
 		base = fmt.Sprintf("%s-%d-items", folder, len(names))
 	}
-	st, err := r.mgr.Stream(ctx, r.ID, archiveScript, append([]string{dir}, names...)...)
+	args := []string{dir}
+	for _, n := range names {
+		// bsdtar, which a Mac has, reads a name that starts with @ as an
+		// archive to copy the members of, so that name goes in as a path.
+		if strings.HasPrefix(n, "@") {
+			n = "./" + n
+		}
+		args = append(args, n)
+	}
+	st, err := r.mgr.Stream(ctx, r.ID, archiveScript, args...)
 	return st, base + ".tar.gz", err
 }
 

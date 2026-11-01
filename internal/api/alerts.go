@@ -244,12 +244,19 @@ func (h *handler) logEvent(r *http.Request, e store.Event) {
 	h.addEvent(r.Context(), e)
 }
 
+// eventTimeout is the longest Roost waits to write a line of the activity log.
+const eventTimeout = 10 * time.Second
+
 // addEvent is logEvent for code that has no request.
 func (h *handler) addEvent(ctx context.Context, e store.Event) {
 	e.At = time.Now()
 	if e.Level == "" {
 		e.Level = string(EventLevelInfo)
 	}
+	// What an admin did is logged even if their browser went away while it
+	// was happening, or a download took longer than they stayed.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), eventTimeout)
+	defer cancel()
 	if err := h.opts.Store.AddEvents(ctx, e); err != nil {
 		h.log.Warn("add to the activity log", "error", err)
 	}

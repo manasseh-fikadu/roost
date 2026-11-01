@@ -26,6 +26,7 @@ func uiHandler(fsys fs.FS) http.Handler {
 			http.Error(w, noUIMessage, http.StatusNotFound)
 		})
 	}
+	csp := uiPolicy(fsys)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead {
 			w.Header().Set("Allow", "GET, HEAD")
@@ -41,6 +42,9 @@ func uiHandler(fsys fs.FS) http.Handler {
 			} else {
 				w.Header().Set("Cache-Control", "no-cache")
 			}
+			if strings.HasSuffix(name, ".html") {
+				csp.apply(w, r)
+			}
 			//nolint:gosec // G703: an fs.FS only opens valid paths inside its root, so name can't escape it.
 			http.ServeFileFS(w, r, fsys, name)
 			return
@@ -54,6 +58,7 @@ func uiHandler(fsys fs.FS) http.Handler {
 			return
 		}
 		w.Header().Set("Cache-Control", "no-cache")
+		csp.apply(w, r)
 		http.ServeFileFS(w, r, fsys, fallbackPage)
 	})
 }

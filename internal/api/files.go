@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/manasseh-fikadu/roost/internal/files"
 	"github.com/manasseh-fikadu/roost/internal/store"
@@ -19,6 +21,9 @@ import (
 // maxFilesBody is the largest JSON body the file routes read: ten thousand
 // long paths.
 const maxFilesBody = 4 << 20
+
+// defaultMaxUpload is the most one uploaded file may have, unless Options says.
+const defaultMaxUpload = 10 << 30
 
 const (
 	// uploadQuiet is how long after an upload's last file the activity log
@@ -85,7 +90,7 @@ func (a *fileAudit) flushLocked(h *handler, key string) {
 	if b.files > 1 {
 		what = strconv.Itoa(b.files) + " files"
 	}
-	b.event.Message = fmt.Sprintf("Uploaded %s (%s) to %s on %s", what, byteLabel(b.bytes), b.dir, b.device)
+	b.event.Message = printable(fmt.Sprintf("Uploaded %s (%s) to %s on %s", what, byteLabel(b.bytes), b.dir, b.device))
 	h.addEvent(context.WithoutCancel(context.Background()), b.event)
 }
 
@@ -99,9 +104,11 @@ func (a *fileAudit) flushAll(h *handler) {
 	}
 }
 
-// edited reports whether saving a file is a new edit for the log: the first
-// save of it by someone in ten minutes.
-func (a *fileAudit) edited(actor, deviceID, file string, now time.Time) bool {
+// first reports whether what is the first time in editQuiet that actor did
+// it on a device, as kind says: one line for saving the same file over and
+// over, or for reading the same file's bytes in pieces, however many requests
+// that takes. The window slides, so it stays one while it goes on.
+func (a *fileAudit) first(kind, actor, deviceID, what string, now time.Time) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.edits == nil {
@@ -112,7 +119,7 @@ func (a *fileAudit) edited(actor, deviceID, file string, now time.Time) bool {
 			delete(a.edits, k)
 		}
 	}
-	key := actor + "\x00" + deviceID + "\x00" + file
+	key := kind + "\x00" + actor + "\x00" + deviceID + "\x00" + what
 	_, again := a.edits[key]
 	a.edits[key] = now
 	return !again
@@ -213,10 +220,55 @@ func commonDir(paths []string) string {
 	return dir
 }
 
-// logFiles adds a line about files to the activity log.
+// logFiles adds a line about files to the activity log. Names of files are
+// whatever their owners called them, so the line shows them with their control
+// characters spelled out (see printable).
 func (h *handler) logFiles(r *http.Request, format string, args ...any) {
 	id := r.PathValue("id")
-	h.logAction(r, EventKindFiles, id, fmt.Sprintf(format, args...)+" on "+h.deviceName(r, id))
+	h.logAction(r, EventKindFiles, id, printable(fmt.Sprintf(format, args...))+" on "+h.deviceName(r, id))
+}
+
+// printable returns s with what can't be shown as itself written out: a file
+// can be called "x", a newline and "Deleted /etc on prod", and an activity
+// log that showed that as it is would show a line no one wrote. Control
+// characters and the ones that turn text around, such as U+202E, become
+// escapes like \n and \u202e, and bytes that aren't UTF-8 become U+FFFD.
+func printable(s string) string {
+	s = strings.ToValidUTF8(s, "\uFFFD")
+	if !strings.ContainsFunc(s, unprintable) {
+		return s
+	}
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\r':
+			b.WriteString(`\r`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case unprintable(r):
+			fmt.Fprintf(&b, `\u%04x`, r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// unprintable reports whether r is a control character, or one of the marks
+// that change which way text runs.
+func unprintable(r rune) bool {
+	return unicode.IsControl(r) || r == 0x061c || r == 0x200e || r == 0x200f || (r >= 0x202a && r <= 0x202e) || (r >= 0x2066 && r <= 0x2069)
+}
+
+// logRead adds a line about a file being read to the activity log, the first
+// time in a while that this admin reads it (see fileAudit.first). It's for
+// what was sent, even if only part of it was.
+func (h *handler) logRead(r *http.Request, verb, file string) {
+	if h.audit.first("read "+verb, callerOf(r).who.LoginName, r.PathValue("id"), file, time.Now()) {
+		h.logFiles(r, "%s %s", verb, file)
+	}
 }
 
 // summary says what a request that changed several paths did.
@@ -282,7 +334,18 @@ func (h *handler) rawFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	err := rem.ServeRaw(w, r, p, r.URL.Query().Get("download") == "1")
+	download := r.URL.Query().Get("download") == "1"
+	err := rem.ServeRaw(w, r, p, download)
+	// A file's content leaves the machine here, so this is logged like the
+	// archive is, though once for a file that is read in pieces, or again and
+	// again by a preview. Even a download that broke off sent some of it.
+	if (err == nil || errors.Is(err, files.ErrAborted)) && r.Method == http.MethodGet {
+		verb := "Opened"
+		if download {
+			verb = "Downloaded"
+		}
+		h.logRead(r, verb, p)
+	}
 	if errors.Is(err, files.ErrAborted) {
 		// The headers are out. The browser can only know by the connection
 		// closing before the end.
@@ -407,6 +470,13 @@ func conflictOf(s string) files.Conflict {
 // uploadFile answers PUT /api/devices/{id}/files/upload?dir=&name=&conflict=
 // with the body written to the file.
 func (h *handler) uploadFile(w http.ResponseWriter, r *http.Request) {
+	limit := cmp.Or(h.opts.MaxUpload, defaultMaxUpload)
+	if r.ContentLength > limit {
+		// Before connecting to the machine, or reading any of it.
+		h.writeJSON(w, r, http.StatusRequestEntityTooLarge, ErrorBody{Error: "Roost uploads files up to " + byteLabel(limit)})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	rem := h.openFiles(w, r)
 	if rem == nil {
 		return
@@ -453,7 +523,7 @@ func (h *handler) writeFile(w http.ResponseWriter, r *http.Request) {
 	}
 	// Saving the same file over and over while editing is one edit as far as
 	// the log is concerned.
-	if id := r.PathValue("id"); create || h.audit.edited(callerOf(r).who.LoginName, id, p, time.Now()) {
+	if id := r.PathValue("id"); create || h.audit.first("edit", callerOf(r).who.LoginName, id, p, time.Now()) {
 		verb := "Edited"
 		if create {
 			verb = "Created"

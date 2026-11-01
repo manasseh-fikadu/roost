@@ -11,6 +11,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/manasseh-fikadu/roost/internal/netguard"
 	"github.com/manasseh-fikadu/roost/internal/store"
 )
 
@@ -112,6 +113,8 @@ func checkURL(target string) error {
 	}
 	if host := u.Hostname(); !hostName(host) && !isIP(host) {
 		return errors.New("the URL's host isn't a host name or an IP address")
+	} else if netguard.ForbiddenHost(host) {
+		return errForbiddenTarget
 	}
 	if p := u.Port(); p != "" && !validPort(p) {
 		return errors.New("the URL's port must be a number from 1 to 65535")
@@ -128,9 +131,16 @@ func checkHostPort(target string) error {
 		return errors.New("the target's host isn't a host name or an IP address")
 	case !validPort(port):
 		return errors.New("the port must be a number from 1 to 65535")
+	case netguard.ForbiddenHost(host):
+		return errForbiddenTarget
 	}
 	return nil
 }
+
+// errForbiddenTarget is why a check can't aim at a link-local address. A check
+// that reached a cloud's metadata service would show, by its status, that the
+// credentials are there to take.
+var errForbiddenTarget = errors.New("the target is a link-local or cloud metadata address, which Roost doesn't connect to")
 
 func validPort(p string) bool {
 	n, err := strconv.ParseUint(p, 10, 16)

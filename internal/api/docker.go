@@ -112,6 +112,23 @@ func (h *handler) containerID(w http.ResponseWriter, r *http.Request) (string, b
 	return id, true
 }
 
+// logDockerRead adds a line to the activity log about an admin reading what
+// a container keeps secret: its environment, its processes' command lines, its
+// logs. It names the container as Docker does, and keeps one line for it
+// while the admin goes on reading, such as a processes list that refreshes.
+// what is a short phrase for the log, such as "Read the logs of".
+func (h *handler) logDockerRead(r *http.Request, t *dockerTarget, cid, what string) {
+	actor := callerOf(r).who.LoginName
+	if !h.audit.first("docker "+what, actor, t.deviceID, cid, time.Now()) {
+		return
+	}
+	name, err := t.host.Name(r.Context(), cid)
+	if err != nil || name == "" {
+		name = cid
+	}
+	h.logAction(r, EventKindContainer, t.deviceID, what+" "+printable(name)+" on "+h.deviceName(r, t.deviceID))
+}
+
 // Said to someone who may not know how Roost reaches a machine: its SSH user
 // and port, its Docker socket, or what Docker itself says went wrong.
 const (
@@ -270,6 +287,7 @@ func (h *handler) dockerInspect(w http.ResponseWriter, r *http.Request) {
 	if h.dockerError(w, r, err) {
 		return
 	}
+	h.logDockerRead(r, t, cid, "Inspected")
 	h.writeJSON(w, r, http.StatusOK, raw)
 }
 
@@ -284,6 +302,7 @@ func (h *handler) dockerTop(w http.ResponseWriter, r *http.Request) {
 	if h.dockerError(w, r, err) {
 		return
 	}
+	h.logDockerRead(r, t, cid, "Listed the processes of")
 	out := DockerProcesses{Titles: nonNil(top.Titles), Processes: top.Processes}
 	if out.Processes == nil {
 		out.Processes = [][]string{}
@@ -467,6 +486,7 @@ func (h *handler) dockerLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	ctx, cancel := h.streamContext(r)
 	defer cancel()
+	h.logDockerRead(r, t, cid, "Read the logs of")
 	c := callerOf(r)
 	s := openSSE(w, r)
 	defer s.close()
@@ -626,6 +646,7 @@ func (h *handler) dockerLogDownload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() { _ = body.Close() }()
+	h.logDockerRead(r, t, cid, "Downloaded the logs of")
 
 	file := fileSafe.ReplaceAllString(strings.TrimPrefix(in.Name, "/"), "_") + "-" + time.Now().UTC().Format("2006-01-02-15-04-05") + ".log"
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")

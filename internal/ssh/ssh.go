@@ -687,6 +687,15 @@ func (m *Manager) checkHostKey(ctx context.Context, t target, offered gossh.Publ
 		a.HostKey, a.PinnedAt = key, now
 		m.access[t.id] = a
 		m.log.Info("pinned an SSH host key", "device", t.id, "fingerprint", gossh.FingerprintSHA256(offered))
+		// Trust on first use is a decision about a machine's identity, so it
+		// leaves a line to check the key against.
+		event := store.Event{
+			At: now, Level: "info", Kind: "ssh", DeviceID: t.deviceID,
+			Message: "Roost pinned the SSH host key of " + t.name + " the first time it connected, " + gossh.FingerprintSHA256(offered),
+		}
+		if err := m.opts.Store.AddEvents(context.WithoutCancel(ctx), event); err != nil {
+			m.log.Warn("add to the activity log", "error", err)
+		}
 		m.changed()
 		return nil
 	}
