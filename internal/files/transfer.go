@@ -30,8 +30,8 @@ var ErrAborted = errors.New("the transfer was cut short")
 // sandbox is the Content-Security-Policy of everything served from a
 // machine's files. Roost's origin can open shells on every machine, so
 // nothing served from it may run script: this runs none, even in an SVG
-// opened by itself.
-const sandbox = "sandbox; default-src 'none'; img-src 'self' data: blob:; media-src 'self'; style-src 'unsafe-inline'"
+// opened by itself. Only Roost's own pages may frame it.
+const sandbox = "sandbox; default-src 'none'; img-src 'self' data: blob:; media-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'"
 
 // disposition returns a Content-Disposition with an ASCII name for old
 // browsers and the real one as RFC 5987 says.

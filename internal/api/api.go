@@ -94,7 +94,7 @@ func New(opts Options) http.Handler {
 	h := newHandler(opts)
 	rt := newRouter(h)
 	h.routes(rt)
-	return h.guard(rt.mux)
+	return securityHeaders(h.guard(rt.mux))
 }
 
 func newHandler(opts Options) *handler {
