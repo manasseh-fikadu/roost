@@ -149,6 +149,35 @@ func (s *Store) AddCheckResult(ctx context.Context, r CheckResult) error {
 	return oneRow(res, "record a check's result")
 }
 
+// AddCheckResults records many results of checks at once, such as to start a
+// new database with history. Like AddCheckResult, it leaves out the results of
+// checks that don't exist.
+func (s *Store) AddCheckResults(ctx context.Context, results []CheckResult) error {
+	if len(results) == 0 {
+		return nil
+	}
+	err := s.inTx(ctx, func(tx *sql.Tx) error {
+		stmt, err := tx.PrepareContext(ctx, `
+			INSERT INTO check_results (ts, check_id, ok, latency_ms, detail)
+			SELECT ?1, ?2, ?3, ?4, ?5 WHERE EXISTS (SELECT 1 FROM checks WHERE id = ?2)`)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = stmt.Close() }()
+		for _, r := range results {
+			latency := sql.NullFloat64{Float64: ms(r.Latency), Valid: r.Latency > 0}
+			if _, err := stmt.ExecContext(ctx, r.At.UnixMilli(), r.CheckID, r.OK, latency, r.Detail); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("record checks' results: %w", err)
+	}
+	return nil
+}
+
 // RecentCheckResults returns the latest n results of each check since a
 // time, oldest first, by check ID.
 func (s *Store) RecentCheckResults(ctx context.Context, since time.Time, n int) (map[string][]CheckResult, error) {
@@ -347,6 +376,32 @@ func (s *Store) AddHealth(ctx context.Context, h HealthSample) error {
 		h.At.UnixMilli(), h.Score, h.Passing, h.Failing, h.Unavailable)
 	if err != nil {
 		return fmt.Errorf("record the health score: %w", err)
+	}
+	return nil
+}
+
+// AddHealthSamples records many health scores at once, such as to start a new
+// database with history.
+func (s *Store) AddHealthSamples(ctx context.Context, samples []HealthSample) error {
+	if len(samples) == 0 {
+		return nil
+	}
+	err := s.inTx(ctx, func(tx *sql.Tx) error {
+		stmt, err := tx.PrepareContext(ctx, `
+			INSERT OR REPLACE INTO health (ts, score, passing, failing, unavailable) VALUES (?, ?, ?, ?, ?)`)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = stmt.Close() }()
+		for _, h := range samples {
+			if _, err := stmt.ExecContext(ctx, h.At.UnixMilli(), h.Score, h.Passing, h.Failing, h.Unavailable); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("record the health scores: %w", err)
 	}
 	return nil
 }
