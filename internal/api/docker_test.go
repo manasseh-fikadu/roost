@@ -998,3 +998,33 @@ func TestDocker_containerWithNoExposedPorts(t *testing.T) {
 		}
 	}
 }
+
+// What a container keeps secret is read in the open by an admin, and the log
+// says so: once for a processes list that refreshes, and not at all for a
+// viewer, who is refused.
+func TestDocker_secretReadsAreLogged(t *testing.T) {
+	t.Parallel()
+	e := newDockerEnv(t, testStore(t), false)
+	base := "/api/devices/laptop/docker/containers/web/"
+	for _, path := range []string{"inspect", "inspect", "top", "top", "top", "logs/download", "logs/download"} {
+		if rec := e.do(t, http.MethodGet, base+path, laptopIP); rec.Code != http.StatusOK {
+			t.Fatalf("GET %s = %d %s", path, rec.Code, rec.Body)
+		}
+	}
+	for _, path := range []string{"inspect", "top", "logs", "logs/download"} {
+		if rec := e.do(t, http.MethodGet, base+path, phoneIP); rec.Code != http.StatusForbidden {
+			t.Fatalf("a viewer's GET %s = %d, want 403", path, rec.Code)
+		}
+	}
+	var msgs []string
+	for _, ev := range e.events(t, api.EventKindContainer) {
+		if ev.Actor != alice || ev.DeviceID != "laptop" {
+			t.Errorf("event %+v, want one by alice about the laptop", ev)
+		}
+		msgs = append(msgs, ev.Message)
+	}
+	want := "Downloaded the logs of web on laptop|Listed the processes of web on laptop|Inspected web on laptop"
+	if strings.Join(msgs, "|") != want {
+		t.Errorf("events = %q, want %q", msgs, want)
+	}
+}
