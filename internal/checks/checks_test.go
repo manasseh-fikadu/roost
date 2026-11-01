@@ -1,9 +1,11 @@
 package checks_test
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"net/netip"
@@ -694,6 +696,16 @@ func TestClean(t *testing.T) {
 			want: with(func(c *store.Check) { c.Kind, c.Target = checks.KindTCP, "[2001:db8::1]:443" })},
 		{name: "an IP in a URL", in: with(func(c *store.Check) { c.Target = "http://127.0.0.1:8080/healthz" }),
 			want: with(func(c *store.Check) { c.Target = "http://127.0.0.1:8080/healthz" })},
+		{name: "a private address", in: with(func(c *store.Check) { c.Kind, c.Target = checks.KindTCP, "10.0.0.5:22" }),
+			want: with(func(c *store.Check) { c.Kind, c.Target = checks.KindTCP, "10.0.0.5:22" })},
+		{name: "a cloud's metadata service", in: with(func(c *store.Check) { c.Target = "http://169.254.169.254/latest/meta-data/" }),
+			wantErr: "the target is a link-local or cloud metadata address, which Roost doesn't connect to"},
+		{name: "a link-local IPv6 address", in: with(func(c *store.Check) { c.Target = "http://[fe80::1]:8080/" }),
+			wantErr: "the target is a link-local or cloud metadata address, which Roost doesn't connect to"},
+		{name: "a metadata host name", in: with(func(c *store.Check) { c.Target = "http://metadata.google.internal/computeMetadata/v1/" }),
+			wantErr: "the target is a link-local or cloud metadata address, which Roost doesn't connect to"},
+		{name: "a link-local TCP target", in: with(func(c *store.Check) { c.Kind, c.Target = checks.KindTCP, "169.254.169.254:80" }),
+			wantErr: "the target is a link-local or cloud metadata address, which Roost doesn't connect to"},
 		{name: "no name", in: with(func(c *store.Check) { c.Name = "  " }), wantErr: "the check needs a name"},
 		{name: "a long name", in: with(func(c *store.Check) { c.Name = strings.Repeat("x", 81) }), wantErr: "the name is too long"},
 		{name: "a name of two lines", in: with(func(c *store.Check) { c.Name = "a\nb" }), wantErr: "the name can only be one line"},
@@ -751,4 +763,83 @@ func TestClean(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A check from before the rule, or one that got into the store some other way,
+// still can't connect to a link-local address.
+func TestRunner_refusesLinkLocal(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		st := newStore(t)
+		n := newFakeNet()
+		var ids []string
+		for _, c := range []store.Check{
+			tcpCheck("Metadata", "169.254.169.254:80", time.Hour),
+			{Name: "Creds", Kind: checks.KindHTTP, Target: "http://169.254.169.254/latest/meta-data/iam/security-credentials/", Interval: time.Hour, Timeout: time.Second},
+		} {
+			c.Paused = true
+			c, err := st.AddCheck(t.Context(), c)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ids = append(ids, c.ID)
+		}
+		r := newRunner(t, st, n)
+		start(t, r)
+		for _, id := range ids {
+			res, err := r.RunNow(t.Context(), id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.OK || !strings.Contains(res.Detail, "link-local or cloud metadata") {
+				t.Errorf("result = %+v, want a refusal", res)
+			}
+		}
+		if d := n.dialsTo("169.254.169.254:80"); d != 0 {
+			t.Errorf("Roost dialed the metadata address %d times", d)
+		}
+	})
+}
+
+// What a server that isn't HTTP says first can be its name and version, and
+// viewers read the result.
+func TestProbes_notHTTP(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		n := newFakeNet()
+		ln := n.listener(t, "db.example.com:5432")
+		go func() {
+			for {
+				c, err := ln.Accept()
+				if err != nil {
+					return
+				}
+				go func() {
+					// A pipe has no buffer, so read the whole request before
+					// answering, or the client's write fails first.
+					rd := bufio.NewReader(c)
+					for {
+						if line, err := rd.ReadString('\n'); err != nil || line == "\r\n" {
+							break
+						}
+					}
+					_, _ = io.WriteString(c, "SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13\r\n")
+					_ = c.Close()
+				}()
+			}
+		}()
+		r := newRunner(t, newStore(t), n)
+		start(t, r)
+		c := add(t, r, store.Check{
+			Name: "SSH, asked as HTTP", Kind: checks.KindHTTP, Target: "http://db.example.com:5432/", Group: "Test",
+			Interval: time.Hour, Timeout: time.Second, Paused: true,
+		})
+		res, err := r.RunNow(t.Context(), c.ID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.OK || res.Detail != "the server didn't answer in HTTP" || strings.Contains(res.Detail, "OpenSSH") {
+			t.Errorf("result = %+v, want a failure that doesn't say what the server is", res)
+		}
+	})
 }

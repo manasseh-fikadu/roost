@@ -20,6 +20,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
+	"github.com/manasseh-fikadu/roost/internal/netguard"
 	"github.com/manasseh-fikadu/roost/internal/store"
 )
 
@@ -279,6 +280,8 @@ func checkURL(s string) error {
 		return errors.New("can't have a username and password in it")
 	case !validHost(u.Hostname()):
 		return errors.New("has a host that isn't a name or an IP address")
+	case netguard.ForbiddenHost(u.Hostname()):
+		return errors.New("is a link-local or cloud metadata address, which Roost doesn't connect to")
 	}
 	if p := u.Port(); p != "" {
 		if n := atoi(p); n < 1 || n > 65535 {

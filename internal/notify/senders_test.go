@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/manasseh-fikadu/roost/internal/netguard"
 )
 
 var sentAt = time.Date(2026, 11, 1, 12, 0, 0, 0, time.UTC)
@@ -413,5 +415,35 @@ func TestTrunc(t *testing.T) {
 	}
 	if got := oneLine("a\r\nb\tc  d"); got != "a b c  d" {
 		t.Errorf("oneLine() = %q", got)
+	}
+}
+
+// An Env never connects to a link-local address, where a cloud's metadata
+// service answers, whatever a stored channel says.
+func TestNewEnv_refusesLinkLocal(t *testing.T) {
+	t.Parallel()
+	var dialed int
+	env := NewEnv(func(context.Context, string, string) (net.Conn, error) {
+		dialed++
+		return nil, errors.New("fake dial")
+	})
+	for _, target := range []string{"http://169.254.169.254/latest/meta-data/", "http://[fe80::1]:8080/"} {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, target, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err := env.Client.Do(req)
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+		if !errors.Is(err, netguard.ErrForbidden) {
+			t.Errorf("POST %s: %v, want netguard.ErrForbidden", target, err)
+		}
+	}
+	if _, err := env.Dial(t.Context(), "tcp", "169.254.169.254:25"); !errors.Is(err, netguard.ErrForbidden) {
+		t.Errorf("Dial: %v, want netguard.ErrForbidden", err)
+	}
+	if dialed != 0 {
+		t.Errorf("dialed %d times, want none", dialed)
 	}
 }
