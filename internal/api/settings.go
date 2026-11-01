@@ -58,6 +58,7 @@ func (b ChangeSettings) apply(s *settings.Settings) error {
 			}
 			s.General.PublicURL = url
 		}
+		set(&s.General.SetupDone, g.SetupDone)
 	}
 	if t := b.Thresholds; t != nil {
 		th := &s.Thresholds

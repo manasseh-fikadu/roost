@@ -69,7 +69,8 @@ func newSnapshot(src sources, now time.Time) (Snapshot, []machine) {
 	out := Snapshot{
 		GeneratedAt: now,
 		Hub: Hub{
-			Name: src.global.General.Name, Version: src.version, Thresholds: Thresholds(src.global.Thresholds),
+			Name: src.global.General.Name, SetupDone: src.global.General.SetupDone, Version: src.version,
+			Thresholds: Thresholds(src.global.Thresholds),
 		},
 		Collectors: []Collector{newCollector("Tailscale status", s.StatusAt, s.StatusErr)},
 		Uplink:     newUplink(s),

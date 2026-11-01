@@ -15,6 +15,7 @@
 	import { Persisted } from '#lib/files/persisted.svelte.js';
 	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
+	import CodeLine from '#lib/ui/CodeLine.svelte';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import IconButton from '#lib/ui/IconButton.svelte';
 	import Input from '#lib/ui/Input.svelte';
@@ -91,7 +92,9 @@
 {:else if all.length === 0}
 	<Card>
 		<EmptyState title="No containers on {deviceName}" icon={ContainerIcon}>
-			Containers started with docker run or Docker Compose show up here within a few seconds.
+			Start one on {deviceName}, with docker run or Docker Compose, and it shows up here within a
+			few seconds. For example:
+			<div class="mt-3 text-left"><CodeLine command="docker run -d --name hello nginx" /></div>
 		</EmptyState>
 	</Card>
 {:else}

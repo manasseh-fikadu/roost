@@ -6,6 +6,7 @@
 	import { page } from '$app/state';
 	import AdminOnly from '#lib/AdminOnly.svelte';
 	import type { Device } from '#lib/api/types.js';
+	import SetUpAccess from '#lib/devices/SetUpAccess.svelte';
 	import FileBrowser from '#lib/files/FileBrowser.svelte';
 	import { live } from '#lib/live.svelte.js';
 	import { canOpen, listedDeviceId, terminalDevices } from '#lib/terminal.js';
@@ -70,13 +71,8 @@
 	{:else if !device}
 		<Card>
 			<EmptyState title="No machine has SSH access yet" icon={FolderOpen}>
-				Open a device, and set up Roost's access in its SSH access card. On the machine Roost runs
-				on, it takes one click.
-				<a
-					href={resolve('/devices')}
-					class="mt-2 block text-fg-muted underline decoration-line-heavy underline-offset-4 hover:text-fg"
-					>See the devices</a
-				>
+				Roost needs SSH access to a machine first. On the machine it runs on, that takes one click.
+				<SetUpAccess devices={all} />
 			</EmptyState>
 		</Card>
 	{:else if !ready}

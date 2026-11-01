@@ -22,6 +22,13 @@ func Changes(before, after Settings) []string {
 	default:
 		out = append(out, "Changed the public URL")
 	}
+	switch {
+	case before.General.SetupDone == after.General.SetupDone:
+	case after.General.SetupDone:
+		out = append(out, "Finished the first-run setup")
+	default:
+		out = append(out, "Turned the first-run setup back on")
+	}
 
 	b, a := before.Thresholds, after.Thresholds
 	var th []string

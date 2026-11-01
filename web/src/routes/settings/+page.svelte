@@ -13,6 +13,7 @@
 	import GeneralSettings from '#lib/settings/GeneralSettings.svelte';
 	import NotificationSettings from '#lib/settings/NotificationSettings.svelte';
 	import RetentionSettings from '#lib/settings/RetentionSettings.svelte';
+	import SetupCard from '#lib/settings/SetupCard.svelte';
 	import UnitSettings from '#lib/settings/UnitSettings.svelte';
 	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
@@ -71,7 +72,12 @@
 
 {#if view}
 	<Tabs bind:value={() => tab, setTab} {tabs}>
-		<TabPanel value="general"><GeneralSettings {view} onsaved={saved} /></TabPanel>
+		<TabPanel value="general">
+			<div class="space-y-4">
+				<GeneralSettings {view} onsaved={saved} />
+				<SetupCard />
+			</div>
+		</TabPanel>
 		<TabPanel value="alerts"><AlertSettings {view} onsaved={saved} /></TabPanel>
 		<TabPanel value="notifications">
 			<NotificationSettings {view} onsaved={saved} active={tab === 'notifications'} />

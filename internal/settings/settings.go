@@ -55,6 +55,9 @@ type General struct {
 	// opened at. It's used in the links and commands Roost writes. It's ""
 	// to use the address of the request.
 	PublicURL string `json:"publicUrl"`
+	// SetupDone is whether an admin finished or skipped the first-run setup,
+	// which the app shows admins until then.
+	SetupDone bool `json:"setupDone"`
 }
 
 // Thresholds are when a device needs attention, and when an alert opens.

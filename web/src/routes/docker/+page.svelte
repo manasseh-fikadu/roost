@@ -5,6 +5,7 @@
 	import { page } from '$app/state';
 	import AdminOnly from '#lib/AdminOnly.svelte';
 	import type { Device } from '#lib/api/types.js';
+	import SetUpAccess from '#lib/devices/SetUpAccess.svelte';
 	import ActionDialog from '#lib/docker/ActionDialog.svelte';
 	import type { PendingAction } from '#lib/docker/actions.js';
 	import { getDockerContainers, getDockerOverview } from '#lib/docker/api.js';
@@ -117,11 +118,16 @@
 		<EmptyState title="No machine has Docker yet" icon={ContainerIcon}>
 			Docker on the machine Roost runs on shows up here by itself. For another machine, an admin
 			sets up SSH access on its device page, and Roost checks it for Docker.
-			<a
-				href={resolve('/devices')}
-				class="mt-2 block text-fg-muted underline decoration-line-heavy underline-offset-4 hover:text-fg"
-				>See the devices</a
-			>
+			<AdminOnly>
+				<SetUpAccess devices={live.snapshot?.devices ?? []} />
+				{#snippet fallback()}
+					<a
+						href={resolve('/devices')}
+						class="mt-2 block text-fg-muted underline decoration-line-heavy underline-offset-4 hover:text-fg"
+						>See the devices</a
+					>
+				{/snippet}
+			</AdminOnly>
 		</EmptyState>
 	</Card>
 {:else}

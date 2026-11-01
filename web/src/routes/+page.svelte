@@ -1,6 +1,9 @@
 <script lang="ts">
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
+	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
+	import { isAdmin } from '#lib/access.js';
 	import AlertsCard from '#lib/alerts/AlertsCard.svelte';
 	import type { CollectorState } from '#lib/api/types.js';
 	import HealthCard from '#lib/checks/HealthCard.svelte';
@@ -9,12 +12,22 @@
 	import { live } from '#lib/live.svelte.js';
 	import MapLegend from '#lib/map/MapLegend.svelte';
 	import NetworkMap from '#lib/map/NetworkMap.svelte';
+	import { markSetupSent, setupSent, shouldOpenSetup } from '#lib/setup.js';
 	import type { Status } from '#lib/status.js';
 	import Card from '#lib/ui/Card.svelte';
 	import PageHeader from '#lib/ui/PageHeader.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import StatusDot from '#lib/ui/StatusDot.svelte';
 	import Tooltip from '#lib/ui/Tooltip.svelte';
+
+	// An admin of a Roost that nobody has set up lands in the setup, once per
+	// browser tab, so leaving it doesn't bring them back every time.
+	$effect(() => {
+		if (shouldOpenSetup(isAdmin(page.data.me), live.snapshot?.hub, setupSent())) {
+			markSetupSent();
+			void goto(resolve('/setup'), { replace: true });
+		}
+	});
 
 	const devices = $derived(live.snapshot?.devices ?? []);
 	const online = $derived(devices.filter((d) => d.online).length);
