@@ -40,6 +40,17 @@
 		}
 	});
 
+	/** Undoes a stop. */
+	async function startAgain(target: PendingAction) {
+		try {
+			await runDockerAction(deviceId, target.id, 'start');
+			toast(`${actionCopy.start.done} ${target.name}`);
+			ondone?.();
+		} catch {
+			// A toast said why.
+		}
+	}
+
 	async function run() {
 		// A slow stop can outlast the dialog: it may be closed and opened for
 		// another container by the time Docker answers, so this one's answer is
@@ -54,7 +65,12 @@
 			toast(
 				res.changed
 					? `${actionCopy[target.action].done} ${target.name}`
-					: `${target.name} was ${target.action === 'start' ? 'running' : 'stopped'} already`
+					: `${target.name} was ${target.action === 'start' ? 'running' : 'stopped'} already`,
+				'default',
+				// A stopped container can be started again, so a stop can be undone.
+				target.action === 'stop' && res.changed
+					? { action: { label: 'Undo', run: () => void startAgain(target) }, duration: 6000 }
+					: {}
 			);
 			if (shown === target) {
 				open = false;

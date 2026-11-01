@@ -12,15 +12,16 @@
 	import CheckRow from '#lib/checks/CheckRow.svelte';
 	import { RecentResults } from '#lib/checks/recent.svelte.js';
 	import { live } from '#lib/live.svelte.js';
+	import { deleteWithUndo, isHidden } from '#lib/undo.svelte.js';
 	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
-	import Dialog from '#lib/ui/Dialog.svelte';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import PageHeader from '#lib/ui/PageHeader.svelte';
 	import Segmented from '#lib/ui/Segmented.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 
-	const checks = $derived(live.snapshot?.checks ?? []);
+	// A check that was just deleted is gone from the list while it can still be undone.
+	const checks = $derived((live.snapshot?.checks ?? []).filter((c) => !isHidden(`check:${c.id}`)));
 
 	// The latest results of each check, for its bars: loaded when the page
 	// opens, and again after the stream reconnects, since results came while
@@ -66,33 +67,18 @@
 	/** The check being added (null) or changed, while the dialog is open. */
 	let editing = $state<Check | null>(null);
 	let editOpen = $state(false);
-	let removing = $state<Check | null>(null);
-	let removeOpen = $state(false);
-	let busy = $state(false);
 
 	function edit(c: Check | null) {
 		editing = c;
 		editOpen = true;
 	}
 
-	function askRemove(c: Check) {
-		removing = c;
-		removeOpen = true;
-	}
-
-	async function remove() {
-		if (!removing) {
-			return;
-		}
-		busy = true;
-		try {
-			await deleteCheck(removing.id);
-			removeOpen = false;
-		} catch {
-			// deleteCheck showed the error as a toast.
-		} finally {
-			busy = false;
-		}
+	function remove(c: Check) {
+		deleteWithUndo({
+			key: `check:${c.id}`,
+			message: `Deleted ${c.name}`,
+			commit: () => deleteCheck(c.id)
+		});
 	}
 </script>
 
@@ -167,7 +153,7 @@
 							{now}
 							onopen={() => setParam('check', c.id)}
 							onedit={() => edit(c)}
-							ondelete={() => askRemove(c)}
+							ondelete={() => remove(c)}
 						/>
 					{/each}
 				</ul>
@@ -185,15 +171,3 @@
 {/if}
 
 <CheckDialog check={editing} bind:open={editOpen} groups={groupNames} />
-
-<Dialog
-	bind:open={removeOpen}
-	title="Delete {removing?.name ?? 'this check'}?"
-	description="Roost stops running it, and forgets its history."
->
-	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (removeOpen = false)}>Cancel</Button>
-		<Button variant="danger" loading={busy} onclick={remove}>Delete</Button>
-	{/snippet}
-	<p class="text-[13px] text-fg-muted">The health score leaves it out from then on.</p>
-</Dialog>

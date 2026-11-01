@@ -3,10 +3,23 @@
 
 export type ToastTone = 'default' | 'error';
 
+/** A button on a toast, such as "Undo". The toast goes away when it's pressed. */
+export interface ToastAction {
+	label: string;
+	run: () => void;
+}
+
 export interface Toast {
 	id: number;
 	message: string;
 	tone: ToastTone;
+	action?: ToastAction;
+}
+
+export interface ToastOptions {
+	action?: ToastAction;
+	/** How long it stays, in milliseconds, instead of the usual for its tone. */
+	duration?: number;
 }
 
 /** How long a toast stays, in milliseconds. Errors stay longer, to be read. */
@@ -21,13 +34,17 @@ let nextId = 1;
 export const toasts: Toast[] = $state([]);
 
 /** Shows a toast, and returns its id. */
-export function toast(message: string, tone: ToastTone = 'default'): number {
-	const t = { id: nextId++, message, tone };
+export function toast(
+	message: string,
+	tone: ToastTone = 'default',
+	{ action, duration }: ToastOptions = {}
+): number {
+	const t = { id: nextId++, message, tone, action };
 	toasts.push(t);
 	if (toasts.length > maxToasts) {
 		toasts.splice(0, toasts.length - maxToasts);
 	}
-	setTimeout(() => dismiss(t.id), durations[tone]);
+	setTimeout(() => dismiss(t.id), duration ?? durations[tone]);
 	return t.id;
 }
 

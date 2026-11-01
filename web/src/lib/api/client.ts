@@ -1,4 +1,4 @@
-import { toast } from '#lib/toast.svelte.js';
+import { toast, type ToastAction } from '#lib/toast.svelte.js';
 import type {
 	Access,
 	AgentCode,
@@ -89,18 +89,19 @@ export async function request<T>(
 /**
  * Sends a request that changes something, for a button or form. If it
  * fails, a toast says why and the error is thrown on. If it works and
- * `success` is given, a toast says that.
+ * `success` is given, a toast says that, with `undo` as a button if there is
+ * one that takes it back.
  */
 export async function mutate<T>(
 	method: 'POST' | 'PUT' | 'PATCH' | 'DELETE',
 	path: string,
 	body?: unknown,
-	{ success }: { success?: string } = {}
+	{ success, undo }: { success?: string; undo?: ToastAction } = {}
 ): Promise<T> {
 	try {
 		const out = await request<T>(method, path, body);
 		if (success) {
-			toast(success);
+			toast(success, 'default', undo ? { action: undo, duration: 6000 } : {});
 		}
 		return out;
 	} catch (err) {
@@ -380,10 +381,14 @@ export function setRole(login: string, role: Role, success = 'Saved'): Promise<A
 	return mutate('PUT', `access/users/${encodeURIComponent(login)}`, { role }, { success });
 }
 
-/** Takes a login's role away, and says so in a toast. Admins only. */
-export function removeUser(login: string): Promise<Access> {
+/**
+ * Takes a login's role away, and says so in a toast, with `undo` as its
+ * button. Admins only.
+ */
+export function removeUser(login: string, undo?: ToastAction): Promise<Access> {
 	return mutate('DELETE', `access/users/${encodeURIComponent(login)}`, undefined, {
-		success: 'Removed'
+		success: 'Removed',
+		undo
 	});
 }
 

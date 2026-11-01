@@ -144,6 +144,34 @@
 		void grant(user.login, role);
 	}
 
+	/**
+	 * Takes someone's role away. For anyone but the caller there's no question:
+	 * the toast says it's done and can put the role back. The caller is asked,
+	 * since taking their own role away can't be undone by them.
+	 */
+	async function remove(user: User) {
+		if (isMe(user.login)) {
+			ask('remove', user.login);
+			return;
+		}
+		const undo = {
+			label: 'Undo',
+			run: () =>
+				void change(user.login, user.role, () => setRole(user.login, user.role, 'Put back'))
+		};
+		if (await change(user.login, undefined, () => removeUser(user.login, undo))) {
+			await focusAddForm();
+		}
+	}
+
+	/** Gives focus back to the add form, once what had it is gone, unless a touch screen's keyboard would open. */
+	async function focusAddForm() {
+		await tick();
+		if (matchMedia('(pointer: fine)').matches) {
+			document.getElementById(`${id}-login`)?.focus();
+		}
+	}
+
 	// The question before taking a role from the caller, or taking one away.
 	// What it's about stays after it closes, so its text doesn't change while
 	// it fades out. `fromForm` is for a demotion that came from the add form,
@@ -188,8 +216,7 @@
 		if (ok && kind === 'remove') {
 			// The row, and the button the dialog would give focus back to, are gone.
 			// Wait for the dialog to let go of focus, then put it on the add form.
-			await tick();
-			document.getElementById(`${id}-login`)?.focus();
+			await focusAddForm();
 		}
 	}
 
@@ -308,7 +335,7 @@
 							<IconButton
 								label="Remove {u.login}"
 								disabled={busy[u.login]}
-								onclick={() => ask('remove', u.login)}
+								onclick={() => void remove(u)}
 							>
 								<Trash2 class="size-4" />
 							</IconButton>
