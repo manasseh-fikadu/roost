@@ -14,6 +14,7 @@
 	import type { Device } from '#lib/api/types.js';
 	import { deviceIcon } from '#lib/device.js';
 	import AddAgent from '#lib/devices/AddAgent.svelte';
+	import DeviceActions from '#lib/devices/DeviceActions.svelte';
 	import DeviceHistory from '#lib/devices/DeviceHistory.svelte';
 	import DeviceSettingsDialog from '#lib/devices/DeviceSettingsDialog.svelte';
 	import MetricTile from '#lib/devices/MetricTile.svelte';
@@ -138,6 +139,8 @@
 			</Button>
 		</AdminOnly>
 	</div>
+
+	<DeviceActions {device} />
 
 	<p
 		class={[
