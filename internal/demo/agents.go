@@ -47,8 +47,10 @@ func (d *Demo) Report(ctx context.Context, s Sinks) {
 			continue
 		}
 		wg.Go(func() {
-			// Every agent has reported by the time anyone looks, and the next
-			// reports don't all come at the same moment.
+			// Every agent has reported twice by the time anyone looks, which
+			// is what its network rates take, and the next reports don't all
+			// come at the same moment.
+			d.send(ctx, s, m, time.Now().Add(-agentEvery))
 			d.send(ctx, s, m, time.Now())
 			wait := time.Duration(unit(d.seed, int64(m.index)) * float64(agentEvery))
 			select {
