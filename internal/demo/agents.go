@@ -47,7 +47,9 @@ func (d *Demo) Report(ctx context.Context, s Sinks) {
 			continue
 		}
 		wg.Go(func() {
-			// The agents don't all report at the same moment.
+			// Every agent has reported by the time anyone looks, and the next
+			// reports don't all come at the same moment.
+			d.send(ctx, s, m, time.Now())
 			wait := time.Duration(unit(d.seed, int64(m.index)) * float64(agentEvery))
 			select {
 			case <-ctx.Done():
