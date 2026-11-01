@@ -558,3 +558,7 @@ func TestSnapshot_leavesTheDatabaseAlone(t *testing.T) {
 		}
 	})
 }
+
+// testingTempDir returns a new directory that outlives a benchmark, since the
+// benchmarks share a database.
+func testingTempDir() (string, error) { return os.MkdirTemp("", "roost-bench-") }

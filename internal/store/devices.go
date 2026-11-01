@@ -184,7 +184,7 @@ func (s *Store) RTTHistory(ctx context.Context, deviceID string, since time.Time
 	if size.Milliseconds() <= 0 {
 		return nil, fmt.Errorf("bucket size %v is under a millisecond", size)
 	}
-	sp := spanFor(time.Now(), since, size)
+	sp := s.spanFor(ctx, pingsSeries, deviceID, since, size)
 	var out []RTTBucket
 	if sp.step > 0 && since.Before(sp.cut) {
 		var err error

@@ -73,14 +73,15 @@ type MetricsBucket struct {
 // given size, oldest first. Buckets with no rows are left out. Each bucket
 // starts at a multiple of size since the Unix epoch.
 //
-// Raw samples only go back RawKeep. What's older comes from the buckets that
+// Raw samples only go back RawKeep, so the history is read from the buckets that
 // Roost folds them into, if size is a multiple of their length: five minutes,
-// or an hour.
+// or an hour. That's faster too, and the raw samples only fill in what isn't
+// in a bucket yet.
 func (s *Store) MetricsHistory(ctx context.Context, deviceID string, since time.Time, size time.Duration) ([]MetricsBucket, error) {
 	if size.Milliseconds() <= 0 {
 		return nil, fmt.Errorf("bucket size %v is under a millisecond", size)
 	}
-	sp := spanFor(time.Now(), since, size)
+	sp := s.spanFor(ctx, metricsSeries, deviceID, since, size)
 	var out []MetricsBucket
 	if sp.step > 0 && since.Before(sp.cut) {
 		var err error

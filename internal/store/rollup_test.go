@@ -293,7 +293,7 @@ func TestStore_rollupsRoundTrip(t *testing.T) {
 	t.Parallel()
 	s := openQuiet(t)
 	// A demo's history, which ends 3 days ago.
-	end := time.Now().Add(-3 * 24 * time.Hour).Truncate(time.Hour)
+	end := time.Now().Add(-3 * 24 * time.Hour).Truncate(2 * time.Hour)
 	var rows []store.MetricsRollup
 	var pings []store.PingRollup
 	for i := range 48 {

@@ -46,6 +46,9 @@ func (d *Demo) Seed(ctx context.Context, st *store.Store, span time.Duration) er
 		{"pings", func() error { return d.seedPings(ctx, st, span) }},
 		{"container metrics", func() error { return d.seedContainers(ctx, st, span) }},
 		{"usage", func() error { return d.seedUsage(ctx, st, span) }},
+		// Roost folds the last 48 hours into buckets now, so it needn't wait a
+		// few minutes to read the history from them.
+		{"buckets", func() error { return st.RollUp(ctx, time.Now()) }},
 	}
 	for _, step := range steps {
 		if err := step.run(); err != nil {

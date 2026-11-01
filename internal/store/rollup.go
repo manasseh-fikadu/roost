@@ -275,28 +275,39 @@ type span struct {
 	cut time.Time
 }
 
-// spanFor works out where to read a history that goes back to since, in
-// buckets of size, at now. The buckets are those of the longest step that
-// fits in size, and a size they don't fill gets nothing older than the raw
-// samples.
-func spanFor(now, since time.Time, size time.Duration) span {
+// spanFor works out where to read a history of a device's series that goes back
+// to since, in buckets of size. The buckets are those of the longest step that
+// fits in size, and they're read as far as the device has them, which is
+// nearly to now: a raw sample is only read for what isn't in a bucket yet. A
+// size that no step fits in gets the raw samples alone, which only go back
+// RawKeep.
+func (s *Store) spanFor(ctx context.Context, sr series, deviceID string, since time.Time, size time.Duration) span {
 	sp := span{cut: since}
-	if !since.Before(now.Add(-RawKeep)) {
-		return sp
-	}
+	var step time.Duration
 	switch {
 	case size >= CoarseStep && size%CoarseStep == 0:
-		sp.step = CoarseStep
+		step = CoarseStep
 	case size >= FineStep && size%FineStep == 0:
-		sp.step = FineStep
+		step = FineStep
 	default:
-		// Only the raw samples reach this far.
 		return sp
 	}
-	// The first bucket of the raw samples that lies wholly inside their time.
-	cut := now.Add(-RawKeep).Truncate(size).Add(size)
-	if cut.After(sp.cut) {
-		sp.cut = cut
+	var last sql.NullInt64
+	err := s.db.QueryRowContext(ctx, "SELECT MAX(ts) FROM "+sr.rollup+" WHERE device_id = ? AND step = ?",
+		deviceID, int64(step/time.Second)).Scan(&last)
+	if err != nil || !last.Valid {
+		return sp
+	}
+	// The raw samples fill the first bucket of the size that the device's
+	// buckets don't wholly make. If they've been deleted, the buckets make
+	// what they can of it.
+	end := time.UnixMilli(last.Int64).Add(step)
+	cut := end.Truncate(size)
+	if cut.Before(time.Now().Add(-RawKeep)) && cut.Before(end) {
+		cut = cut.Add(size)
+	}
+	if cut.After(since) {
+		sp.step, sp.cut = step, cut
 	}
 	return sp
 }
