@@ -177,8 +177,11 @@ func TestStore_prunesMetricsAndUsage(t *testing.T) {
 
 		time.Sleep(store.PruneInterval)
 		synctest.Wait()
-		if got := firstColumn(t, s.DB(), "SELECT device_id FROM metrics"); !slices.Equal(got, []string{"kept"}) {
-			t.Errorf("metrics after an hour = %q, want only the row that's under a week old", got)
+		if got := firstColumn(t, s.DB(), "SELECT device_id FROM metrics"); len(got) != 0 {
+			t.Errorf("raw metrics after an hour = %q, want none, since they're all older than two days", got)
+		}
+		if got := firstColumn(t, s.DB(), "SELECT DISTINCT device_id FROM metrics_rollup"); !slices.Equal(got, []string{"kept"}) {
+			t.Errorf("metrics buckets after an hour = %q, want only the one that's under a week old", got)
 		}
 		rows, err := s.UsageSince(t.Context(), "laptop", time.Time{})
 		if err != nil {

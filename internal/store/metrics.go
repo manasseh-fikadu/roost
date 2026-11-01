@@ -72,16 +72,43 @@ type MetricsBucket struct {
 // MetricsHistory averages a device's metrics since a time, in buckets of the
 // given size, oldest first. Buckets with no rows are left out. Each bucket
 // starts at a multiple of size since the Unix epoch.
+//
+// Raw samples only go back RawKeep. What's older comes from the buckets that
+// Roost folds them into, if size is a multiple of their length: five minutes,
+// or an hour.
 func (s *Store) MetricsHistory(ctx context.Context, deviceID string, since time.Time, size time.Duration) ([]MetricsBucket, error) {
-	step := size.Milliseconds()
-	if step <= 0 {
+	if size.Milliseconds() <= 0 {
 		return nil, fmt.Errorf("bucket size %v is under a millisecond", size)
 	}
-	rows, err := s.db.QueryContext(ctx, `
+	sp := spanFor(time.Now(), since, size)
+	var out []MetricsBucket
+	if sp.step > 0 && since.Before(sp.cut) {
+		var err error
+		out, err = s.metricsBuckets(ctx, `
+			SELECT ts / ?1 * ?1 AS bucket, `+weighted("cpu")+`, `+weighted("mem")+`, `+weighted("disk")+`,
+				`+weighted("net_rx")+`, `+weighted("net_tx")+`
+			FROM metrics_rollup WHERE device_id = ?2 AND step = ?3 AND ts >= ?4 AND ts < ?5
+			GROUP BY bucket ORDER BY bucket`,
+			size.Milliseconds(), deviceID, int64(sp.step/time.Second), since.Truncate(sp.step).UnixMilli(), sp.cut.UnixMilli())
+		if err != nil {
+			return nil, err
+		}
+	}
+	raw, err := s.metricsBuckets(ctx, `
 		SELECT ts / ?1 * ?1 AS bucket, AVG(cpu), AVG(mem), AVG(disk), AVG(net_rx), AVG(net_tx)
 		FROM metrics WHERE device_id = ?2 AND ts >= ?3
 		GROUP BY bucket ORDER BY bucket`,
-		step, deviceID, since.UnixMilli())
+		size.Milliseconds(), deviceID, sp.cut.UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	return append(out, raw...), nil
+}
+
+// metricsBuckets runs a query for buckets: each has its start and the five
+// values of a MetricsBucket.
+func (s *Store) metricsBuckets(ctx context.Context, query string, args ...any) ([]MetricsBucket, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read the metrics history: %w", err)
 	}
