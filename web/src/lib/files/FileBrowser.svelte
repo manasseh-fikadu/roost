@@ -1028,7 +1028,7 @@
 					<button
 						type="button"
 						onclick={() => (showHidden.value = true)}
-						class="hover:text-fg-muted"
+						class="hover:text-fg-muted pointer-coarse:-my-2 pointer-coarse:py-2"
 					>
 						{hiddenCount} hidden
 					</button>

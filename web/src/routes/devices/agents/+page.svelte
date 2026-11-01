@@ -75,7 +75,7 @@
 
 <a
 	href={resolve('/devices')}
-	class="mb-4 inline-flex items-center gap-1.5 text-[13px] text-fg-subtle transition-colors hover:text-fg"
+	class="mb-4 inline-flex items-center gap-1.5 text-[13px] text-fg-subtle transition-colors hover:text-fg pointer-coarse:-mt-2 pointer-coarse:mb-2 pointer-coarse:py-2"
 >
 	<ArrowLeft class="size-3.5" /> Devices
 </a>
@@ -120,7 +120,7 @@
 						<span class="min-w-0 flex-1">
 							<a
 								href={resolve('/devices/[id]', { id: d.id })}
-								class="block truncate text-[14px] font-medium text-fg hover:underline"
+								class="block truncate text-[14px] font-medium text-fg hover:underline pointer-coarse:-my-1.5 pointer-coarse:py-1.5"
 							>
 								{d.name}
 							</a>

@@ -123,7 +123,7 @@
 				<button
 					type="button"
 					class={[
-						'flex items-center gap-2 transition-colors',
+						'flex items-center gap-2 transition-colors pointer-coarse:py-2',
 						s.value === step ? 'text-fg' : 'text-fg-subtle hover:text-fg-muted'
 					]}
 					onclick={() => go(s.value)}
