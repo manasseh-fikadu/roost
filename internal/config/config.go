@@ -29,6 +29,15 @@ const (
 	DefaultSetupListen = "127.0.0.1:4700"
 	DefaultPort        = 4700
 	DefaultHostRoot    = "/"
+	DefaultDemoListen  = "127.0.0.1:4700"
+	DefaultDemoDevices = 12
+	DefaultDemoDays    = 7.0
+)
+
+// The most a demo can have: devices, and days of history.
+const (
+	MaxDemoDevices = 1000
+	MaxDemoDays    = 90
 )
 
 // Config holds the hub's settings.
@@ -57,6 +66,19 @@ type Config struct {
 	// Admins are the Tailscale logins to make Roost's first admins, along with
 	// the owner of Roost's node. They're only used while Roost has no admins.
 	Admins []string
+	// Demo runs Roost against a made-up tailnet, with no Tailscale and none
+	// of the machine's own data, so it needs nothing to show off. It keeps
+	// its data in a temporary directory, and the Tailscale flags above don't
+	// apply.
+	Demo bool
+	// DemoListen is the local TCP address the demo is served on.
+	DemoListen string
+	// DemoDevices is how many devices the demo's tailnet has, Roost's own
+	// node included.
+	DemoDevices int
+	// DemoDays is how many days of history the demo starts with. It can be a
+	// fraction, such as in a test that has no time to seed a day.
+	DemoDays float64
 }
 
 // Parse reads the serve command's flags from args. A flag that isn't given falls
@@ -85,6 +107,17 @@ func Parse(args []string, getenv func(string) string, output io.Writer) (Config,
 		"`URL` of a Vite dev server to proxy the web UI to, for development (env ROOST_DEV_UI)")
 	admins := fs.String("admins", getenv("ROOST_ADMINS"),
 		"comma-separated Tailscale `logins` to make admins while Roost has none (env ROOST_ADMINS)")
+	demo, demoErr := envBool(getenv, "ROOST_DEMO")
+	fs.BoolVar(&cfg.Demo, "demo", demo,
+		"run against a made-up tailnet with seeded data, for screenshots and trying Roost out; needs no Tailscale (env ROOST_DEMO)")
+	fs.StringVar(&cfg.DemoListen, "demo-listen", envOr(getenv, "ROOST_DEMO_LISTEN", DefaultDemoListen),
+		"local `address` to serve the demo on (env ROOST_DEMO_LISTEN)")
+	devices, devicesErr := envInt(getenv, "ROOST_DEMO_DEVICES", DefaultDemoDevices)
+	fs.IntVar(&cfg.DemoDevices, "demo-devices", devices,
+		"`number` of devices in the demo's tailnet, Roost's own included (env ROOST_DEMO_DEVICES)")
+	days, daysErr := envFloat(getenv, "ROOST_DEMO_DAYS", DefaultDemoDays)
+	fs.Float64Var(&cfg.DemoDays, "demo-days", days,
+		"`number` of days of history the demo starts with (env ROOST_DEMO_DAYS)")
 
 	if err := fs.Parse(args); err != nil {
 		return Config{}, err
@@ -95,6 +128,15 @@ func Parse(args []string, getenv func(string) string, output io.Writer) (Config,
 	if portErr != nil && !isSet(fs, "port") {
 		return Config{}, portErr
 	}
+	if demoErr != nil && !isSet(fs, "demo") {
+		return Config{}, demoErr
+	}
+	if devicesErr != nil && !isSet(fs, "demo-devices") {
+		return Config{}, devicesErr
+	}
+	if daysErr != nil && !isSet(fs, "demo-days") {
+		return Config{}, daysErr
+	}
 	cfg.Admins = splitList(*admins)
 	if err := cfg.validate(); err != nil {
 		return Config{}, err
@@ -103,17 +145,8 @@ func Parse(args []string, getenv func(string) string, output io.Writer) (Config,
 }
 
 func (cfg Config) validate() error {
-	switch {
-	case cfg.Tailscale != Embedded && cfg.Tailscale != Host:
-		return fmt.Errorf("unknown Tailscale mode %q: use %q or %q", cfg.Tailscale, Embedded, Host)
-	case cfg.Hostname == "":
-		return errors.New("no hostname: set --hostname or ROOST_HOSTNAME")
-	case cfg.Port < 1 || cfg.Port > 65535:
-		return fmt.Errorf("port %d is out of range", cfg.Port)
-	case cfg.DataDir == "":
-		return errors.New("no data directory: set --data-dir or ROOST_DATA_DIR")
-	case !filepath.IsAbs(cfg.HostRoot):
-		return fmt.Errorf("host root %q isn't an absolute path", cfg.HostRoot)
+	if err := cfg.validateMode(); err != nil {
+		return err
 	}
 	if cfg.DevUI != "" {
 		u, err := url.Parse(cfg.DevUI)
@@ -129,6 +162,35 @@ func (cfg Config) validate() error {
 		if at := strings.IndexByte(login, '@'); at <= 0 || at == len(login)-1 || strings.ContainsAny(login, " \t") {
 			return fmt.Errorf("admin %q isn't a Tailscale login, such as alice@example.com", login)
 		}
+	}
+	return nil
+}
+
+// validateMode checks the settings for the way Roost runs: a demo, whose
+// tailnet is made up, or else a real one.
+func (cfg Config) validateMode() error {
+	if cfg.Demo {
+		switch {
+		case cfg.DemoListen == "":
+			return errors.New("no demo address: set --demo-listen or ROOST_DEMO_LISTEN")
+		case cfg.DemoDevices < 2 || cfg.DemoDevices > MaxDemoDevices:
+			return fmt.Errorf("a demo needs from 2 to %d devices, not %d", MaxDemoDevices, cfg.DemoDevices)
+		case !(cfg.DemoDays > 0 && cfg.DemoDays <= MaxDemoDays):
+			return fmt.Errorf("a demo starts with up to %d days of history, not %v", MaxDemoDays, cfg.DemoDays)
+		}
+		return nil
+	}
+	switch {
+	case cfg.Tailscale != Embedded && cfg.Tailscale != Host:
+		return fmt.Errorf("unknown Tailscale mode %q: use %q or %q", cfg.Tailscale, Embedded, Host)
+	case cfg.Hostname == "":
+		return errors.New("no hostname: set --hostname or ROOST_HOSTNAME")
+	case cfg.Port < 1 || cfg.Port > 65535:
+		return fmt.Errorf("port %d is out of range", cfg.Port)
+	case cfg.DataDir == "":
+		return errors.New("no data directory: set --data-dir or ROOST_DATA_DIR")
+	case !filepath.IsAbs(cfg.HostRoot):
+		return fmt.Errorf("host root %q isn't an absolute path", cfg.HostRoot)
 	}
 	return nil
 }
@@ -167,6 +229,32 @@ func envOr(getenv func(string) string, key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// envBool reads a true or false from an environment variable, which counts as
+// false if it's unset or empty.
+func envBool(getenv func(string) string, key string) (bool, error) {
+	v := getenv(key)
+	if v == "" {
+		return false, nil
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, fmt.Errorf("%s=%q isn't true or false", key, v)
+	}
+	return b, nil
+}
+
+func envFloat(getenv func(string) string, key string, fallback float64) (float64, error) {
+	v := getenv(key)
+	if v == "" {
+		return fallback, nil
+	}
+	f, err := strconv.ParseFloat(v, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s=%q isn't a number", key, v)
+	}
+	return f, nil
 }
 
 func envInt(getenv func(string) string, key string, fallback int) (int, error) {
