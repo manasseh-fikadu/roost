@@ -77,7 +77,7 @@
 
 <FormCard
 	title="When to notify"
-	description="Roost tells a channel when an alert opens, and again if it gets worse. Alerts that someone acknowledged or snoozed stay quiet."
+	description="A channel hears when an alert opens, and again if it gets worse. Acknowledged or snoozed alerts stay quiet."
 	dirty={draft.dirty}
 	{saving}
 	{problem}

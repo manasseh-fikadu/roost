@@ -156,7 +156,7 @@
 
 <PageHeader
 	title="Alerts"
-	description="Roost raises them from what it sees of devices, checks, containers and systemd units, and resolves them when the condition clears."
+	description="Problems Roost found on devices, checks, containers and services. They resolve when the problem clears."
 />
 
 {#if focusId !== null}
@@ -171,7 +171,7 @@
 		{:else if focusStatus === 'loading'}
 			<div class="p-4"><Skeleton class="h-20" /></div>
 		{:else if focusStatus === 'gone'}
-			<EmptyState title="Roost doesn't have this alert">
+			<EmptyState title="This alert isn't here">
 				Alerts that resolved are kept for 30 days, so this one may be older.
 			</EmptyState>
 		{:else}

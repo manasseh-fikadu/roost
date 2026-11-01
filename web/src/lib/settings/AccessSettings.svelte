@@ -287,7 +287,7 @@
 <div class="space-y-6">
 	<Card
 		title="People"
-		description="Admins can change anything in Roost. Viewers can see its dashboard, without logs, files or other secrets."
+		description="Admins can change anything. Viewers can look at the dashboard, but not logs, files or secrets."
 	>
 		{#if !access}
 			{#if loadError}

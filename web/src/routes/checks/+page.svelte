@@ -102,7 +102,7 @@
 
 <PageHeader
 	title="Checks"
-	description="HTTP, TCP and DNS checks run from the hub, and a ping of every machine on the tailnet. The ones that run make up the health score."
+	description="Website, port and DNS checks run from the hub, plus a ping of every device. Together they make the health score."
 >
 	{#snippet actions()}
 		<AdminOnly>

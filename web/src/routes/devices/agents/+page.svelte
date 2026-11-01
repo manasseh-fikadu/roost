@@ -193,7 +193,7 @@
 <Dialog
 	bind:open={confirmOpen}
 	title="Revoke {revoking?.name ?? 'this'}'s agent?"
-	description="Roost will refuse its heartbeats and forget what it reported. To add it back, run a new install command on the machine."
+	description="Roost ignores its heartbeats and forgets what it reported. To add it again, run a new install command on the machine."
 >
 	<p class="text-[13px] text-fg-muted">
 		The agent keeps running until it's uninstalled, and tries again every few minutes.

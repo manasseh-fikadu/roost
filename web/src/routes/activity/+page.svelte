@@ -146,7 +146,7 @@
 
 <PageHeader
 	title="Activity"
-	description="What Roost saw happen, such as devices coming and going and alerts opening and resolving, and what anyone did in Roost."
+	description="Devices coming and going, alerts opening and resolving, and what people did in Roost."
 />
 
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">

@@ -108,7 +108,7 @@
 <AdminOnly>
 	<PageHeader
 		title="Set up Roost"
-		description="A few checks and choices. Every step can be skipped, and Settings opens this again."
+		description="A few checks and choices. Skip any step, and Settings brings this back."
 	>
 		{#snippet actions()}
 			<Button variant="ghost" loading={busy} onclick={() => leave('Setup skipped')}>

@@ -91,7 +91,7 @@
 <Dialog
 	bind:open
 	title={check ? 'Edit check' : 'New check'}
-	description="Checks run from the hub. Use 127.0.0.1 for a service on the hub's own machine, or a device's tailnet name or address for another one."
+	description="Checks run from the hub. Use 127.0.0.1 for the hub's own machine, or a tailnet name or address for another."
 >
 	<form id="{id}-form" class="grid gap-4 sm:grid-cols-2" onsubmit={save}>
 		<div class="sm:col-span-2">

@@ -157,7 +157,7 @@
 
 <FormCard
 	title="Watched units"
-	description="Roost shows these units on the hub's page and alerts when one isn't running. It always shows failed units, watched or not."
+	description="Roost shows these units on the hub's page and alerts when one stops. Failed units always show."
 	dirty={draft.dirty}
 	{saving}
 	onsave={save}
@@ -179,7 +179,7 @@
 		</div>
 	{:else if !installed.available}
 		<div class="rounded-lg border border-line">
-			<EmptyState title="Roost can't read systemd on its machine" icon={Server}>
+			<EmptyState title="Can't read systemd on this machine" icon={Server}>
 				It needs systemd to list the units there are, so it can't offer them here.
 			</EmptyState>
 		</div>

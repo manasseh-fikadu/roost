@@ -140,7 +140,7 @@
 
 <Card
 	title="Channels"
-	description="Where Roost sends a message when an alert opens. Each channel picks the alerts it hears about."
+	description="Where Roost sends alerts. Each channel picks which ones it hears about."
 >
 	{#snippet actions()}
 		<Button variant="primary" icon={plus} onclick={() => edit(null)}>Add channel</Button>
