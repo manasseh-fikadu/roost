@@ -64,7 +64,7 @@ func TestStore_SetRole(t *testing.T) {
 	if _, err := s.SetRole(ctx, "carol@example.com", "owner"); err == nil {
 		t.Error("SetRole() with an unknown role succeeded")
 	}
-	for _, login := range []string{"", "alice", "@example.com", "alice@", "alice @example.com"} {
+	for _, login := range []string{"", "   ", "alice @example.com", "alice\tsmith", "alice\x00"} {
 		if _, err := s.SetRole(ctx, login, store.Viewer); err == nil {
 			t.Errorf("SetRole(%q) succeeded, want an error", login)
 		}
@@ -218,7 +218,7 @@ func TestStore_AddFirstAdmins(t *testing.T) {
 	if added, err := s.AddFirstAdmins(ctx, nil); err != nil || added {
 		t.Errorf("AddFirstAdmins(nil) = %v, %v; want false", added, err)
 	}
-	if _, err := s.AddFirstAdmins(ctx, []string{"alice@example.com", "nobody"}); err == nil {
+	if _, err := s.AddFirstAdmins(ctx, []string{"alice@example.com", "no body"}); err == nil {
 		t.Error("AddFirstAdmins() with a bad login succeeded")
 	}
 	// Viewers don't count, and one can become an admin.
@@ -274,5 +274,34 @@ func TestOpen_adminsBecomeRoles(t *testing.T) {
 		if got[i].Login != want[i].Login || got[i].Role != want[i].Role || got[i].Since.UnixMilli() != int64(i+1) {
 			t.Errorf("user %d = %+v, want %+v since %dms", i, got[i], want[i], i+1)
 		}
+	}
+}
+
+// Headscale names a user by email if they have one and otherwise by name, so
+// a login doesn't always have an @.
+func TestStore_loginsWithoutAnAtSign(t *testing.T) {
+	t.Parallel()
+	s := openStore(t, filepath.Join(t.TempDir(), "roost.db"), nil)
+	ctx := t.Context()
+
+	if added, err := s.AddFirstAdmins(ctx, []string{"alice", "bob@example.com"}); err != nil || !added {
+		t.Fatalf("AddFirstAdmins(alice, bob@example.com) = %v, %v; want true", added, err)
+	}
+	// An OIDC user without an email or a name is named after their identity.
+	const oidc = "https://idp.example.com/users/42"
+	for _, login := range []string{"carol.smith", oidc} {
+		if changed, err := s.SetRole(ctx, login, store.Viewer); err != nil || !changed {
+			t.Errorf("SetRole(%q) = %v, %v; want true", login, changed, err)
+		}
+	}
+	want := []string{"alice admin", "bob@example.com admin", "carol.smith viewer", oidc + " viewer"}
+	if got := users(t, s); !slices.Equal(got, want) {
+		t.Errorf("Users() = %q, want %q", got, want)
+	}
+	if role, err := s.Role(ctx, "alice"); err != nil || role != store.Admin {
+		t.Errorf("Role(alice) = %q, %v; want admin", role, err)
+	}
+	if removed, err := s.RemoveUser(ctx, oidc); err != nil || !removed {
+		t.Errorf("RemoveUser(%q) = %v, %v; want true", oidc, removed, err)
 	}
 }

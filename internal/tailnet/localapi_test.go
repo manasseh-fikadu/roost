@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"tailscale.com/client/tailscale/apitype"
+	"tailscale.com/ipn"
 	"tailscale.com/ipn/ipnstate"
 	"tailscale.com/net/netcheck"
 	"tailscale.com/tailcfg"
@@ -323,5 +324,20 @@ func TestMultiListener(t *testing.T) {
 	}
 	if err := m.Close(); err != nil {
 		t.Errorf("second Close() error = %v, want none", err)
+	}
+}
+
+func TestCustomControlURL(t *testing.T) {
+	t.Parallel()
+	for _, tt := range []struct{ controlURL, want string }{
+		{"", ""},
+		{"https://controlplane.tailscale.com", ""},
+		{"https://login.tailscale.com", ""},
+		{"https://hs.example.com", "https://hs.example.com"},
+		{"http://127.0.0.1:8080", "http://127.0.0.1:8080"},
+	} {
+		if got := customControlURL(&ipn.Prefs{ControlURL: tt.controlURL}); got != tt.want {
+			t.Errorf("customControlURL(%q) = %q, want %q", tt.controlURL, got, tt.want)
+		}
 	}
 }

@@ -68,9 +68,10 @@ func openNode(ctx context.Context, cfg config.Config, logger *slog.Logger) (tail
 		return tailnet.NewHost(ctx, tailnet.HostOptions{Port: cfg.Port, Logger: logger})
 	}
 	return tailnet.NewEmbedded(tailnet.EmbeddedOptions{
-		Dir:      filepath.Join(cfg.DataDir, "tailscale"),
-		Hostname: cfg.Hostname,
-		Logger:   logger,
+		Dir:        filepath.Join(cfg.DataDir, "tailscale"),
+		Hostname:   cfg.Hostname,
+		ControlURL: cfg.ControlURL,
+		Logger:     logger,
 	})
 }
 
@@ -399,7 +400,9 @@ func dockerTargets(fleet *docker.Fleet, snap tailnet.Snapshot, access map[string
 }
 
 // addFirstAdmins makes the owner of Roost's node and the logins in admins
-// Roost's admins, if it has none yet. A tagged node has no owner.
+// Roost's admins, if it has none yet. A tagged node has no owner. Logins are
+// whatever the tailnet calls its users: an email address on Tailscale, and a
+// name or an email address on Headscale.
 func addFirstAdmins(ctx context.Context, st *store.Store, tn tailnet.Tailnet, admins []string, logger *slog.Logger) error {
 	status, err := tn.Status(ctx)
 	if err != nil {
@@ -422,8 +425,8 @@ func addFirstAdmins(ctx context.Context, st *store.Store, tn tailnet.Tailnet, ad
 		return err
 	}
 	if !slices.ContainsFunc(users, func(u store.User) bool { return u.Role == store.Admin }) {
-		logger.Warn("Roost has no admins, since its node is tagged and ROOST_ADMINS is empty; " +
-			"add one with `roost admin add <login>`")
+		logger.Warn("Roost has no admins, since its node has no owner (it's tagged, or its tailnet hasn't said who owns it yet) " +
+			"and ROOST_ADMINS is empty; restart Roost, or add one with `roost admin add <login>`")
 	}
 	return nil
 }

@@ -268,14 +268,14 @@ describe('readUnitName', () => {
 });
 
 describe('loginProblem', () => {
-	test.each(['alice@example.com', ' alice@github ', 'a@b'])('accepts %j', (login) => {
-		expect(loginProblem(login)).toBe('');
-	});
-
-	test.each(['', '   ', 'alice', '@example.com', 'alice@', 'a@b@c', 'alice smith@example.com'])(
-		'rejects %j',
+	test.each(['alice@example.com', ' alice@github ', 'a@b', 'alice', 'https://idp.example.com/u/1'])(
+		'accepts %j',
 		(login) => {
-			expect(loginProblem(login)).toContain('Tailscale login');
+			expect(loginProblem(login)).toBe('');
 		}
 	);
+
+	test.each(['', '   ', 'alice smith@example.com', 'alice\tsmith'])('rejects %j', (login) => {
+		expect(loginProblem(login)).toContain('without spaces');
+	});
 });

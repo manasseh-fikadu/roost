@@ -7,7 +7,8 @@
 # To skip the login link, put an auth key in a .env file next to this one:
 #   TS_AUTHKEY=tskey-auth-...
 # Roost only uses it the first time it starts. It also reads ROOST_ADMINS (see
-# docs/tailscale.md#admins-and-viewers) and ROOST_HOSTNAME from there.
+# docs/tailscale.md#admins-and-viewers) and ROOST_HOSTNAME from there. For a
+# Headscale server (docs/headscale.md), set ROOST_CONTROL_URL to its address too.
 services:
   roost:
     image: ghcr.io/manasseh-fikadu/roost:latest
@@ -16,6 +17,7 @@ services:
       TS_AUTHKEY: ${TS_AUTHKEY:-}
       ROOST_ADMINS: ${ROOST_ADMINS:-}
       ROOST_HOSTNAME: ${ROOST_HOSTNAME:-roost}
+      ROOST_CONTROL_URL: ${ROOST_CONTROL_URL:-}
     volumes:
       # Roost's database, and its Tailscale node and SSH key.
       - roost-data:/data

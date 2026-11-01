@@ -33,7 +33,20 @@ func (a localAPI) Status(ctx context.Context) (*Status, error) {
 	if err != nil {
 		return nil, err
 	}
-	return convertStatus(st), nil
+	out := convertStatus(st)
+	out.ControlURL = a.controlURL(ctx)
+	return out, nil
+}
+
+// controlURL returns the control server the node uses when it isn't
+// Tailscale's, or "" if it is. The status doesn't say, so this reads the
+// node's preferences, and a failure to read them counts as Tailscale's.
+func (a localAPI) controlURL(ctx context.Context) string {
+	prefs, err := a.lc.GetPrefs(ctx)
+	if err != nil {
+		return ""
+	}
+	return customControlURL(prefs)
 }
 
 func (a localAPI) Ping(ctx context.Context, ip netip.Addr) (*PingResult, error) {
@@ -137,6 +150,16 @@ func waitRunning(ctx context.Context, lc *local.Client, onState func(ipn.State))
 		}
 		return st, nil
 	}
+}
+
+// customControlURL returns the control server that prefs name when it isn't
+// Tailscale's, which is any but the default and its old names.
+func customControlURL(prefs *ipn.Prefs) string {
+	u := prefs.ControlURL
+	if u == "" || u == ipn.DefaultControlURL || ipn.IsLoginServerSynonym(u) {
+		return ""
+	}
+	return u
 }
 
 func convertStatus(st *ipnstate.Status) *Status {

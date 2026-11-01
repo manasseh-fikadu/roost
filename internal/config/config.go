@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // The ways Roost can join the tailnet, set with --tailscale.
@@ -46,6 +47,11 @@ type Config struct {
 	Tailscale string
 	// Hostname is the embedded node's name on the tailnet.
 	Hostname string
+	// ControlURL is the URL of the control server the embedded node logs in
+	// to, such as a Headscale server's. It's empty for Tailscale's own. Host
+	// mode uses whatever control server the machine's Tailscale is logged in
+	// to, so it has none.
+	ControlURL string
 	// SetupListen is the local TCP address of the first-run page, which
 	// embedded mode serves until Roost is logged in to the tailnet.
 	SetupListen string
@@ -95,6 +101,8 @@ func Parse(args []string, getenv func(string) string, output io.Writer) (Config,
 		"`mode`: \"embedded\" joins the tailnet as its own machine, \"host\" uses this machine's Tailscale (env ROOST_TAILSCALE)")
 	fs.StringVar(&cfg.Hostname, "hostname", envOr(getenv, "ROOST_HOSTNAME", DefaultHostname),
 		"`name` of Roost's machine on the tailnet in embedded mode (env ROOST_HOSTNAME)")
+	fs.StringVar(&cfg.ControlURL, "control-url", envOr(getenv, "ROOST_CONTROL_URL", ""),
+		"`URL` of the control server for the embedded node to log in to, such as a Headscale server's; Tailscale's by default (env ROOST_CONTROL_URL)")
 	fs.StringVar(&cfg.SetupListen, "setup-listen", envOr(getenv, "ROOST_SETUP_LISTEN", DefaultSetupListen),
 		"local `address` of the page for logging in to Tailscale in embedded mode (env ROOST_SETUP_LISTEN)")
 	fs.IntVar(&cfg.Port, "port", port,
@@ -158,9 +166,10 @@ func (cfg Config) validate() error {
 			return errors.New("the dev UI URL can't have a user, a query or a fragment")
 		}
 	}
+	// The same rule as store.CleanLogin, which config can't import.
 	for _, login := range cfg.Admins {
-		if at := strings.IndexByte(login, '@'); at <= 0 || at == len(login)-1 || strings.ContainsAny(login, " \t") {
-			return fmt.Errorf("admin %q isn't a Tailscale login, such as alice@example.com", login)
+		if strings.ContainsFunc(login, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
+			return fmt.Errorf("admin %q isn't a login, such as alice@example.com (or alice on a Headscale tailnet)", login)
 		}
 	}
 	return nil
@@ -185,14 +194,33 @@ func (cfg Config) validateMode() error {
 		return fmt.Errorf("unknown Tailscale mode %q: use %q or %q", cfg.Tailscale, Embedded, Host)
 	case cfg.Hostname == "":
 		return errors.New("no hostname: set --hostname or ROOST_HOSTNAME")
+	case cfg.ControlURL != "" && cfg.Tailscale == Host:
+		return errors.New("--control-url is for embedded mode: in host mode Roost uses the control server " +
+			"this machine's Tailscale is logged in to, which `tailscale up --login-server` sets")
 	case cfg.Port < 1 || cfg.Port > 65535:
 		return fmt.Errorf("port %d is out of range", cfg.Port)
 	case cfg.DataDir == "":
 		return errors.New("no data directory: set --data-dir or ROOST_DATA_DIR")
+	case !validControlURL(cfg.ControlURL):
+		return fmt.Errorf("control URL %q isn't an http:// or https:// URL, such as https://headscale.example.com", cfg.ControlURL)
 	case !filepath.IsAbs(cfg.HostRoot):
 		return fmt.Errorf("host root %q isn't an absolute path", cfg.HostRoot)
 	}
 	return nil
+}
+
+// validControlURL reports whether raw is empty, which means Tailscale's own
+// control server, or the address of another: a web address with nothing but
+// the host and maybe a port.
+func validControlURL(raw string) bool {
+	if raw == "" {
+		return true
+	}
+	u, err := url.Parse(raw)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+		return false
+	}
+	return u.User == nil && u.RawQuery == "" && u.Fragment == "" && (u.Path == "" || u.Path == "/")
 }
 
 // splitList splits a comma-separated list, dropping empty items.

@@ -143,6 +143,20 @@ func TestPolicySnippet(t *testing.T) {
 }`,
 		},
 		{
+			// Headscale's user without an email is a name, and a policy
+			// refers to it as name@.
+			name: "a user with no @ in their login",
+			src:  tailnet.Device{ID: "roost", Owner: "alice"},
+			dst:  tailnet.Device{HostName: "laptop", Owner: "alice"},
+			user: "alice",
+			want: `{
+  "action": "accept",
+  "src": ["alice@"],
+  "dst": ["autogroup:self"],
+  "users": ["alice"]
+}`,
+		},
+		{
 			name: "a tagged machine",
 			src:  roost,
 			dst:  tailnet.Device{HostName: "web", Tags: []string{"tag:server"}},

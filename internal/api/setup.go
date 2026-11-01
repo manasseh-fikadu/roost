@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"strings"
 
 	"github.com/skip2/go-qrcode"
@@ -67,7 +68,7 @@ func Setup(opts SetupOptions) http.Handler {
 		if err != nil {
 			page.Error = err.Error()
 		} else {
-			page.State, page.LoginURL = st.State, st.LoginURL
+			page.State, page.LoginURL, page.ControlURL = st.State, st.LoginURL, st.ControlURL
 		}
 		if page.LoginURL != "" {
 			if page.QR, err = qrSVG(page.LoginURL); err != nil {
@@ -105,9 +106,20 @@ func localHost(hostport string) bool {
 type setupPage struct {
 	State    string
 	LoginURL string
-	QR       template.HTML
-	AppURL   string
-	Error    string
+	// ControlURL is the control server if it isn't Tailscale's, such as a
+	// Headscale server's.
+	ControlURL string
+	QR         template.HTML
+	AppURL     string
+	Error      string
+}
+
+// ControlHost is the control server's address without its scheme.
+func (p setupPage) ControlHost() string {
+	if u, err := url.Parse(p.ControlURL); err == nil && u.Host != "" {
+		return u.Host
+	}
+	return p.ControlURL
 }
 
 // Running reports whether Roost is on the tailnet and serving.
@@ -172,13 +184,18 @@ code { font-size: .875em; }
 <p class="muted">{{.AppURL}}</p>
 {{- else if .LoginURL}}
 <h1>Add Roost to your tailnet</h1>
+{{- if .ControlURL}}
+<p>Log in to your control server, <code>{{.ControlHost}}</code>, to add Roost to your tailnet as a new machine. A Headscale server shows the <code>headscale</code> command that approves it.</p>
+<p><a class="button" href="{{.LoginURL}}" target="_blank" rel="noopener noreferrer">Log in</a></p>
+{{- else}}
 <p>Log in to Tailscale to add Roost to your tailnet as a new machine.</p>
 <p><a class="button" href="{{.LoginURL}}" target="_blank" rel="noopener noreferrer">Log in to Tailscale</a></p>
+{{- end}}
 {{- if .QR}}
 <div class="qr">{{.QR}}</div>
 <p class="muted">Or scan the code to log in on your phone.</p>
 {{- end}}
-<p class="muted">To skip this step, restart Roost with <code>TS_AUTHKEY</code> set to an auth key.</p>
+<p class="muted">To skip this step, restart Roost with <code>TS_AUTHKEY</code> set to an auth key{{if .ControlURL}}, which <code>headscale preauthkeys create</code> makes{{end}}.</p>
 {{- else}}
 <h1>Connecting to Tailscale…</h1>
 <p class="muted">{{with .State}}Tailscale is {{.}}. {{end}}This page updates by itself.</p>

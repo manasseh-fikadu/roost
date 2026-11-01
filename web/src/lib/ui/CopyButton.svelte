@@ -2,6 +2,7 @@
 <script lang="ts">
 	import Check from '@lucide/svelte/icons/check';
 	import Copy from '@lucide/svelte/icons/copy';
+	import { copyText } from '#lib/clipboard.js';
 	import { toast } from '#lib/toast.svelte.js';
 	import IconButton from './IconButton.svelte';
 
@@ -18,9 +19,7 @@
 
 	async function copy() {
 		try {
-			// The clipboard API needs a secure context, which Roost's HTTPS
-			// name on the tailnet is.
-			await navigator.clipboard.writeText(value);
+			await copyText(value);
 		} catch {
 			toast("Couldn't copy. Select the text and copy it yourself.", 'error');
 			return;

@@ -11,6 +11,8 @@ Roost gets everything about your tailnet from Tailscale: the devices, how traffi
 
 Either way, Roost serves the app only on the tailnet. Nothing on the machine's other networks can reach it.
 
+The tailnet doesn't have to be Tailscale's own: Roost also works with [Headscale](headscale.md), a self-hosted control server for the same clients. Where this page says "log in to Tailscale", Headscale's page says what to do instead.
+
 ## Embedded mode
 
 ```sh
@@ -25,11 +27,11 @@ TS_AUTHKEY=tskey-auth-... roost serve
 
 After that first login, Roost remembers its node in `tailscale/` inside the data directory, and the setup page just links to Roost on the tailnet. The setup page shows only the login state. It never serves the app or the API, and it only answers requests addressed to `localhost` or an IP address, so another website can't read the login link. To serve it on a different address, such as in a container, use `--setup-listen` or `ROOST_SETUP_LISTEN`. Until Roost is logged in, anyone who can open the setup page can add Roost to their own tailnet, so keep it to your machine: in a container, publish the port on the host's loopback only (`-p 127.0.0.1:4700:4700`), or use `TS_AUTHKEY`. Roost warns in its log when the page listens on more than loopback.
 
-The node's name is `roost`, or whatever you set with `--hostname` or `ROOST_HOSTNAME`.
+The node's name is `roost`, or whatever you set with `--hostname` or `ROOST_HOSTNAME`. To log in to a control server other than Tailscale's, such as Headscale, set `--control-url` or `ROOST_CONTROL_URL` to its address ([Roost and Headscale](headscale.md)).
 
 ### HTTPS
 
-Turn on MagicDNS and HTTPS certificates in the [DNS settings](https://login.tailscale.com/admin/dns) of the admin console. Roost then serves the app on port 443 with its own certificate and redirects port 80 to it. Without them, it serves plain HTTP on port 80. WireGuard still encrypts that traffic, but browsers treat the page as insecure.
+Turn on MagicDNS and HTTPS certificates in the [DNS settings](https://login.tailscale.com/admin/dns) of the admin console. Roost then serves the app on port 443 with its own certificate and redirects port 80 to it. Without them, it serves plain HTTP on port 80. WireGuard still encrypts that traffic, but browsers treat the page as insecure. Headscale never makes certificates, so on Headscale it's always plain HTTP.
 
 ### Tailnet policy
 
@@ -95,7 +97,7 @@ Anyone else, and anyone anonymous, can only see that Roost is there and why they
 
 One setting decides who else can view Roost. By default, it's `listed`: only Roost's admins and viewers can, and anyone else who signs in sees the command an admin can run to make them a viewer. Set it to `tailnet` to make anyone who signs in from the tailnet a viewer unless they have a role of their own. That includes people you share Roost's machine with, since Tailscale names them too, so with `tailnet`, sharing that machine shares the dashboard of your whole tailnet.
 
-When Roost has no admins yet, it makes the first ones as soon as it's on the tailnet: the user who owns Roost's node, which is whoever logged it in, and any logins in `ROOST_ADMINS` or `--admins`, separated by commas. A node logged in with a tagged auth key has no owner, so give it `ROOST_ADMINS`:
+When Roost has no admins yet, it makes the first ones as soon as it's on the tailnet: the user who owns Roost's node, which is whoever logged it in, and any logins in `ROOST_ADMINS` or `--admins`, separated by commas. A login is an email address such as `alice@example.com`, or on Headscale, which names a user without an email by their name, just `alice`. A node logged in with a tagged auth key has no owner, so give it `ROOST_ADMINS`:
 
 ```sh
 TS_AUTHKEY=tskey-auth-... ROOST_ADMINS=alice@example.com roost serve

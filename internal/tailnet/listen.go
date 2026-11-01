@@ -46,6 +46,19 @@ func certDomain(st *ipnstate.Status) (string, bool) {
 	return st.CertDomains[0], true
 }
 
+// noHTTPSMessage says why Roost serves plain HTTP when the tailnet has no
+// HTTPS certificates, and what to do about it. controlURL is the control
+// server if it isn't Tailscale's.
+func noHTTPSMessage(controlURL string) string {
+	if controlURL != "" {
+		// Headscale doesn't make certificates for tailnet names.
+		return "this tailnet's control server gives Roost no HTTPS certificate, as Headscale doesn't, " +
+			"so Roost is served over plain HTTP, which WireGuard still encrypts"
+	}
+	return "HTTPS is off for this tailnet, so Roost is served over plain HTTP; " +
+		"turn on MagicDNS and HTTPS certificates in the Tailscale admin console to fix it"
+}
+
 // appURL returns the app's URL at host and port, leaving the port out if it's
 // the scheme's default.
 func appURL(scheme, host string, port int) string {

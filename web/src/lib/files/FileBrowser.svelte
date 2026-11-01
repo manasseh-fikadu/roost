@@ -35,6 +35,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { ConflictMode, FileEntry, FileListing, FileSearch } from '#lib/api/types.js';
+	import { copyText } from '#lib/clipboard.js';
 	import { bytes, plural } from '#lib/format.js';
 	import { toast } from '#lib/toast.svelte.js';
 	import Button from '#lib/ui/Button.svelte';
@@ -417,7 +418,7 @@
 
 	async function copyPath(path: string) {
 		try {
-			await navigator.clipboard.writeText(path);
+			await copyText(path);
 			toast('Path copied');
 		} catch {
 			toast('Couldn’t copy. Select the path and copy it yourself.', 'error');

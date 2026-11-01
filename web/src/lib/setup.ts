@@ -66,19 +66,34 @@ function tailscaleCheck(s: Snapshot | null, mode: TailscaleMode | undefined): Se
 				? "Using this machine's Tailscale"
 				: 'Connected to the tailnet';
 	const parts = [how];
+	// Set when the tailnet isn't Tailscale's, such as when it's Headscale.
+	const control = s.hub.controlUrl;
+	if (control) {
+		parts.push(`control server ${controlHost(control)}`);
+	}
 	if (s.hub.tailnet) {
 		parts.push(`tailnet ${s.hub.tailnet}`);
 	}
 	parts.push(`${plural(others, 'other device')} found`);
 	if (others === 0) {
+		const login = control ? `, as in tailscale up --login-server ${control}` : '';
 		return {
 			...base,
 			status: 'attention',
 			detail: parts.join(' · '),
-			hint: 'Roost sees no other machine yet. Install Tailscale on one and log it in to this tailnet, and it shows up here within seconds.'
+			hint: `Roost sees no other machine yet. Install Tailscale on one and log it in to this tailnet${login}, and it shows up here within seconds.`
 		};
 	}
 	return { ...base, status: 'online', detail: parts.join(' · ') };
+}
+
+/** A control server's address without the scheme, as in headscale.example.com:8443. */
+function controlHost(url: string): string {
+	try {
+		return new URL(url).host;
+	} catch {
+		return url;
+	}
 }
 
 function signInCheck(me: Me | null | undefined): SetupCheck {

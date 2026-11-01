@@ -46,8 +46,9 @@ curl -fsSL https://raw.githubusercontent.com/manasseh-fikadu/roost/main/install.
 | `ROOST_VERSION` | The release to install, such as `v0.1.0`. The default is the latest. |
 | `ROOST_TAILSCALE` | `embedded` (the default) or `host`. |
 | `ROOST_HOSTNAME` | The name of Roost's node on the tailnet in embedded mode. |
+| `ROOST_CONTROL_URL` | The address of your [Headscale](headscale.md) server, to log Roost's node in to it instead of to Tailscale, in embedded mode. |
 | `ROOST_ADMINS` | Logins to make Roost's first admins, separated by commas. |
-| `TS_AUTHKEY` | A Tailscale [auth key](https://tailscale.com/kb/1085/auth-keys), so Roost joins the tailnet without a login. |
+| `TS_AUTHKEY` | A Tailscale [auth key](https://tailscale.com/kb/1085/auth-keys), or a Headscale pre-auth key, so Roost joins the tailnet without a login. |
 
 The script saves these in `/etc/roost/roost.env` the first time only. After that, edit the file, and run `sudo systemctl restart roost`. [Roost and Tailscale](tailscale.md) says what each one means. `TS_AUTHKEY` is only used while Roost has no node yet, so you can delete it from the file once Roost is on the tailnet.
 

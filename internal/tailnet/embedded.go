@@ -42,6 +42,10 @@ type EmbeddedOptions struct {
 	// Hostname is the node's name on the tailnet, and the first label of its
 	// MagicDNS name.
 	Hostname string
+	// ControlURL is the control server the node logs in to, such as a
+	// Headscale server's. If it's empty, the node uses TS_CONTROL_URL, and
+	// then Tailscale's.
+	ControlURL string
 	// Logger receives tsnet's messages at debug level. Nil discards them.
 	Logger *slog.Logger
 }
@@ -57,8 +61,9 @@ func NewEmbedded(opts EmbeddedOptions) (*Embedded, error) {
 	}
 	// AuthKey is left empty, so tsnet reads TS_AUTHKEY (or TS_AUTH_KEY) itself.
 	srv := &tsnet.Server{
-		Dir:      opts.Dir,
-		Hostname: opts.Hostname,
+		Dir:        opts.Dir,
+		Hostname:   opts.Hostname,
+		ControlURL: opts.ControlURL,
 		// tsnet repeats the login URL every few seconds; Roost reports it once.
 		UserLogf: func(format string, args ...any) {
 			log.Debug("tsnet", "message", fmt.Sprintf(format, args...))
@@ -123,8 +128,7 @@ func (e *Embedded) Listen(ctx context.Context) (net.Listener, string, error) {
 	}
 	domain, ok := certDomain(st)
 	if !ok {
-		e.log.Warn("HTTPS is off for this tailnet, so Roost is served over plain HTTP; " +
-			"turn on MagicDNS and HTTPS certificates in the Tailscale admin console to fix it")
+		e.log.Warn(noHTTPSMessage(e.controlURL(ctx)))
 		ln, err := e.srv.Listen("tcp", ":80")
 		if err != nil {
 			return nil, "", err

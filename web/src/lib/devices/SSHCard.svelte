@@ -352,8 +352,13 @@
 						<CopyButton value={ssh.policy.snippet} label="Copy rule" />
 					</div>
 					<p class="text-[12px] text-fg-subtle">
-						Add it to the "ssh" section of your tailnet policy, above any broader rule, under Access
-						controls in the Tailscale admin console. Then press Check.
+						{#if live.snapshot?.hub.controlUrl}
+							Add it to the "ssh" section of your Headscale policy file, above any broader rule, and
+							reload Headscale. Then press Check.
+						{:else}
+							Add it to the "ssh" section of your tailnet policy, above any broader rule, under
+							Access controls in the Tailscale admin console. Then press Check.
+						{/if}
 					</p>
 				</div>
 			{/if}
