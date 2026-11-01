@@ -41,6 +41,8 @@ const (
 type FeedOptions struct {
 	// Version is the hub's build version.
 	Version string
+	// Demo says the tailnet is made up, which the snapshots say too.
+	Demo bool
 	// Tailnet returns what Roost last learned about the tailnet. Required.
 	Tailnet func() tailnet.Snapshot
 	// TailnetChanged receives a value when Tailnet's answer changes.
@@ -253,7 +255,7 @@ func (f *Feed) latest(ctx context.Context) *published {
 func (f *Feed) publish(ctx context.Context) *published {
 	f.buildMu.Lock()
 	defer f.buildMu.Unlock()
-	src := sources{version: f.opts.Version, tailnet: f.opts.Tailnet()}
+	src := sources{version: f.opts.Version, demo: f.opts.Demo, tailnet: f.opts.Tailnet()}
 	if f.opts.Host != nil {
 		h := f.opts.Host()
 		src.host = &h

@@ -113,7 +113,7 @@ func TestStore_RTTHistory(t *testing.T) {
 	}
 }
 
-func TestStore_prunesOldPings(t *testing.T) {
+func TestStore_prunesPingsOnceTheyAreSummedUp(t *testing.T) {
 	t.Parallel()
 	synctest.Test(t, func(t *testing.T) {
 		const week = 7 * 24 * time.Hour
@@ -129,8 +129,12 @@ func TestStore_prunesOldPings(t *testing.T) {
 		}
 		time.Sleep(store.PruneInterval)
 		synctest.Wait()
-		if got := firstColumn(t, s.DB(), "SELECT device_id FROM pings"); !reflect.DeepEqual(got, []string{"kept"}) {
-			t.Errorf("pings after an hour = %q, want only the one that's under a week old", got)
+		// Raw pings go after two days, once they're in buckets, which last a week.
+		if got := firstColumn(t, s.DB(), "SELECT device_id FROM pings"); len(got) != 0 {
+			t.Errorf("raw pings after an hour = %q, want none", got)
+		}
+		if got := firstColumn(t, s.DB(), "SELECT DISTINCT device_id FROM pings_rollup"); !reflect.DeepEqual(got, []string{"kept"}) {
+			t.Errorf("ping buckets after an hour = %q, want only the one that's under a week old", got)
 		}
 	})
 }

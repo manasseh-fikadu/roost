@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"log/slog"
@@ -19,6 +20,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/manasseh-fikadu/roost/internal/api"
 	"github.com/manasseh-fikadu/roost/internal/config"
 	"github.com/manasseh-fikadu/roost/internal/tailnet"
 	"github.com/manasseh-fikadu/roost/internal/tailnet/tailnettest"
@@ -406,5 +408,90 @@ func (w *logWriter) waitFor(t *testing.T, marker string) string {
 		case <-timeout:
 			t.Fatalf("the log never said %q:\n%s", marker, w)
 		}
+	}
+}
+
+// firstSnapshot reads the first snapshot of the stream at url.
+func firstSnapshot(t *testing.T, client *http.Client, url string) api.Snapshot {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url+"/api/stream", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := client.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = res.Body.Close() }()
+	sc := bufio.NewScanner(res.Body)
+	sc.Buffer(make([]byte, 0, 1<<20), 16<<20)
+	for sc.Scan() {
+		if data, ok := strings.CutPrefix(sc.Text(), "data: "); ok {
+			var snap api.Snapshot
+			if err := json.Unmarshal([]byte(data), &snap); err != nil {
+				t.Fatal(err)
+			}
+			return snap
+		}
+	}
+	t.Fatalf("the stream ended without a snapshot: %v", sc.Err())
+	return api.Snapshot{}
+}
+
+func TestServe_demo(t *testing.T) {
+	t.Parallel()
+	cfg := config.Config{
+		Demo: true, DemoListen: "127.0.0.1:0", DemoDevices: config.DefaultDemoDevices, DemoDays: 0.05,
+		DataDir: filepath.Join(t.TempDir(), "data"),
+	}
+	// A demo has a tailnet of its own, whatever it's given.
+	log := startServe(t, cfg, nil)
+	line := log.waitFor(t, "roost is running")
+	url := regexp.MustCompile(`url=(\S+)`).FindStringSubmatch(line)
+	if url == nil {
+		t.Fatalf("the log line %q doesn't give a URL", line)
+	}
+	client := &http.Client{Timeout: 20 * time.Second}
+
+	code, body := get(t, client, url[1]+"/api/me")
+	if code != http.StatusOK || !strings.Contains(body, `"role":"admin"`) || !strings.Contains(body, "alex@example.com") {
+		t.Errorf("GET /api/me = %d %q, want Alex, an admin", code, body)
+	}
+
+	snap := firstSnapshot(t, client, url[1])
+	if !snap.Hub.Demo || snap.Hub.Name != "Roost demo" || !snap.Hub.SetupDone {
+		t.Errorf("hub = %+v, want a demo that has been set up", snap.Hub)
+	}
+	if len(snap.Devices) != config.DefaultDemoDevices {
+		t.Errorf("%d devices, want %d", len(snap.Devices), config.DefaultDemoDevices)
+	}
+	var titles []string
+	for _, a := range snap.Alerts {
+		titles = append(titles, a.Title)
+	}
+	for _, want := range []string{"Disk 90% full on NAS", "Garage Pi is offline", "Garage camera is failing"} {
+		if !slices.Contains(titles, want) {
+			t.Errorf("alerts = %q, want %q among them", titles, want)
+		}
+	}
+	if len(snap.Checks) < 14 || snap.Health.Failing == 0 {
+		t.Errorf("%d checks and health %+v, want the demo's checks and one that fails", len(snap.Checks), snap.Health)
+	}
+
+	if code, body := get(t, client, url[1]+"/api/events"); code != http.StatusOK || !strings.Contains(body, "Garage Pi went offline") {
+		t.Errorf("GET /api/events = %d %q, want the demo's log", code, body)
+	}
+	// Terminals need a real machine.
+	code, body = get(t, client, url[1]+"/api/devices/anything/terminal/sessions")
+	if code != http.StatusForbidden || !strings.Contains(body, "turned off in this demo") {
+		t.Errorf("GET a terminal's sessions = %d %q, want a notice that a demo has none", code, body)
+	}
+	if strings.Contains(log.String(), "level=ERROR") {
+		t.Errorf("the demo logged an error:\n%s", log)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.DataDir, "roost.db")); err != nil {
+		t.Errorf("the demo didn't make its database: %v", err)
 	}
 }

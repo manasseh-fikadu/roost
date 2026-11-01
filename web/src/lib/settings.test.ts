@@ -64,7 +64,7 @@ describe('retention', () => {
 
 	test('retentionProblem', () => {
 		expect(retentionProblem(kept)).toBe('');
-		expect(retentionProblem({ ...kept, historyDays: 31 })).toContain('device history');
+		expect(retentionProblem({ ...kept, historyDays: 91 })).toContain('device history');
 		expect(retentionProblem({ ...kept, activityDays: 0 })).toContain('activity log');
 		expect(retentionProblem({ ...kept, checksDays: 90.5 })).toContain('check results');
 	});

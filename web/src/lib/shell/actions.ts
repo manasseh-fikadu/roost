@@ -37,7 +37,9 @@ const verbs: Record<DockerAction, string> = { start: 'Start', stop: 'Stop', rest
 /**
  * The actions for what's in `snapshot`. Anyone can see the shortcuts and open
  * a machine's Docker. The rest is for admins, who are the only ones the hub
- * tells about SSH access, and the only ones the routes behind them accept.
+ * tells about SSH access, and the only ones the routes behind them accept. A
+ * demo has no machines to open a terminal on or to change Docker on, so it
+ * leaves those out.
  */
 export function paletteActions(snapshot: Snapshot | null, admin: boolean): PaletteAction[] {
 	const out: PaletteAction[] = [
@@ -66,7 +68,8 @@ export function paletteActions(snapshot: Snapshot | null, admin: boolean): Palet
 	if (!admin) {
 		return out;
 	}
-	for (const d of terminalDevices(devices).filter(canOpen)) {
+	const real = !snapshot.hub.demo;
+	for (const d of real ? terminalDevices(devices).filter(canOpen) : []) {
 		const keywords = [d.name, d.dnsName, ...d.ips];
 		out.push(
 			{
@@ -87,7 +90,7 @@ export function paletteActions(snapshot: Snapshot | null, admin: boolean): Palet
 			}
 		);
 	}
-	for (const c of snapshot.containers) {
+	for (const c of real ? snapshot.containers : []) {
 		const deviceName = devices.find((d) => d.id === c.deviceId)?.name ?? '';
 		for (const action of actionsFor(c.state)) {
 			out.push({

@@ -362,13 +362,25 @@ func decodeTuple(b []byte, dst ...any) error {
 	return nil
 }
 
+// deflaters holds the writers that deflate has used. A writer at the best
+// compression takes over a megabyte, and a device's minute is a few kilobytes,
+// so a new one for each minute of 200 devices would be most of what Roost
+// allocates.
+var deflaters sync.Pool // of *flate.Writer
+
 // deflate encodes d as JSON compressed with DEFLATE.
 func deflate(d detail) ([]byte, error) {
 	var buf bytes.Buffer
-	zw, err := flate.NewWriter(&buf, flate.BestCompression)
-	if err != nil {
-		return nil, err
+	zw, _ := deflaters.Get().(*flate.Writer)
+	if zw == nil {
+		var err error
+		if zw, err = flate.NewWriter(&buf, flate.BestCompression); err != nil {
+			return nil, err
+		}
+	} else {
+		zw.Reset(&buf)
 	}
+	defer deflaters.Put(zw)
 	if err := json.NewEncoder(zw).Encode(d); err != nil {
 		return nil, err
 	}

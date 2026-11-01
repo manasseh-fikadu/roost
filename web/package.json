@@ -12,6 +12,7 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "bun test src",
+		"e2e": "playwright test",
 		"lint": "prettier --check .",
 		"format": "prettier --write ."
 	},
@@ -24,6 +25,7 @@
 		"@fontsource-variable/geist-mono": "^5.3.0",
 		"@internationalized/date": "^3.12.4",
 		"@lucide/svelte": "^1.61.0",
+		"@playwright/test": "^1.64.1",
 		"@sveltejs/adapter-static": "^4.0.0",
 		"@sveltejs/kit": "^3.0.0",
 		"@sveltejs/vite-plugin-svelte": "^7.2.0",

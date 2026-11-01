@@ -290,8 +290,9 @@ export interface RetentionSettings {
    */
   activityDays: number /* int */;
   /**
-   * HistoryDays is how long what devices and containers used, and the
-   * round-trip times to devices, last.
+   * HistoryDays is how long what devices used, and the round-trip times to
+   * them, last, in buckets of an hour. What used their CPU, and what their
+   * containers used, last 7 days at most.
    */
   historyDays: number /* int */;
   /**
@@ -575,6 +576,11 @@ export interface Hub {
    * its own, as the settings have them now.
    */
   thresholds: Thresholds;
+  /**
+   * Demo is whether this Roost runs a demo, whose tailnet is made up. It
+   * can't open terminals or files, or change Docker, and the app says so.
+   */
+  demo: boolean;
 }
 /**
  * A Collector is a job that gathers what Roost knows, such as polling

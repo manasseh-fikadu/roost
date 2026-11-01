@@ -69,6 +69,11 @@ type Options struct {
 	Systemd *systemd.Collector
 	// Tailscale is how Roost joined the tailnet, which the settings show.
 	Tailscale TailscaleMode
+	// Demo says the tailnet is made up. Roost then answers to any host name,
+	// since there's no tailnet address to hold it to, and refuses what needs a
+	// real machine: terminals, files, changes to Docker, SSH access and who
+	// has a role (see demoRefused).
+	Demo bool
 	// AppURL is where the app is on the tailnet, such as
 	// https://roost.example.ts.net, which the agent sends its heartbeats to.
 	// If it's empty, it's worked out from each request.

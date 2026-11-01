@@ -19,6 +19,9 @@ func TestParse(t *testing.T) {
 		Port:        config.DefaultPort,
 		DataDir:     config.DefaultDataDir(),
 		HostRoot:    config.DefaultHostRoot,
+		DemoListen:  config.DefaultDemoListen,
+		DemoDevices: config.DefaultDemoDevices,
+		DemoDays:    config.DefaultDemoDays,
 	}
 	with := func(change func(*config.Config)) config.Config {
 		cfg := defaults
@@ -48,6 +51,10 @@ func TestParse(t *testing.T) {
 				"ROOST_HOST_ROOT":    "/host",
 				"ROOST_DEV_UI":       "http://127.0.0.1:5173",
 				"ROOST_ADMINS":       "alice@example.com, bob@github,",
+				"ROOST_DEMO":         "true",
+				"ROOST_DEMO_LISTEN":  "0.0.0.0:8080",
+				"ROOST_DEMO_DEVICES": "200",
+				"ROOST_DEMO_DAYS":    "30",
 			},
 			want: config.Config{
 				Tailscale:   config.Host,
@@ -58,6 +65,10 @@ func TestParse(t *testing.T) {
 				HostRoot:    "/host",
 				DevUI:       "http://127.0.0.1:5173",
 				Admins:      []string{"alice@example.com", "bob@github"},
+				Demo:        true,
+				DemoListen:  "0.0.0.0:8080",
+				DemoDevices: 200,
+				DemoDays:    30,
 			},
 		},
 		{
@@ -143,6 +154,62 @@ func TestParse(t *testing.T) {
 			name:    "empty data directory",
 			args:    []string{"--data-dir", ""},
 			wantErr: true,
+		},
+		{
+			name: "demo",
+			args: []string{"--demo", "--demo-devices", "200"},
+			want: with(func(c *config.Config) { c.Demo, c.DemoDevices = true, 200 }),
+		},
+		{
+			name: "demo flag beats a bad environment variable",
+			args: []string{"--demo=false"},
+			env:  map[string]string{"ROOST_DEMO": "maybe"},
+			want: defaults,
+		},
+		{
+			name:    "demo environment variable isn't true or false",
+			env:     map[string]string{"ROOST_DEMO": "maybe"},
+			wantErr: true,
+		},
+		{
+			name:    "demo devices in the environment isn't a number",
+			env:     map[string]string{"ROOST_DEMO_DEVICES": "many"},
+			wantErr: true,
+		},
+		{
+			name:    "demo with no history",
+			args:    []string{"--demo", "--demo-days", "0"},
+			wantErr: true,
+		},
+		{
+			name: "demo with a fraction of a day",
+			args: []string{"--demo", "--demo-days", "0.05"},
+			want: with(func(c *config.Config) { c.Demo, c.DemoDays = true, 0.05 }),
+		},
+		{
+			name:    "demo with too much history",
+			args:    []string{"--demo", "--demo-days", "400"},
+			wantErr: true,
+		},
+		{
+			name:    "demo with one device",
+			args:    []string{"--demo", "--demo-devices", "1"},
+			wantErr: true,
+		},
+		{
+			name:    "demo with too many devices",
+			args:    []string{"--demo", "--demo-devices", "5000"},
+			wantErr: true,
+		},
+		{
+			name:    "demo without an address",
+			args:    []string{"--demo", "--demo-listen", ""},
+			wantErr: true,
+		},
+		{
+			name: "demo doesn't check the Tailscale settings",
+			args: []string{"--demo", "--tailscale", "funnel", "--hostname", ""},
+			want: with(func(c *config.Config) { c.Demo, c.Tailscale, c.Hostname = true, "funnel", "" }),
 		},
 		{
 			name:      "help",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"io/fs"
+	"time"
 )
 
 // Hooks for the store_test package.
@@ -31,3 +32,6 @@ func (s *Store) ApplyFrom(ctx context.Context, files fs.FS, from int) error {
 	_, err = s.upgrade(ctx, migrations[from:])
 	return err
 }
+
+// Prune deletes what has expired at now, as the store does once an hour.
+func (s *Store) Prune(ctx context.Context, now time.Time) { s.prune(ctx, now) }

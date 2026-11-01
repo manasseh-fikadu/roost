@@ -8,7 +8,7 @@
 	import type { DockerHistory } from '#lib/api/types.js';
 	import type { ChartSeries } from '#lib/charts/AreaChart.svelte';
 	import { bytes } from '#lib/format.js';
-	import { historyRanges, rangeName, type HistoryRange } from '#lib/history.js';
+	import { rangeName, shortRanges, type HistoryRange } from '#lib/history.js';
 	import Card from '#lib/ui/Card.svelte';
 	import Segmented from '#lib/ui/Segmented.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
@@ -103,7 +103,7 @@
 
 <Card title="History" description="Averages of each minute, kept by the container's name">
 	{#snippet actions()}
-		<Segmented bind:value={range} options={historyRanges} label="Time range" />
+		<Segmented bind:value={range} options={shortRanges} label="Time range" />
 	{/snippet}
 	{#if history && series}
 		{#if empty}

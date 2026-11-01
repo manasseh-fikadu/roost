@@ -17,7 +17,15 @@
 </script>
 
 <script lang="ts">
-	import { areaPath, linePath, nearest, niceMax, runs, typicalStep } from './path.js';
+	import {
+		areaPath,
+		linePath,
+		nearest,
+		niceMax,
+		runs,
+		timeTickFormat,
+		typicalStep
+	} from './path.js';
 
 	interface Props {
 		series: ChartSeries[];
@@ -91,11 +99,7 @@
 		const count = width > 500 ? 5 : 3;
 		return Array.from({ length: count }, (_, i) => t0 + ((t1 - t0) * i) / (count - 1));
 	});
-	const tickFormat: Intl.DateTimeFormatOptions = $derived(
-		t1 - t0 > 2 * 86_400_000
-			? { weekday: 'short', hour: 'numeric' }
-			: { hour: 'numeric', minute: '2-digit' }
-	);
+	const tickFormat = $derived(timeTickFormat(t1 - t0));
 
 	function valueAt(s: ChartSeries, ts: number): number | null {
 		return s.points.find((p) => p.ts === ts)?.v ?? null;

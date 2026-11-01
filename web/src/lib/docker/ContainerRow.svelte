@@ -16,6 +16,7 @@
 	import AdminOnly from '#lib/AdminOnly.svelte';
 	import type { DockerContainerRow } from '#lib/api/types.js';
 	import { bytes, percent, plural, rateShort } from '#lib/format.js';
+	import { live } from '#lib/live.svelte.js';
 	import Badge from '#lib/ui/Badge.svelte';
 	import IconButton from '#lib/ui/IconButton.svelte';
 	import Menu from '#lib/ui/Menu.svelte';
@@ -92,6 +93,7 @@
 					{@const Icon = actionIcons[action]}
 					<MenuItem
 						icon={Icon}
+						disabled={live.demo}
 						onSelect={() => onaction({ id: c.id, name: c.name, state: c.state, action })}
 					>
 						{actionCopy[action].label}

@@ -19,13 +19,14 @@ func TestStore_retention(t *testing.T) {
 	for _, tt := range []struct {
 		name string
 		opts store.Options
-		// want lists the pings that are left after an hour, by device ID, which
-		// says how many days ago they were sent.
+		// want lists the container metrics that are left after an hour, by name,
+		// which says how many days ago they were written.
 		want []string
 	}{
 		{"the defaults", store.Options{}, []string{"6d"}},
 		{"a day", store.Options{Retention: fixedRetention(store.Retention{Activity: day, History: day, Checks: day})}, nil},
-		{"a month", store.Options{Retention: fixedRetention(store.Retention{Activity: day, History: 30 * day, Checks: day})}, []string{"10d", "6d"}},
+		// What isn't summed up in buckets goes back a week at most.
+		{"a month", store.Options{Retention: fixedRetention(store.Retention{Activity: day, History: 30 * day, Checks: day})}, []string{"6d"}},
 		{"a setting it can't read", store.Options{Retention: func(context.Context, *store.Store) (store.Retention, error) {
 			return store.Retention{}, errors.New("no")
 		}}, []string{"10d", "6d"}},
@@ -42,19 +43,19 @@ func TestStore_retention(t *testing.T) {
 				t.Cleanup(func() { _ = s.Close() })
 				synctest.Wait()
 				now := time.Now()
-				// Sent a little under 10 and 6 days ago.
-				err = s.AddPings(t.Context(), []store.Ping{
-					{DeviceID: "10d", At: now.Add(-10*day + time.Hour)},
-					{DeviceID: "6d", At: now.Add(-6*day + time.Hour)},
+				// Written a little under 10 and 6 days ago.
+				err = s.AddContainerMetrics(t.Context(), []store.ContainerMetricsRow{
+					{DeviceID: "hub", Name: "10d", At: now.Add(-10*day + time.Hour)},
+					{DeviceID: "hub", Name: "6d", At: now.Add(-6*day + time.Hour)},
 				})
 				if err != nil {
 					t.Fatal(err)
 				}
 				time.Sleep(store.PruneInterval)
 				synctest.Wait()
-				got := firstColumn(t, s.DB(), "SELECT device_id FROM pings ORDER BY device_id")
+				got := firstColumn(t, s.DB(), "SELECT name FROM container_metrics ORDER BY name")
 				if !slices.Equal(got, tt.want) {
-					t.Errorf("pings left = %q, want %q", got, tt.want)
+					t.Errorf("container metrics left = %q, want %q", got, tt.want)
 				}
 			})
 		})

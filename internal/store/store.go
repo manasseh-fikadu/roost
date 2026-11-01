@@ -61,7 +61,7 @@ type Options struct {
 	// the store keeps everything until it works. Nil keeps the defaults of
 	// DefaultRetention.
 	Retention func(ctx context.Context, s *Store) (Retention, error)
-	// NoPrune stops the store deleting history, for a command that opens it
+	// NoPrune stops the store summing up and deleting history, for a command that opens it
 	// for something else, since it doesn't know how long an admin chose to
 	// keep it.
 	NoPrune bool
@@ -71,7 +71,8 @@ type Options struct {
 // don't exist, and migrates it to the latest schema. Before migrating a database
 // that already has a schema, it copies it to path + ".bak".
 //
-// Until Close is called, the store deletes expired history once an hour,
+// Until Close is called, the store sums up metrics and round-trip times
+// into buckets every few minutes, and deletes expired history once an hour,
 // unless opts.NoPrune says not to.
 func Open(ctx context.Context, path string, opts Options) (*Store, error) {
 	return open(ctx, path, opts, migrationFiles())
@@ -106,7 +107,7 @@ func open(ctx context.Context, path string, opts Options, files fs.FS) (*Store, 
 	}
 	go func() {
 		defer close(s.pruned)
-		s.pruneHourly(pruneCtx)
+		s.maintain(pruneCtx)
 	}()
 	return s, nil
 }

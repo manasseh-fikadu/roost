@@ -10,6 +10,8 @@ Roost keeps everything it needs in its data directory: the database, the embedde
 
 When the new version starts, it applies the database changes it brings, which are numbered files that run in a single transaction, so a failed upgrade leaves the database as it was. Before it does, it copies the database to `roost.db.bak` in the data directory. Each upgrade that changes the database replaces that copy, and one that doesn't leaves it alone, so for a backup you can count on, use `roost backup`.
 
+Roost used to keep every sample of a device's metrics and pings for as long as the history setting said, a week by default. Now it keeps the samples of the last 48 hours, and averages of 5 minutes and of an hour for the rest, up to 90 days. The first start of a version that does this folds the old samples into averages, which takes seconds, and deletes the ones older than 48 hours. Charts of a day or more are made of the averages from then on.
+
 A Roost that finds a database written by a newer version refuses to start and says so: `the database was written by a newer version of Roost`. It never tries to use it, since it doesn't know what changed. See [Rolling back](#rolling-back).
 
 ## Backing up

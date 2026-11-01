@@ -61,8 +61,8 @@ export const retention: {
 	{
 		key: 'historyDays',
 		label: 'Device history',
-		description: 'What devices and containers used, and round-trip times.',
-		max: 30
+		description: 'What devices used, and round-trip times to them.',
+		max: 90
 	},
 	{
 		key: 'checksDays',

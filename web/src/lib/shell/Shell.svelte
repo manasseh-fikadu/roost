@@ -22,6 +22,8 @@
 	import Toaster from '#lib/ui/Toaster.svelte';
 	import { iconButtonClass } from '#lib/ui/button.js';
 	import CommandPalette from './CommandPalette.svelte';
+	import DemoBanner from './DemoBanner.svelte';
+	import DemoOff from './DemoOff.svelte';
 	import LiveIndicator from './LiveIndicator.svelte';
 	import Shortcuts from './Shortcuts.svelte';
 	import Sidebar from './Sidebar.svelte';
@@ -56,6 +58,12 @@
 	);
 	/** The page is for admins, and the caller isn't one. */
 	const forbidden = $derived(item?.adminOnly === true && !isAdmin(page.data.me));
+	/** What a demo doesn't have, if this is the page for it. */
+	const demoOff = $derived(
+		live.demo
+			? ({ '/terminal': 'Terminals', '/files': 'Files' } as const)[item?.href as never]
+			: undefined
+	);
 
 	/**
 	 * Whether the stream has been down long enough to say so. A restart of the
@@ -166,6 +174,9 @@
 					: ''}. Trying again.
 			</p>
 		{/if}
+		{#if live.demo}
+			<DemoBanner />
+		{/if}
 		<main
 			class="mx-auto max-w-[1400px] px-4 py-6 max-lg:pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 lg:py-8"
 		>
@@ -174,6 +185,8 @@
 					An admin can make you one with <code class="font-mono text-fg-muted">roost admin add</code
 					>.
 				</EmptyState>
+			{:else if demoOff}
+				<DemoOff what={demoOff} />
 			{:else}
 				{@render children()}
 			{/if}

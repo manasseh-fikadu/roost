@@ -43,6 +43,15 @@ func ServeValue(opts Options, v any) http.Handler {
 	return h.guard(rt.mux)
 }
 
+// DemoRefusals returns the patterns of the routes a demo turns off.
+func DemoRefusals() []string {
+	var out []string
+	for _, r := range demoRefusals {
+		out = append(out, r.patterns...)
+	}
+	return out
+}
+
 // Redact is redact, for any value.
 func Redact(v any) any { return redact(v) }
 

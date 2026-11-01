@@ -177,17 +177,41 @@ type RTTBucket struct {
 
 // RTTHistory sums up the pings of a device since a time, in buckets of the
 // given size, oldest first. Buckets with no pings are left out. Each bucket
-// starts at a multiple of size since the Unix epoch.
+// starts at a multiple of size since the Unix epoch. As MetricsHistory does,
+// it reads what's older than the raw pings from the buckets they're folded
+// into.
 func (s *Store) RTTHistory(ctx context.Context, deviceID string, since time.Time, size time.Duration) ([]RTTBucket, error) {
-	step := size.Milliseconds()
-	if step <= 0 {
+	if size.Milliseconds() <= 0 {
 		return nil, fmt.Errorf("bucket size %v is under a millisecond", size)
 	}
-	rows, err := s.db.QueryContext(ctx, `
+	sp := s.spanFor(ctx, pingsSeries, deviceID, since, size)
+	var out []RTTBucket
+	if sp.step > 0 && since.Before(sp.cut) {
+		var err error
+		out, err = s.rttBuckets(ctx, `
+			SELECT ts / ?1 * ?1 AS bucket, SUM(pings), SUM(replies), COALESCE(SUM(rtt_ms * replies) / NULLIF(SUM(replies), 0), 0)
+			FROM pings_rollup WHERE device_id = ?2 AND step = ?3 AND ts >= ?4 AND ts < ?5
+			GROUP BY bucket ORDER BY bucket`,
+			size.Milliseconds(), deviceID, int64(sp.step/time.Second), since.Truncate(sp.step).UnixMilli(), sp.cut.UnixMilli())
+		if err != nil {
+			return nil, err
+		}
+	}
+	raw, err := s.rttBuckets(ctx, `
 		SELECT ts / ?1 * ?1 AS bucket, COUNT(*), COUNT(rtt_ms), COALESCE(AVG(rtt_ms), 0)
 		FROM pings WHERE device_id = ?2 AND ts >= ?3
 		GROUP BY bucket ORDER BY bucket`,
-		step, deviceID, since.UnixMilli())
+		size.Milliseconds(), deviceID, sp.cut.UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+	return append(out, raw...), nil
+}
+
+// rttBuckets runs a query for buckets: each has its start, how many pings it
+// has, how many got a reply and their average in milliseconds.
+func (s *Store) rttBuckets(ctx context.Context, query string, args ...any) ([]RTTBucket, error) {
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("read the round-trip history: %w", err)
 	}

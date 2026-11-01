@@ -55,6 +55,9 @@
 			<h3 class="text-[14px] font-medium text-fg">Top consumers over time</h3>
 			<p class="text-[12px] text-fg-subtle">
 				One-minute averages. Click the chart to see that moment.
+				{#if range === '30d' || range === '90d'}
+					Roost keeps them for 7 days, so the older part is empty.
+				{/if}
 			</p>
 		</div>
 		<Segmented bind:value={range} options={historyRanges} label="Time range" />

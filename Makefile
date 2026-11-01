@@ -8,7 +8,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
 .DEFAULT_GOAL := help
-.PHONY: help build web dev dev-api dev-web test lint types clean
+.PHONY: help build web dev dev-api dev-web demo demo-api test e2e bench load lint types clean
 
 ## build: build ./roost with the web UI embedded
 build: web
@@ -28,11 +28,30 @@ dev-api:
 dev-web:
 	cd web && $(BUN) run dev --port $(VITE_PORT)
 
+## demo: run Roost against a made-up tailnet, with the web UI from Vite
+demo: web/node_modules
+	@$(MAKE) --no-print-directory -j2 demo-api dev-web
+
+demo-api:
+	$(GO) run ./cmd/roost serve --demo --dev-ui http://127.0.0.1:$(VITE_PORT)
+
 ## test: run the Go and web tests, and type-check the web app
 test: web/node_modules
 	$(GO) test -race -shuffle=on ./...
 	cd web && $(BUN) run test
 	cd web && $(BUN) run check
+
+## e2e: click through the demo in a browser (run make build first)
+e2e: web/node_modules
+	cd web && $(BUN) run e2e
+
+## bench: benchmark the store and the usage recorder with 200 devices and 90 days of history
+bench:
+	$(GO) test ./internal/store ./internal/usage -run '^$$' -bench . -benchmem
+
+## load: run Roost against a demo of 200 devices and say what it costs (takes minutes)
+load:
+	ROOST_LOAD_DAYS=$${ROOST_LOAD_DAYS:-7} $(GO) test -tags load -run TestLoad -v -count=1 -timeout 40m ./cmd/roost
 
 ## lint: run golangci-lint, shellcheck and prettier
 lint: web/node_modules

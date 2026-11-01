@@ -1,5 +1,14 @@
 import { describe, expect, test } from 'bun:test';
-import { areaPath, linePath, nearest, niceMax, runs, typicalStep, type Point } from './path.js';
+import {
+	areaPath,
+	linePath,
+	nearest,
+	niceMax,
+	runs,
+	timeTickFormat,
+	typicalStep,
+	type Point
+} from './path.js';
 
 const identity = (n: number) => n;
 
@@ -116,5 +125,19 @@ describe('typicalStep', () => {
 
 	test('is a minute with too few points', () => {
 		expect(typicalStep([{ ts: 0, v: 1 }])).toBe(60_000);
+	});
+});
+
+describe('timeTickFormat', () => {
+	const hour = 3_600_000;
+	test.each([
+		{ name: 'an hour', span: hour, want: { hour: 'numeric', minute: '2-digit' } },
+		{ name: 'two days', span: 48 * hour, want: { hour: 'numeric', minute: '2-digit' } },
+		{ name: 'a week', span: 7 * 24 * hour, want: { weekday: 'short', hour: 'numeric' } },
+		{ name: 'two weeks', span: 14 * 24 * hour, want: { weekday: 'short', hour: 'numeric' } },
+		{ name: 'a month', span: 30 * 24 * hour, want: { month: 'short', day: 'numeric' } },
+		{ name: 'a quarter', span: 90 * 24 * hour, want: { month: 'short', day: 'numeric' } }
+	])('$name', ({ span, want }) => {
+		expect(timeTickFormat(span)).toEqual(want as Intl.DateTimeFormatOptions);
 	});
 });
