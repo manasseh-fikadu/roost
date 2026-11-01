@@ -120,6 +120,11 @@ func TestParse(t *testing.T) {
 			want: with(func(c *config.Config) { c.Admins = []string{"carol@example.com"} }),
 		},
 		{
+			name: "admins can be plain names, as on Headscale",
+			args: []string{"--admins", "alice,bob@example.com"},
+			want: with(func(c *config.Config) { c.Admins = []string{"alice", "bob@example.com"} }),
+		},
+		{
 			name: "control URL flag beats environment",
 			args: []string{"--control-url", "https://hs.example.com:8443"},
 			env:  map[string]string{"ROOST_CONTROL_URL": "https://other.example.com"},
@@ -152,7 +157,7 @@ func TestParse(t *testing.T) {
 		},
 		{
 			name:    "admin isn't a login",
-			args:    []string{"--admins", "alice@example.com,bob"},
+			args:    []string{"--admins", "alice@example.com,bob smith"},
 			wantErr: true,
 		},
 		{

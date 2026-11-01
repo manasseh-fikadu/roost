@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // Role is what a Tailscale login may do in Roost.
@@ -224,12 +225,14 @@ func (s *Store) SetWhoCanView(ctx context.Context, who string) (changed bool, er
 	return changed, nil
 }
 
-// CleanLogin trims login and checks that it looks like a Tailscale login,
-// which always has an @, as in alice@example.com or alice@github.
+// CleanLogin trims login and checks that it can be a login: one word, which
+// Tailscale makes an email address such as alice@example.com or alice@github.
+// A Headscale tailnet names a user by email if they have one and otherwise by
+// name, such as alice, so an @ can't be required.
 func CleanLogin(login string) (string, error) {
 	login = strings.TrimSpace(login)
-	if i := strings.IndexByte(login, '@'); i <= 0 || i == len(login)-1 || strings.ContainsAny(login, " \t\r\n") {
-		return "", fmt.Errorf("%q isn't a Tailscale login, such as alice@example.com", login)
+	if login == "" || strings.ContainsFunc(login, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
+		return "", fmt.Errorf("%q isn't a login, such as alice@example.com (or alice on a Headscale tailnet)", login)
 	}
 	return login, nil
 }

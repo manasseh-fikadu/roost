@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/manasseh-fikadu/roost/internal/api"
+	"github.com/manasseh-fikadu/roost/internal/tailnet"
 )
 
 // users returns each of a's users as "login role".
@@ -85,8 +88,8 @@ func TestAccess_errors(t *testing.T) {
 		{"unknown field", http.MethodPut, "/api/access/users/" + carol, `{"role": "viewer", "admin": true}`, http.StatusBadRequest},
 		{"two values", http.MethodPut, "/api/access/users/" + carol, `{"role": "viewer"} {}`, http.StatusBadRequest},
 		{"not JSON", http.MethodPut, "/api/access/users/" + carol, `role=viewer`, http.StatusBadRequest},
-		{"bad login", http.MethodPut, "/api/access/users/carol", `{"role": "viewer"}`, http.StatusBadRequest},
-		{"bad login to remove", http.MethodDelete, "/api/access/users/carol", ``, http.StatusBadRequest},
+		{"bad login", http.MethodPut, "/api/access/users/carol%20smith", `{"role": "viewer"}`, http.StatusBadRequest},
+		{"bad login to remove", http.MethodDelete, "/api/access/users/carol%20smith", ``, http.StatusBadRequest},
 		{"unknown who can view", http.MethodPatch, "/api/access", `{"whoCanView": "everyone"}`, http.StatusBadRequest},
 		// Valid JSON, so only the size limit can refuse it.
 		{"too big", http.MethodPatch, "/api/access", `{"whoCanView": "tailnet"` + strings.Repeat(" ", 2<<20) + `}`, http.StatusBadRequest},
@@ -108,5 +111,47 @@ func TestAccess_errors(t *testing.T) {
 	_, users := accessUsers(t, serve(h, newRequest(t, http.MethodGet, "/api/access", laptopIP)))
 	if got := strings.Join(users, ", "); got != alice+" admin, "+bob+" viewer" {
 		t.Errorf("users after failed changes = %s", got)
+	}
+}
+
+// Headscale names a user by email if they have one and otherwise by name, so
+// a login doesn't always have an @, and an OIDC identity can have slashes.
+func TestAccess_loginsWithoutAnAtSign(t *testing.T) {
+	t.Parallel()
+	const dave, erin = "dave", "https://idp.example.com/users/7"
+	daveIP, erinIP := netip.MustParseAddr("100.64.0.6"), netip.MustParseAddr("100.64.0.7")
+	tn := testTailnet()
+	st, err := tn.Status(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Peers = append(st.Peers,
+		tailnet.Device{ID: "dave", DNSName: "dave.example.ts.net", IPs: []netip.Addr{daveIP}, Owner: dave, Online: true},
+		tailnet.Device{ID: "erin", DNSName: "erin.example.ts.net", IPs: []netip.Addr{erinIP}, Owner: erin, Online: true})
+	tn.SetStatus(*st)
+	h := api.New(withTailnet(t, tn, api.Options{}))
+	me := func(from netip.Addr) api.Me { return getMe(t, h, newRequest(t, http.MethodGet, "/api/me", from)) }
+
+	if got := me(daveIP); got.Login != dave || got.Role != "" {
+		t.Errorf("dave before a role = %+v", got)
+	}
+	for login, role := range map[string]string{dave: "admin", erin: "viewer"} {
+		target := "/api/access/users/" + url.PathEscape(login)
+		if rec := send(t, h, http.MethodPut, target, laptopIP, `{"role": "`+role+`"}`); rec.Code != http.StatusOK {
+			t.Fatalf("PUT %s = %d %q, want 200", target, rec.Code, rec.Body)
+		}
+	}
+	if got := me(daveIP); got.Role != api.RoleAdmin {
+		t.Errorf("dave after being made an admin = %+v", got)
+	}
+	if got := me(erinIP); got.Login != erin || got.Role != api.RoleViewer {
+		t.Errorf("erin after being made a viewer = %+v", got)
+	}
+	target := "/api/access/users/" + url.PathEscape(erin)
+	if rec := send(t, h, http.MethodDelete, target, laptopIP, ""); rec.Code != http.StatusOK {
+		t.Fatalf("DELETE %s = %d %q, want 200", target, rec.Code, rec.Body)
+	}
+	if got := me(erinIP); got.Role != "" {
+		t.Errorf("erin after being removed = %+v", got)
 	}
 }

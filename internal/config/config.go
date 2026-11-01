@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode"
 )
 
 // The ways Roost can join the tailnet, set with --tailscale.
@@ -165,9 +166,10 @@ func (cfg Config) validate() error {
 			return errors.New("the dev UI URL can't have a user, a query or a fragment")
 		}
 	}
+	// The same rule as store.CleanLogin, which config can't import.
 	for _, login := range cfg.Admins {
-		if at := strings.IndexByte(login, '@'); at <= 0 || at == len(login)-1 || strings.ContainsAny(login, " \t") {
-			return fmt.Errorf("admin %q isn't a Tailscale login, such as alice@example.com", login)
+		if strings.ContainsFunc(login, func(r rune) bool { return unicode.IsSpace(r) || unicode.IsControl(r) }) {
+			return fmt.Errorf("admin %q isn't a login, such as alice@example.com (or alice on a Headscale tailnet)", login)
 		}
 	}
 	return nil

@@ -310,15 +310,14 @@ export function readUnitName(input: string): { name: string; problem: string } {
 }
 
 /**
- * What is wrong with a Tailscale login typed into the add form, in a
- * sentence, or '' if nothing is. A login has one @ with something on each
- * side of it, and no spaces.
+ * What is wrong with a login typed into the add form, in a sentence, or ''
+ * if nothing is. Tailscale logins are email addresses, but Headscale names a
+ * user without an email by name, so a login is just one word.
  */
 export function loginProblem(login: string): string {
 	const s = login.trim();
-	const at = s.indexOf('@');
-	if (s === '' || /\s/.test(s) || at <= 0 || at !== s.lastIndexOf('@') || at === s.length - 1) {
-		return 'Use a Tailscale login, such as alice@example.com.';
+	if (s === '' || /\s/.test(s)) {
+		return 'Use a login without spaces, such as alice@example.com (or alice on Headscale).';
 	}
 	return '';
 }
