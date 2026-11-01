@@ -22,7 +22,7 @@ The first time, the log has a link to log Roost in to Tailscale. Open it, and Ro
 TS_AUTHKEY=tskey-auth-...
 ```
 
-A key for a tagged node means Roost has no owner to make its admin, so also set `ROOST_ADMINS` in `.env` ([Admins and viewers](tailscale.md#admins-and-viewers)). `ROOST_HOSTNAME` renames the node.
+A key for a tagged node means Roost has no owner to make its admin, so also set `ROOST_ADMINS` in `.env` ([Admins and viewers](tailscale.md#admins-and-viewers)). `ROOST_HOSTNAME` renames the node. With [Headscale](headscale.md), set `ROOST_CONTROL_URL` to your server's address in `.env` too, and use a pre-auth key for `TS_AUTHKEY`.
 
 Roost also serves a login page inside the container, on `127.0.0.1:4700`, which isn't published, so the link in the log is the way in. If you do publish it, publish it on the host's loopback only (`127.0.0.1:4700:4700`) and set `ROOST_SETUP_LISTEN=0.0.0.0:4700`: until Roost is logged in, anyone who can open that page can add it to their own tailnet.
 

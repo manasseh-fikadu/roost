@@ -26,6 +26,8 @@ make build      # builds ./roost with the web UI inside
 
 The first time, open <http://127.0.0.1:4700> on the same machine to log Roost in to Tailscale. After that, Roost is at `https://roost.<your-tailnet>.ts.net`. To use the machine's own Tailscale instead, run `./roost serve --tailscale host`. [docs/tailscale.md](docs/tailscale.md) explains both modes and the tailnet policy Roost needs.
 
+Roost also works with [Headscale](https://github.com/juanfont/headscale), a self-hosted control server for Tailscale's clients: `./roost serve --control-url https://headscale.example.com`. See [Roost and Headscale](docs/headscale.md).
+
 There's no password: Roost asks Tailscale who each connection comes from. Whoever logs Roost in to Tailscale becomes its first admin, and `roost admin add <login>` adds more. Viewers get a read-only dashboard: add them with `roost admin add-viewer <login>`, or let anyone on the tailnet view with `roost admin who-can-view tailnet`. See [Signing in](docs/tailscale.md#signing-in) and [Admins and viewers](docs/tailscale.md#admins-and-viewers).
 
 Roost keeps its data in `~/.config/roost` (`~/Library/Application Support/roost` on macOS). To put it somewhere else, use `--data-dir` or set `ROOST_DATA_DIR`.
