@@ -129,6 +129,41 @@ jobs:
           ./roost version
           go test -tags ui -run '^TestServe_ui$' ./cmd/roost
 
+  # Starts the binary in demo mode, which needs no Tailscale, and clicks through
+  # every page of the app in a browser, on a desktop and on a phone.
+  e2e:
+    name: Demo smoke test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: web/package.json
+      - run: make build
+      - name: Install the browser
+        working-directory: web
+        run: bunx playwright install --with-deps chromium
+      - name: Run the smoke test against the demo
+        working-directory: web
+        run: bun run e2e
+      - name: Keep the traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-traces
+          path: web/test-results
+          retention-days: 7
+
   # Tries the release without a tag: the archives, the checksums and the Docker
   # image (which it builds but doesn't push), so a change that breaks
   # .goreleaser.yaml or the Dockerfile fails here and not when a tag is pushed.
@@ -181,7 +216,7 @@ jobs:
   ci:
     name: CI passed
     if: always()
-    needs: [go, lint, vuln, web, build, release, dco]
+    needs: [go, lint, vuln, web, build, e2e, release, dco]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
