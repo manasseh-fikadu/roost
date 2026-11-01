@@ -205,7 +205,10 @@ func tail(s string, limit int) string {
 func (h *handler) installScript(w http.ResponseWriter, r *http.Request) {
 	c, code := callerOf(r), r.PathValue("code")
 	refusal := ""
-	if c.reason == ReasonWhoIsFailed {
+	if ok, _ := h.limits.enroll.allow(limitKey(c, r.RemoteAddr), time.Now()); !ok {
+		// A script that says so, like the other refusals: curl -f would hide a 429.
+		refusal = "this machine asked for too many install commands in a row, so wait a moment and run the command again"
+	} else if c.reason == ReasonWhoIsFailed {
 		// Without the machine, a code it used would look like another
 		// machine's.
 		refusal = whoIsFailed + ", so run the command again in a moment"

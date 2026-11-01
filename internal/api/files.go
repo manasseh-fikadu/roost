@@ -1,6 +1,7 @@
 package api
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -19,6 +20,9 @@ import (
 // maxFilesBody is the largest JSON body the file routes read: ten thousand
 // long paths.
 const maxFilesBody = 4 << 20
+
+// defaultMaxUpload is the most one uploaded file may have, unless Options says.
+const defaultMaxUpload = 10 << 30
 
 const (
 	// uploadQuiet is how long after an upload's last file the activity log
@@ -407,6 +411,13 @@ func conflictOf(s string) files.Conflict {
 // uploadFile answers PUT /api/devices/{id}/files/upload?dir=&name=&conflict=
 // with the body written to the file.
 func (h *handler) uploadFile(w http.ResponseWriter, r *http.Request) {
+	limit := cmp.Or(h.opts.MaxUpload, defaultMaxUpload)
+	if r.ContentLength > limit {
+		// Before connecting to the machine, or reading any of it.
+		h.writeJSON(w, r, http.StatusRequestEntityTooLarge, ErrorBody{Error: "Roost uploads files up to " + byteLabel(limit)})
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, limit)
 	rem := h.openFiles(w, r)
 	if rem == nil {
 		return

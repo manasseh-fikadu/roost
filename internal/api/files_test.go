@@ -268,6 +268,48 @@ func TestFiles_upload(t *testing.T) {
 	}
 }
 
+// An upload over the limit is refused, from its Content-Length before any of it
+// is read, or else as it streams in, and leaves nothing behind.
+func TestFiles_uploadLimit(t *testing.T) {
+	t.Parallel()
+	e := newFilesEnv(t)
+	opts := e.opts
+	opts.MaxUpload = 10
+	h := api.New(opts)
+	target := "/api/devices/laptop/files/upload?dir=" + url.QueryEscape(e.home) + "&name="
+
+	if rec := send(t, h, http.MethodPut, target+"ok.bin", laptopIP, "0123456789"); rec.Code != http.StatusOK {
+		t.Fatalf("a file of exactly the limit = %d %s, want 200", rec.Code, rec.Body)
+	}
+
+	t.Run("by its length", func(t *testing.T) {
+		req := newRequestBody(t, http.MethodPut, target+"claimed.bin", laptopIP, strings.NewReader("x"))
+		req.ContentLength = 11
+		rec := serve(h, req)
+		if rec.Code != http.StatusRequestEntityTooLarge || !strings.Contains(rec.Body.String(), "up to 10 B") {
+			t.Errorf("a file that says it's 11 bytes = %d %s, want 413", rec.Code, rec.Body)
+		}
+	})
+
+	t.Run("as it comes", func(t *testing.T) {
+		req := newRequestBody(t, http.MethodPut, target+"streamed.bin", laptopIP, io.NopCloser(strings.NewReader("0123456789ABCDEF")))
+		req.ContentLength = -1
+		rec := serve(h, req)
+		if rec.Code != http.StatusRequestEntityTooLarge {
+			t.Errorf("a body of 16 bytes of unknown length = %d %s, want 413", rec.Code, rec.Body)
+		}
+	})
+
+	for _, name := range []string{"claimed.bin", "streamed.bin"} {
+		if _, err := os.Stat(filepath.Join(e.home, name)); err == nil {
+			t.Errorf("%s was left behind", name)
+		}
+	}
+	if left, _ := filepath.Glob(filepath.Join(e.home, ".*.part")); len(left) != 0 {
+		t.Errorf("partial files left: %v", left)
+	}
+}
+
 // Uploading a folder is a request for every file in it, and one line in the
 // activity log.
 func TestFiles_uploadAudit(t *testing.T) {

@@ -146,6 +146,14 @@ func (rt *router) add(r route, next http.Handler) {
 func (h *handler) allow(r route, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
 		if r.need == agentSecret || r.need == enrollCode {
+			// Before the secret or code is looked at, so guessing one is slow too.
+			limit := h.limits.agent
+			if r.need == enrollCode {
+				limit = h.limits.enroll
+			}
+			if h.tooMany(w, req, limit) {
+				return
+			}
 			if status, msg := h.checkMachine(req, r.need); status != 0 {
 				if status == http.StatusUnauthorized {
 					w.Header().Set("WWW-Authenticate", "Bearer")

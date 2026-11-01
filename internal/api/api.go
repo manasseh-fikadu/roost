@@ -69,6 +69,10 @@ type Options struct {
 	Systemd *systemd.Collector
 	// Tailscale is how Roost joined the tailnet, which the settings show.
 	Tailscale TailscaleMode
+	// MaxUpload is the most bytes one uploaded file may have, or 0 for the
+	// default of 10 GiB. It's there so a runaway upload can't fill a machine's
+	// disk, not to tell people what to put on it.
+	MaxUpload int64
 	// Demo says the tailnet is made up. Roost then answers to any host name,
 	// since there's no tailnet address to hold it to, and refuses what needs a
 	// real machine: terminals, files, changes to Docker, SSH access and who
@@ -103,7 +107,7 @@ func newHandler(opts Options) *handler {
 		opts.Settings == nil || opts.Notify == nil {
 		panic("api.New: Options.WhoIs, Snapshot, Feed, Store, Agents, Usage, Checks, Alerts, SSH, Docker, Settings and Notify are required")
 	}
-	h := &handler{opts: opts, log: opts.Logger}
+	h := &handler{opts: opts, log: opts.Logger, limits: newLimits()}
 	if h.log == nil {
 		h.log = slog.New(slog.DiscardHandler)
 	}
@@ -249,6 +253,8 @@ type handler struct {
 	// activity log is waiting to write about files.
 	archives files.Archives
 	audit    fileAudit
+	// limits keep a machine from calling the routes for agents in a loop.
+	limits limits
 }
 
 func (h *handler) health(w http.ResponseWriter, r *http.Request) {
