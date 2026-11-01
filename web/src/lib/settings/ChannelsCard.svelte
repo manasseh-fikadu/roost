@@ -28,6 +28,7 @@
 	import MenuSeparator from '#lib/ui/MenuSeparator.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import Switch from '#lib/ui/Switch.svelte';
+	import ErrorState from '#lib/ui/ErrorState.svelte';
 	import ChannelDialog from './ChannelDialog.svelte';
 	import ChannelIcon from './ChannelIcon.svelte';
 
@@ -150,12 +151,7 @@
 			<Skeleton class="h-14" />
 		</div>
 	{:else if channels === null}
-		<EmptyState title="Roost couldn't load the channels">
-			{failure}
-			<div class="mt-3">
-				<Button onclick={load}>Try again</Button>
-			</div>
-		</EmptyState>
+		<ErrorState title="Couldn't load the channels" message={failure} onretry={load} />
 	{:else if visible && visible.length === 0}
 		<EmptyState title="No channels yet" icon={Bell}>
 			Alerts only show up in Roost until you add a place to send them: your phone, a chat room or an

@@ -35,6 +35,7 @@
 	import Input from '#lib/ui/Input.svelte';
 	import Select from '#lib/ui/Select.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
+	import ErrorState from '#lib/ui/ErrorState.svelte';
 
 	interface Props {
 		/** For how Roost joins the tailnet. */
@@ -290,12 +291,12 @@
 	>
 		{#if !access}
 			{#if loadError}
-				<EmptyState title="Couldn't load the people">
-					<span class="font-mono text-[12px] break-words text-red-fg">{loadError}</span>
-					<div class="mt-3">
-						<Button {loading} onclick={() => void load()}>Retry</Button>
-					</div>
-				</EmptyState>
+				<ErrorState
+					title="Couldn't load the people"
+					message={loadError}
+					{loading}
+					onretry={() => void load()}
+				/>
 			{:else}
 				<div class="space-y-2 p-4" aria-busy="true">
 					<Skeleton class="h-12" />

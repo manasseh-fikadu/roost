@@ -18,6 +18,7 @@
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import TabPanel from '#lib/ui/TabPanel.svelte';
 	import Tabs from '#lib/ui/Tabs.svelte';
+	import ErrorState from '#lib/ui/ErrorState.svelte';
 
 	const alerts = $derived(live.snapshot?.alerts ?? []);
 	const devices = $derived(live.snapshot?.devices ?? []);
@@ -174,7 +175,7 @@
 				Alerts that resolved are kept for 30 days, so this one may be older.
 			</EmptyState>
 		{:else}
-			<EmptyState title="Roost couldn't load this alert">Try again in a moment.</EmptyState>
+			<ErrorState title="Couldn't load this alert" message="Try again in a moment." />
 		{/if}
 	</Card>
 {/if}

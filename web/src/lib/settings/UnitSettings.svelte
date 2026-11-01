@@ -22,6 +22,7 @@
 	import Input from '#lib/ui/Input.svelte';
 	import Select from '#lib/ui/Select.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
+	import ErrorState from '#lib/ui/ErrorState.svelte';
 	import { Draft } from './draft.svelte.js';
 	import FormCard from './FormCard.svelte';
 
@@ -169,12 +170,12 @@
 		</div>
 	{:else if !installed}
 		<div class="rounded-lg border border-line">
-			<EmptyState title="Couldn't load the services">
-				<span class="font-mono text-[12px] break-words text-red-fg">{loadError}</span>
-				<div class="mt-3">
-					<Button {loading} onclick={() => void load()}>Retry</Button>
-				</div>
-			</EmptyState>
+			<ErrorState
+				title="Couldn't load the services"
+				message={loadError ?? undefined}
+				{loading}
+				onretry={() => void load()}
+			/>
 		</div>
 	{:else if !installed.available}
 		<div class="rounded-lg border border-line">

@@ -14,12 +14,12 @@
 	import { ApiError } from '#lib/api/client.js';
 	import type { DockerContainerDetail } from '#lib/api/types.js';
 	import { buttonClass } from '#lib/ui/button.js';
-	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import TabPanel from '#lib/ui/TabPanel.svelte';
 	import Tabs from '#lib/ui/Tabs.svelte';
+	import ErrorState from '#lib/ui/ErrorState.svelte';
 	import ActionDialog from '../ActionDialog.svelte';
 	import type { PendingAction } from '../actions.js';
 	import { getDockerContainer, type DockerAction } from '../api.js';
@@ -221,13 +221,16 @@
 				<div class="mt-3"><a href={backHref} class={buttonClass()}>All containers</a></div>
 			</EmptyState>
 		{:else}
-			<EmptyState title="Couldn't load this container" icon={Box}>
-				<span class="font-mono text-[12px] break-words text-fg-subtle">{detail.error}</span>
-				<div class="mt-3 flex justify-center gap-2">
-					<Button onclick={() => void detail.reload()}>Retry</Button>
+			<ErrorState
+				title="Couldn't load this container"
+				icon={Box}
+				message={detail.error}
+				onretry={() => void detail.reload()}
+			>
+				{#snippet actions()}
 					<a href={backHref} class={buttonClass('ghost')}>All containers</a>
-				</div>
-			</EmptyState>
+				{/snippet}
+			</ErrorState>
 		{/if}
 	</Card>
 {:else}
