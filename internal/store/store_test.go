@@ -490,3 +490,71 @@ func firstColumn(t *testing.T, db *sql.DB, query string) []string {
 	}
 	return got
 }
+
+func TestSnapshot(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "roost.db")
+	// The store stays open, as it does while Roost runs.
+	s := openStore(t, path, nil)
+	if _, err := s.SetRole(t.Context(), "alice@example.com", store.Admin); err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(dir, "copy.db")
+	if err := os.WriteFile(dst, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := store.Snapshot(t.Context(), path, dst); err != nil {
+		t.Fatalf("Snapshot() error = %v, want none", err)
+	}
+
+	// A change made after the copy isn't in it.
+	if _, err := s.SetRole(t.Context(), "bob@example.com", store.Viewer); err != nil {
+		t.Fatal(err)
+	}
+	copied := openStore(t, dst, nil)
+	users, err := copied.Users(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(users) != 1 || users[0].Login != "alice@example.com" || users[0].Role != store.Admin {
+		t.Errorf("users in the copy = %+v, want only alice as an admin", users)
+	}
+}
+
+func TestSnapshot_leavesTheDatabaseAlone(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "roost.db")
+	dst := filepath.Join(dir, "copy.db")
+
+	t.Run("missing database", func(t *testing.T) {
+		err := store.Snapshot(t.Context(), path, dst)
+
+		if !errors.Is(err, fs.ErrNotExist) {
+			t.Errorf("Snapshot() error = %v, want one for a missing file", err)
+		}
+		for _, name := range []string{path, dst} {
+			if _, err := os.Stat(name); !errors.Is(err, fs.ErrNotExist) {
+				t.Errorf("Snapshot() created %s: Stat error = %v", name, err)
+			}
+		}
+	})
+
+	t.Run("old schema", func(t *testing.T) {
+		// A database one migration behind, which Open would migrate.
+		closeStore(t, openStore(t, path, migrations("CREATE TABLE a (x)")))
+		if err := os.WriteFile(dst, nil, 0o600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := store.Snapshot(t.Context(), path, dst); err != nil {
+			t.Fatalf("Snapshot() error = %v, want none", err)
+		}
+
+		if got := userVersion(t, rawDB(t, dst)); got != 1 {
+			t.Errorf("schema version of the copy = %d, want 1: Snapshot migrated it", got)
+		}
+	})
+}
