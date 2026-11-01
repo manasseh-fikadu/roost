@@ -559,7 +559,16 @@ func (r *Remote) Archive(ctx context.Context, dir string, names []string) (*ssh.
 		}
 		base = fmt.Sprintf("%s-%d-items", folder, len(names))
 	}
-	st, err := r.mgr.Stream(ctx, r.ID, archiveScript, append([]string{dir}, names...)...)
+	args := []string{dir}
+	for _, n := range names {
+		// bsdtar, which a Mac has, reads a name that starts with @ as an
+		// archive to copy the members of, so that name goes in as a path.
+		if strings.HasPrefix(n, "@") {
+			n = "./" + n
+		}
+		args = append(args, n)
+	}
+	st, err := r.mgr.Stream(ctx, r.ID, archiveScript, args...)
 	return st, base + ".tar.gz", err
 }
 

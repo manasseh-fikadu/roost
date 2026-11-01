@@ -45,6 +45,7 @@ var hostile = []string{
 	"!!",
 	".hidden",
 	"työ ☃ 🐓",
+	"@at.txt",
 	"bad \xff utf-8",
 }
 
@@ -526,7 +527,8 @@ func readTar(t *testing.T, r io.Reader) map[string]string {
 		if err != nil {
 			t.Fatal(err)
 		}
-		out[h.Name] = string(b)
+		// A name that tar might read as a command comes in as ./name.
+		out[strings.TrimPrefix(h.Name, "./")] = string(b)
 	}
 }
 
@@ -539,3 +541,162 @@ func status(err error) int {
 }
 
 func itoa(n int) string { return strconv.Itoa(n) }
+
+// A folder can be called anything too: the one a file goes to, is searched,
+// archived or deleted, and whatever the shell does with its name, the files
+// in it are the ones asked for.
+func TestRemote_hostileFolders(t *testing.T) {
+	t.Parallel()
+	for _, shell := range shells {
+		t.Run(shell, func(t *testing.T) {
+			t.Parallel()
+			m := newMachine(t, shell)
+			r := m.open(t)
+			for _, name := range hostile {
+				if name == "bad \xff utf-8" {
+					continue
+				}
+				dir := filepath.Join(m.home, "box "+name)
+				m.write(t, "box "+name+"/inside.needle", "inside")
+				src := m.write(t, "src "+name+"/file.txt", "from "+name)
+
+				// Copy and move into it, and out of it.
+				if res, err := r.Copy(t.Context(), []string{src}, dir, files.ConflictFail); err != nil || res.Done != 1 {
+					t.Fatalf("Copy into %q = %+v, %v", name, res, err)
+				}
+				if got, err := os.ReadFile(filepath.Clean(filepath.Join(dir, "file.txt"))); err != nil || string(got) != "from "+name {
+					t.Errorf("the copy in %q: %q, %v", name, got, err)
+				}
+				moved := filepath.Join(dir, "file.txt")
+				back := filepath.Join(m.home, "back "+name)
+				if err := os.Mkdir(back, 0o700); err != nil {
+					t.Fatal(err)
+				}
+				if res, err := r.Move(t.Context(), []string{moved}, back, files.ConflictFail); err != nil || res.Done != 1 {
+					t.Fatalf("Move out of %q = %+v, %v", name, res, err)
+				}
+
+				// Search it, archive from it.
+				found, err := r.Search(t.Context(), files.Search{Root: dir, Query: "needle"})
+				if err != nil || len(found.Entries) != 1 || found.Entries[0].Path != filepath.Join(dir, "inside.needle") {
+					t.Errorf("Search in %q = %+v, %v", name, found.Entries, err)
+				}
+				st, _, err := r.Archive(t.Context(), dir, []string{"inside.needle"})
+				if err != nil {
+					t.Fatalf("Archive from %q: %v", name, err)
+				}
+				if got := readTar(t, st); got["inside.needle"] != "inside" {
+					t.Errorf("archive from %q has %v", name, got)
+				}
+				_ = st.Close()
+
+				// Delete it.
+				if res, err := r.Delete(t.Context(), []string{dir, back}); err != nil || res.Done != 2 {
+					t.Errorf("Delete of %q = %+v, %v", name, res, err)
+				}
+				if _, err := os.Lstat(dir); err == nil {
+					t.Errorf("%q is still there", dir)
+				}
+			}
+			noPwned(t, m)
+		})
+	}
+}
+
+// A link to a folder is the link, to everything but reading and writing the
+// file that a path ends at: deleting, moving, copying, renaming, archiving and
+// searching never reach through it, so a link that someone else put in a
+// folder can't send the admin's delete, or a download, somewhere else.
+func TestRemote_symlinks(t *testing.T) {
+	t.Parallel()
+	m := newMachine(t, "sh")
+	r := m.open(t)
+	outside, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	precious := filepath.Join(outside, "precious.txt")
+	if err := os.WriteFile(precious, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(m.home, "link")
+	dest := filepath.Join(m.home, "dest")
+	if err := os.Mkdir(dest, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	relink := func() {
+		_ = os.Remove(link)
+		if err := os.Symlink(outside, link); err != nil {
+			t.Fatal(err)
+		}
+	}
+	isLinkTo := func(p string) bool {
+		got, err := os.Readlink(p)
+		return err == nil && got == outside
+	}
+	intact := func(what string) {
+		t.Helper()
+		if b, err := os.ReadFile(filepath.Clean(precious)); err != nil || string(b) != "keep" {
+			t.Errorf("after %s the file behind the link is %q, %v", what, b, err)
+		}
+	}
+
+	relink()
+	if res, err := r.Delete(t.Context(), []string{link}); err != nil || res.Done != 1 {
+		t.Fatalf("Delete = %+v, %v", res, err)
+	}
+	intact("deleting the link")
+	if _, err := os.Lstat(link); err == nil {
+		t.Error("the link is still there")
+	}
+
+	relink()
+	if res, err := r.Copy(t.Context(), []string{link}, dest, files.ConflictFail); err != nil || res.Done != 1 {
+		t.Fatalf("Copy = %+v, %v", res, err)
+	}
+	if !isLinkTo(filepath.Join(dest, "link")) {
+		t.Error("the copy of the link isn't a link to the same place")
+	}
+	if res, err := r.Move(t.Context(), []string{filepath.Join(dest, "link")}, m.home, files.ConflictRename); err != nil || res.Done != 1 {
+		t.Fatalf("Move = %+v, %v", res, err)
+	}
+	if !isLinkTo(filepath.Join(m.home, "link (1)")) {
+		t.Error("the moved link isn't a link to the same place")
+	}
+	if _, err := r.Rename(link, "renamed"); err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if !isLinkTo(filepath.Join(m.home, "renamed")) {
+		t.Error("the renamed link isn't a link to the same place")
+	}
+	intact("moving, copying and renaming the link")
+
+	relink()
+	st, _, err := r.Archive(t.Context(), m.home, []string{"link"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := readTar(t, st); len(got) != 0 {
+		t.Errorf("the archive of a link has files in it: %v", got)
+	}
+	_ = st.Close()
+
+	found, err := r.Search(t.Context(), files.Search{Root: m.home, Query: "precious"})
+	if err != nil || len(found.Entries) != 0 {
+		t.Errorf("Search went through the link: %+v, %v", found.Entries, err)
+	}
+
+	// A link in a folder that is deleted goes without what it points to.
+	relink()
+	holder := filepath.Join(m.home, "holder")
+	if err := os.Mkdir(holder, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(holder, "inner")); err != nil {
+		t.Fatal(err)
+	}
+	if res, err := r.Delete(t.Context(), []string{holder}); err != nil || res.Done != 1 {
+		t.Fatalf("Delete of a folder with a link = %+v, %v", res, err)
+	}
+	intact("deleting a folder that has a link in it")
+}
