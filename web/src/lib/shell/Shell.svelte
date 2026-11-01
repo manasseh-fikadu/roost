@@ -22,6 +22,7 @@
 	import { iconButtonClass } from '#lib/ui/button.js';
 	import CommandPalette from './CommandPalette.svelte';
 	import LiveIndicator from './LiveIndicator.svelte';
+	import Shortcuts from './Shortcuts.svelte';
 	import Sidebar from './Sidebar.svelte';
 	import UserMenu from './UserMenu.svelte';
 	import { navItemFor } from './nav.js';
@@ -37,6 +38,7 @@
 
 	let drawerOpen = $state(false);
 	let paletteOpen = $state(false);
+	let shortcutsOpen = $state(false);
 
 	const item = $derived(navItemFor(page.url.pathname));
 	/** A device's page is named after the device, which only the live data knows. */
@@ -136,7 +138,7 @@
 						<Kbd>K</Kbd>
 					</span>
 				</button>
-				<UserMenu />
+				<UserMenu onshortcuts={() => (shortcutsOpen = true)} />
 			</div>
 		</header>
 		<main class="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:py-8">
@@ -151,6 +153,7 @@
 		</main>
 	</div>
 
-	<CommandPalette bind:open={paletteOpen} />
+	<CommandPalette bind:open={paletteOpen} onshortcuts={() => (shortcutsOpen = true)} />
+	<Shortcuts bind:open={shortcutsOpen} mod={modKey} />
 	<Toaster />
 </div>
