@@ -13,6 +13,7 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"test": "bun test src",
 		"e2e": "playwright test",
+		"screenshots": "playwright test -c screenshots.config.ts",
 		"lint": "prettier --check .",
 		"format": "prettier --write ."
 	},

@@ -8,7 +8,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
 .DEFAULT_GOAL := help
-.PHONY: help build web dev dev-api dev-web demo demo-api test e2e bench load lint types clean
+.PHONY: help build web dev dev-api dev-web demo demo-api test e2e screenshots bench load lint types clean
 
 ## build: build ./roost with the web UI embedded
 build: web
@@ -44,6 +44,10 @@ test: web/node_modules
 ## e2e: click through the demo in a browser (run make build first)
 e2e: web/node_modules
 	cd web && $(BUN) run e2e
+
+## screenshots: retake the screenshots in docs/images from the demo (run make build first)
+screenshots: web/node_modules
+	cd web && $(BUN) run screenshots
 
 ## bench: benchmark the store and the usage recorder with 200 devices and 90 days of history
 bench:
