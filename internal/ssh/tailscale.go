@@ -105,9 +105,19 @@ func policySrc(d tailnet.Device) string {
 	case len(d.Tags) > 0:
 		return d.Tags[0]
 	case d.Owner != "":
-		return d.Owner
+		return policyUser(d.Owner)
 	}
 	return "autogroup:member"
+}
+
+// policyUser is how the policy names the user with the given login. A
+// Tailscale login always has an @. Headscale names a user who has no email by
+// their name and an @, as in alice@, and rejects the bare name.
+func policyUser(login string) string {
+	if strings.Contains(login, "@") {
+		return login
+	}
+	return login + "@"
 }
 
 // policyDst is how an ssh rule from src names the machine dst. It can be a
