@@ -229,6 +229,9 @@ func historyID(m *machine) string {
 	return m.id
 }
 
+// seedMetrics writes the metrics as Roost keeps them: every sample of the last
+// store.RawKeep, and before that, buckets: of store.FineStep for as far back as
+// they last, and of store.CoarseStep for the rest.
 func (d *Demo) seedMetrics(ctx context.Context, st *store.Store, span time.Duration) error {
 	var rows []store.MetricsRow
 	flush := func() error {
@@ -236,7 +239,7 @@ func (d *Demo) seedMetrics(ctx context.Context, st *store.Store, span time.Durat
 		rows = rows[:0]
 		return err
 	}
-	for t := d.start.Add(-span).Truncate(metricsEvery); t.Before(d.start); t = t.Add(metricsEvery) {
+	for t := d.start.Add(-min(span, store.RawKeep)).Truncate(metricsEvery); t.Before(d.start); t = t.Add(metricsEvery) {
 		for _, m := range d.machines {
 			if !d.reportsAt(m, t) {
 				continue
@@ -249,7 +252,77 @@ func (d *Demo) seedMetrics(ctx context.Context, st *store.Store, span time.Durat
 			}
 		}
 	}
-	return flush()
+	if err := flush(); err != nil {
+		return err
+	}
+
+	var buckets []store.MetricsRollup
+	err := d.eachBucket(span, func(step time.Duration, at time.Time) error {
+		for _, m := range d.machines {
+			if d.reportsAt(m, at) && d.reportsAt(m, at.Add(step)) {
+				buckets = append(buckets, d.metricsBucket(m, step, at))
+			}
+		}
+		if len(buckets) < 50000 {
+			return nil
+		}
+		err := st.AddMetricsRollups(ctx, buckets)
+		buckets = buckets[:0]
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return st.AddMetricsRollups(ctx, buckets)
+}
+
+// eachBucket calls fn for each bucket that Roost would have made of a history
+// that reaches back span, up to the last that is over: the buckets of
+// store.FineStep for as far back as they last, and of store.CoarseStep for all
+// of it. It goes oldest first, a step at a time. Roost makes buckets for the
+// time of the raw samples too, and the buckets of the two steps overlap.
+func (d *Demo) eachBucket(span time.Duration, fn func(step time.Duration, at time.Time) error) error {
+	over := d.start.Add(-time.Minute)
+	for _, step := range []time.Duration{store.CoarseStep, store.FineStep} {
+		begin := d.start.Add(-min(span, store.FineKeep)).Truncate(step)
+		if step == store.CoarseStep {
+			begin = d.start.Add(-span).Truncate(step)
+		}
+		for at := begin; !at.Add(step).After(over); at = at.Add(step) {
+			if err := fn(step, at); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// metricsBucket returns the average of what machine m did over the bucket that
+// starts at at, from a few samples of it.
+func (d *Demo) metricsBucket(m *machine, step time.Duration, at time.Time) store.MetricsRollup {
+	samples := 1
+	if step >= store.CoarseStep {
+		samples = 4
+	}
+	var sum reading
+	for i := range samples {
+		r := m.at(at.Add(time.Duration(float64(step)*(float64(i)+0.5)/float64(samples))), d.start)
+		sum.cpu, sum.mem, sum.disk, sum.load[0] = sum.cpu+r.cpu, sum.mem+r.mem, sum.disk+r.disk, sum.load[0]+r.load[0]
+		sum.rx, sum.tx, sum.temp, sum.battery = sum.rx+r.rx, sum.tx+r.tx, sum.temp+r.temp, sum.battery+r.battery
+	}
+	k := float64(samples)
+	b := store.MetricsRollup{
+		DeviceID: historyID(m), Step: step, At: at, N: int(step / metricsEvery),
+		CPU: new(sum.cpu / k), Mem: new(sum.mem / k), Disk: new(sum.disk / k), Load1: new(sum.load[0] / k),
+		NetRx: new(sum.rx / k), NetTx: new(sum.tx / k),
+	}
+	if m.temp > 0 {
+		b.Temp = new(sum.temp / k)
+	}
+	if m.battery {
+		b.Battery = new(sum.battery / k)
+	}
+	return b
 }
 
 // metricsRow returns what machine m did at t, as the store keeps it.
@@ -267,17 +340,16 @@ func (d *Demo) metricsRow(m *machine, t time.Time) store.MetricsRow {
 	return row
 }
 
+// seedPings writes the pings as Roost keeps them, like the metrics.
 func (d *Demo) seedPings(ctx context.Context, st *store.Store, span time.Duration) error {
 	var pings []store.Ping
-	for t := d.start.Add(-span).Truncate(pingEvery); t.Before(d.start); t = t.Add(pingEvery) {
+	for t := d.start.Add(-min(span, store.RawKeep)).Truncate(pingEvery); t.Before(d.start); t = t.Add(pingEvery) {
 		for _, m := range d.machines[1:] {
 			if m.offlineFor > 0 && !t.Before(d.start.Add(-m.offlineFor)) {
 				continue
 			}
-			rtt := cmp.Or(m.rtt, 40*time.Millisecond)
-			p := store.Ping{DeviceID: m.id, At: t, Replied: true, RTT: time.Duration(float64(rtt) * (1 + 0.18*wave(m.seed(11), t, 45*time.Second)))}
-			// Now and then a ping gets lost, mostly on phones and relayed paths.
-			if unit(m.seed(12), t.Unix()/60) < 0.004 || (!m.direct && unit(m.seed(13), t.Unix()/60) < 0.01) {
+			p := store.Ping{DeviceID: m.id, At: t, Replied: true, RTT: d.rttAt(m, t)}
+			if lostAt(m, t) {
 				p.Replied, p.RTT = false, 0
 			}
 			pings = append(pings, p)
@@ -289,12 +361,61 @@ func (d *Demo) seedPings(ctx context.Context, st *store.Store, span time.Duratio
 			pings = pings[:0]
 		}
 	}
-	return st.AddPings(ctx, pings)
+	if err := st.AddPings(ctx, pings); err != nil {
+		return err
+	}
+
+	var buckets []store.PingRollup
+	err := d.eachBucket(span, func(step time.Duration, at time.Time) error {
+		for _, m := range d.machines[1:] {
+			if m.offlineFor > 0 && !at.Add(step).Before(d.start.Add(-m.offlineFor)) {
+				continue
+			}
+			sent := int(step / pingEvery)
+			// The pings that get lost are the same few each time, as they would
+			// be for a machine on a poor link.
+			lost := int(math.Round(lossRate(m) * float64(sent) * (0.5 + unit(m.seed(14), at.Unix()/60))))
+			buckets = append(buckets, store.PingRollup{
+				DeviceID: m.id, Step: step, At: at, Pings: sent, Replies: sent - lost, RTT: d.rttAt(m, at.Add(step/2)),
+			})
+		}
+		if len(buckets) < 50000 {
+			return nil
+		}
+		err := st.AddPingRollups(ctx, buckets)
+		buckets = buckets[:0]
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	return st.AddPingRollups(ctx, buckets)
+}
+
+// rttAt returns how long a ping of machine m took at t.
+func (d *Demo) rttAt(m *machine, t time.Time) time.Duration {
+	rtt := cmp.Or(m.rtt, 40*time.Millisecond)
+	return time.Duration(float64(rtt) * (1 + 0.18*wave(m.seed(11), t, 45*time.Second)))
+}
+
+// lossRate is the share of the pings to machine m that get lost, mostly on
+// relayed paths.
+func lossRate(m *machine) float64 {
+	if m.direct {
+		return 0.004
+	}
+	return 0.014
+}
+
+// lostAt reports whether the ping to machine m at t got no reply.
+func lostAt(m *machine, t time.Time) bool {
+	return unit(m.seed(12), t.Unix()/60) < lossRate(m)
 }
 
 // seedContainers records what the containers of the machines with Docker
 // used, as the sampler does every SampleInterval.
 func (d *Demo) seedContainers(ctx context.Context, st *store.Store, span time.Duration) error {
+	span = min(span, store.DetailKeep)
 	var rows []store.ContainerMetricsRow
 	every := 5 * time.Minute
 	for t := d.start.Add(-span).Truncate(every); t.Before(d.start); t = t.Add(every) {
@@ -328,6 +449,7 @@ func (d *Demo) seedContainers(ctx context.Context, st *store.Store, span time.Du
 // seedUsage records what ran on the first machines, with a Recorder, the way
 // Roost keeps it: a sample every usageEvery is each a minute of its own.
 func (d *Demo) seedUsage(ctx context.Context, st *store.Store, span time.Duration) error {
+	span = min(span, store.DetailKeep)
 	rec := usage.NewRecorder(st, d.log)
 	older := d.start.Add(-24 * time.Hour)
 	step := func(t time.Time) time.Duration {
