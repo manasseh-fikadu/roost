@@ -18,6 +18,7 @@ func TestParse(t *testing.T) {
 		SetupListen: config.DefaultSetupListen,
 		Port:        config.DefaultPort,
 		DataDir:     config.DefaultDataDir(),
+		HostRoot:    config.DefaultHostRoot,
 	}
 	with := func(change func(*config.Config)) config.Config {
 		cfg := defaults
@@ -44,6 +45,7 @@ func TestParse(t *testing.T) {
 				"ROOST_SETUP_LISTEN": ":9000",
 				"ROOST_PORT":         "8443",
 				"ROOST_DATA_DIR":     "/srv/roost",
+				"ROOST_HOST_ROOT":    "/host",
 				"ROOST_DEV_UI":       "http://127.0.0.1:5173",
 				"ROOST_ADMINS":       "alice@example.com, bob@github,",
 			},
@@ -53,6 +55,7 @@ func TestParse(t *testing.T) {
 				SetupListen: ":9000",
 				Port:        8443,
 				DataDir:     "/srv/roost",
+				HostRoot:    "/host",
 				DevUI:       "http://127.0.0.1:5173",
 				Admins:      []string{"alice@example.com", "bob@github"},
 			},
@@ -123,6 +126,17 @@ func TestParse(t *testing.T) {
 		{
 			name:    "dev UI isn't an http URL",
 			args:    []string{"--dev-ui", "127.0.0.1:5173"},
+			wantErr: true,
+		},
+		{
+			name: "host root flag beats environment",
+			args: []string{"--host-root", "/mnt/host"},
+			env:  map[string]string{"ROOST_HOST_ROOT": "/host"},
+			want: with(func(c *config.Config) { c.HostRoot = "/mnt/host" }),
+		},
+		{
+			name:    "host root isn't absolute",
+			args:    []string{"--host-root", "host"},
 			wantErr: true,
 		},
 		{

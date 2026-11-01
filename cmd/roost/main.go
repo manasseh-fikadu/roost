@@ -19,9 +19,11 @@ var version string
 const usageText = `Usage: roost <command> [flags]
 
 Commands:
-  serve     Run the Roost hub
-  admin     Add or list Roost's admins
-  version   Print the version
+  serve        Run the Roost hub
+  admin        Add or list Roost's admins
+  backup       Save a copy of Roost's data
+  healthcheck  Check that a running Roost answers (for Docker)
+  version      Print the version
 
 Run "roost <command> -h" to see a command's flags.
 `
@@ -53,6 +55,10 @@ func run(ctx context.Context, args []string, stdout, stderr io.Writer) error {
 		return serve(ctx, args[1:], stderr)
 	case "admin":
 		return admin(ctx, args[1:], stdout, stderr)
+	case "backup":
+		return backup(ctx, args[1:], stdout, stderr)
+	case "healthcheck":
+		return healthcheck(ctx, args[1:], stdout, stderr)
 	case "version":
 		fmt.Fprintln(stdout, buildVersion())
 		return nil

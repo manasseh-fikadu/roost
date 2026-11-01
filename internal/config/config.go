@@ -28,6 +28,7 @@ const (
 	DefaultHostname    = "roost"
 	DefaultSetupListen = "127.0.0.1:4700"
 	DefaultPort        = 4700
+	DefaultHostRoot    = "/"
 )
 
 // Config holds the hub's settings.
@@ -46,6 +47,10 @@ type Config struct {
 	// DataDir is the directory that holds the database and the embedded
 	// node's state.
 	DataDir string
+	// HostRoot is the directory whose proc/ and sys/ Roost measures the machine
+	// from. It is "/" unless Roost runs in a container that has the host's
+	// /proc and /sys mounted somewhere else, such as /host.
+	HostRoot string
 	// DevUI, if set, is the URL of a Vite dev server to proxy the web UI to,
 	// instead of serving the embedded build.
 	DevUI string
@@ -74,6 +79,8 @@ func Parse(args []string, getenv func(string) string, output io.Writer) (Config,
 		"`port` to serve on in host mode, on this machine's tailnet IPs (env ROOST_PORT)")
 	fs.StringVar(&cfg.DataDir, "data-dir", envOr(getenv, "ROOST_DATA_DIR", DefaultDataDir()),
 		"`directory` to keep the database and Tailscale state in (env ROOST_DATA_DIR)")
+	fs.StringVar(&cfg.HostRoot, "host-root", envOr(getenv, "ROOST_HOST_ROOT", DefaultHostRoot),
+		"`directory` whose proc/ and sys/ are the host's, for Roost in a container that mounts them there (env ROOST_HOST_ROOT)")
 	fs.StringVar(&cfg.DevUI, "dev-ui", envOr(getenv, "ROOST_DEV_UI", ""),
 		"`URL` of a Vite dev server to proxy the web UI to, for development (env ROOST_DEV_UI)")
 	admins := fs.String("admins", getenv("ROOST_ADMINS"),
@@ -105,6 +112,8 @@ func (cfg Config) validate() error {
 		return fmt.Errorf("port %d is out of range", cfg.Port)
 	case cfg.DataDir == "":
 		return errors.New("no data directory: set --data-dir or ROOST_DATA_DIR")
+	case !filepath.IsAbs(cfg.HostRoot):
+		return fmt.Errorf("host root %q isn't an absolute path", cfg.HostRoot)
 	}
 	if cfg.DevUI != "" {
 		u, err := url.Parse(cfg.DevUI)

@@ -6,12 +6,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"text/tabwriter"
 	"time"
 
-	"github.com/manasseh-fikadu/roost/internal/config"
 	"github.com/manasseh-fikadu/roost/internal/store"
 )
 
@@ -57,10 +55,7 @@ func admin(ctx context.Context, args []string, stdout, stderr io.Writer) (err er
 	}
 	fs := flag.NewFlagSet("roost admin "+cmd, flag.ContinueOnError)
 	fs.SetOutput(stderr)
-	dataDir := os.Getenv("ROOST_DATA_DIR")
-	if dataDir == "" {
-		dataDir = config.DefaultDataDir()
-	}
+	dataDir := envDataDir()
 	fs.StringVar(&dataDir, "data-dir", dataDir, "`directory` that holds Roost's database (env ROOST_DATA_DIR)")
 	if err := fs.Parse(args[1:]); err != nil {
 		return err

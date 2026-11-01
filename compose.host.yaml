@@ -1,0 +1,37 @@
+# Roost using the Tailscale that already runs on this machine (host mode). It
+# shows up on the tailnet as this machine, at port 4700 on its tailnet IPs. See
+# docs/docker.md.
+#
+#   docker compose -f compose.host.yaml up -d
+#
+# It reads ROOST_ADMINS (see docs/tailscale.md#admins-and-viewers) and
+# ROOST_PORT from a .env file next to this one.
+services:
+  roost:
+    image: ghcr.io/manasseh-fikadu/roost:latest
+    restart: unless-stopped
+    # Roost listens on the machine's tailnet IPs, which only the host's network
+    # has.
+    network_mode: host
+    # The processes of this machine, not just the container's.
+    pid: host
+    environment:
+      ROOST_TAILSCALE: host
+      ROOST_PORT: ${ROOST_PORT:-4700}
+      ROOST_ADMINS: ${ROOST_ADMINS:-}
+    volumes:
+      - roost-data:/data
+      # The directory, not tailscaled.sock itself: tailscaled makes a new socket
+      # when it restarts, and a mount of the old one would stay dead.
+      - /var/run/tailscale:/var/run/tailscale
+      # Uncomment to manage this machine's containers from Roost, with the
+      # socket's group in group_add. See compose.yaml for the catch.
+      # - /var/run/docker.sock:/var/run/docker.sock
+    # group_add: ["999"]
+
+    # Host mode has no setup page to ask, which is what the image's check does.
+    healthcheck:
+      disable: true
+
+volumes:
+  roost-data:

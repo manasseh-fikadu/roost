@@ -7,9 +7,12 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// Local is this machine.
-func Local() System {
-	return System{FS: os.DirFS("/"), Statfs: statfs}
+// Local is the machine whose /proc, /sys and /etc are under root. Root is "/"
+// unless Roost runs in a container that has the host's /proc and /sys mounted
+// elsewhere. Disk usage is always that of the file system that holds "/", which
+// in a container is the one under the container's own files.
+func Local(root string) System {
+	return System{FS: os.DirFS(root), Statfs: statfs}
 }
 
 func statfs(path string) (used, avail uint64, err error) {

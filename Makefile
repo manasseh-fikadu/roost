@@ -37,7 +37,7 @@ test: web/node_modules
 ## lint: run golangci-lint, shellcheck and prettier
 lint: web/node_modules
 	golangci-lint run ./...
-	shellcheck agent/*.sh .github/scripts/*.sh
+	shellcheck agent/*.sh install.sh .github/scripts/*.sh
 	cd web && $(BUN) run lint
 
 ## types: regenerate web/src/lib/api/types.ts from internal/api/types.go
