@@ -80,7 +80,7 @@
 <Dialog
 	bind:open
 	title={channel ? `Edit ${channel.name}` : 'Add a channel'}
-	description="Roost sends a message here when an alert opens, and you choose which ones."
+	description="Roost sends a message here when an alert opens. You choose which alerts."
 	width="sm:max-w-xl"
 >
 	<form

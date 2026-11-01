@@ -168,7 +168,7 @@
 		<svg
 			{width}
 			{height}
-			class={['block rounded-sm', onSelect && 'cursor-pointer']}
+			class={['block touch-pan-y rounded-sm', onSelect && 'cursor-pointer']}
 			role="slider"
 			tabindex="0"
 			aria-label={label}

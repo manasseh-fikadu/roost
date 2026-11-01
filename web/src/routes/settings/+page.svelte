@@ -15,13 +15,12 @@
 	import RetentionSettings from '#lib/settings/RetentionSettings.svelte';
 	import SetupCard from '#lib/settings/SetupCard.svelte';
 	import UnitSettings from '#lib/settings/UnitSettings.svelte';
-	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
-	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import PageHeader from '#lib/ui/PageHeader.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import TabPanel from '#lib/ui/TabPanel.svelte';
 	import Tabs from '#lib/ui/Tabs.svelte';
+	import ErrorState from '#lib/ui/ErrorState.svelte';
 
 	const tabs = [
 		{ value: 'general', label: 'General' },
@@ -88,12 +87,7 @@
 	</Tabs>
 {:else if failure}
 	<Card>
-		<EmptyState title="Roost couldn't load its settings">
-			{failure}
-			<div class="mt-3">
-				<Button onclick={load}>Try again</Button>
-			</div>
-		</EmptyState>
+		<ErrorState title="Couldn't load the settings" message={failure} onretry={load} />
 	</Card>
 {:else}
 	<div class="space-y-3" aria-busy="true">

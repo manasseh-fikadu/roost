@@ -65,9 +65,19 @@
 					<X class="size-4" />
 				</Dialog.Close>
 			</div>
-			<div class="overflow-y-auto px-5 pb-5">{@render children()}</div>
+			<div
+				class={[
+					'overflow-y-auto px-5 pb-5',
+					// On a phone the sheet sits on the screen's edge, past the home bar.
+					!footer && 'max-sm:pb-[max(1.25rem,env(safe-area-inset-bottom))]'
+				]}
+			>
+				{@render children()}
+			</div>
 			{#if footer}
-				<div class="flex justify-end gap-2 border-t border-line bg-canvas/40 px-5 py-3">
+				<div
+					class="flex justify-end gap-2 border-t border-line bg-canvas/40 px-5 py-3 max-sm:pb-[max(0.75rem,env(safe-area-inset-bottom))]"
+				>
 					{@render footer()}
 				</div>
 			{/if}

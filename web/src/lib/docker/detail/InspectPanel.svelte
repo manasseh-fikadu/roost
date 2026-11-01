@@ -7,13 +7,12 @@
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Search from '@lucide/svelte/icons/search';
 	import { plural } from '#lib/format.js';
-	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
 	import CopyButton from '#lib/ui/CopyButton.svelte';
-	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import IconButton from '#lib/ui/IconButton.svelte';
 	import Input from '#lib/ui/Input.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
+	import ErrorState from '#lib/ui/ErrorState.svelte';
 	import { getDockerInspect } from '../api.js';
 	import { jsonTokens, searchJson, type JsonKind } from './helpers.js';
 
@@ -91,12 +90,12 @@
 	{/snippet}
 	{#if !loaded}
 		{#if error}
-			<EmptyState title="Couldn't load the inspection">
-				<span class="font-mono text-[12px] break-words text-red-fg">{error}</span>
-				<div class="mt-3">
-					<Button {loading} onclick={() => void load()}>Retry</Button>
-				</div>
-			</EmptyState>
+			<ErrorState
+				title="Couldn't load the inspection"
+				message={error}
+				{loading}
+				onretry={() => void load()}
+			/>
 		{:else}
 			<div class="p-4"><Skeleton class="h-64" /></div>
 		{/if}

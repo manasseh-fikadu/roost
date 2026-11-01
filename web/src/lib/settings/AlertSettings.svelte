@@ -126,7 +126,7 @@
 
 <FormCard
 	title="Alert rules"
-	description="Roost raises an alert when a rule's condition holds. Turning a rule off also stops flagging it on the dashboard and resolves its open alerts."
+	description="Roost raises an alert when a rule's condition is true. Turning a rule off hides it from the dashboard and resolves its open alerts."
 	dirty={draft.dirty}
 	{saving}
 	{problem}

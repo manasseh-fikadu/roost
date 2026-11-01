@@ -10,7 +10,7 @@
 </script>
 
 <div
-	class="pointer-events-none fixed right-4 bottom-4 z-[60] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
+	class="pointer-events-none fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-[60] flex w-80 max-w-[calc(100vw-2rem)] flex-col gap-2"
 	aria-live="polite"
 >
 	{#each toasts as t (t.id)}
@@ -23,7 +23,20 @@
 				t.tone === 'error' ? 'border-red/40 text-red-fg' : 'border-line-strong text-fg'
 			]}
 		>
-			<span class="flex-1">{t.message}</span>
+			<span class="min-w-0 flex-1 break-words">{t.message}</span>
+			{#if t.action}
+				{@const action = t.action}
+				<button
+					type="button"
+					onclick={() => {
+						dismiss(t.id);
+						action.run();
+					}}
+					class="-my-0.5 shrink-0 rounded px-1.5 py-0.5 font-medium text-fg underline decoration-line-heavy underline-offset-4 transition-colors hover:decoration-fg"
+				>
+					{action.label}
+				</button>
+			{/if}
 			<button
 				type="button"
 				onclick={() => dismiss(t.id)}

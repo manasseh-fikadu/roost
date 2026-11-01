@@ -182,7 +182,7 @@
 				>
 			{:else if expired}
 				<span class="text-fg-muted">This command expired.</span>
-				<Button size="xs" onclick={start}>Make a new one</Button>
+				<Button size="xs" onclick={start}>Make a new command</Button>
 			{:else}
 				{@render spinner()}
 				<span class="text-fg-muted">Waiting for a machine to enroll…</span>

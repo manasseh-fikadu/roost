@@ -22,6 +22,7 @@
 	import Input from '#lib/ui/Input.svelte';
 	import Select from '#lib/ui/Select.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
+	import ErrorState from '#lib/ui/ErrorState.svelte';
 	import { Draft } from './draft.svelte.js';
 	import FormCard from './FormCard.svelte';
 
@@ -156,7 +157,7 @@
 
 <FormCard
 	title="Watched units"
-	description="Roost shows these units on the hub's page and alerts when one isn't running. It always shows failed units, watched or not."
+	description="Roost shows these units on the hub's page and alerts when one stops. Failed units always show."
 	dirty={draft.dirty}
 	{saving}
 	onsave={save}
@@ -169,16 +170,16 @@
 		</div>
 	{:else if !installed}
 		<div class="rounded-lg border border-line">
-			<EmptyState title="Couldn't load the services">
-				<span class="font-mono text-[12px] break-words text-red-fg">{loadError}</span>
-				<div class="mt-3">
-					<Button {loading} onclick={() => void load()}>Retry</Button>
-				</div>
-			</EmptyState>
+			<ErrorState
+				title="Couldn't load the services"
+				message={loadError ?? undefined}
+				{loading}
+				onretry={() => void load()}
+			/>
 		</div>
 	{:else if !installed.available}
 		<div class="rounded-lg border border-line">
-			<EmptyState title="Roost can't read systemd on its machine" icon={Server}>
+			<EmptyState title="Can't read systemd on this machine" icon={Server}>
 				It needs systemd to list the units there are, so it can't offer them here.
 			</EmptyState>
 		</div>

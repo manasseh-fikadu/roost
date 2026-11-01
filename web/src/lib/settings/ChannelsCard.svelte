@@ -17,10 +17,10 @@
 	import { ago } from '#lib/format.js';
 	import { draftOf, eventNouns, inputOf, kindLabels, routingText } from '#lib/notifications.js';
 	import { toast } from '#lib/toast.svelte.js';
+	import { deleteWithUndo, isHidden } from '#lib/undo.svelte.js';
 	import Badge from '#lib/ui/Badge.svelte';
 	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
-	import Dialog from '#lib/ui/Dialog.svelte';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import IconButton from '#lib/ui/IconButton.svelte';
 	import Menu from '#lib/ui/Menu.svelte';
@@ -28,6 +28,7 @@
 	import MenuSeparator from '#lib/ui/MenuSeparator.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import Switch from '#lib/ui/Switch.svelte';
+	import ErrorState from '#lib/ui/ErrorState.svelte';
 	import ChannelDialog from './ChannelDialog.svelte';
 	import ChannelIcon from './ChannelIcon.svelte';
 
@@ -96,47 +97,40 @@
 		);
 	}
 
+	/** Pausing and resuming show at once, and go back if Roost can't save them. */
 	async function toggle(c: NotificationChannel, enabled: boolean) {
-		const saved = await putChannel(
-			c.id,
-			inputOf({ ...draftOf(c), enabled }),
-			enabled ? 'Sending' : 'Paused'
-		);
-		replace(saved);
+		replace({ ...c, enabled });
+		try {
+			replace(
+				await putChannel(c.id, inputOf({ ...draftOf(c), enabled }), enabled ? 'Sending' : 'Paused')
+			);
+		} catch (err) {
+			replace(c);
+			throw err;
+		}
 	}
 
 	/** The channel being added (null) or changed, while the dialog is open. */
 	let editing = $state<NotificationChannel | null>(null);
 	let editOpen = $state(false);
-	let removing = $state<NotificationChannel | null>(null);
-	let removeOpen = $state(false);
-	let removeBusy = $state(false);
 
 	function edit(c: NotificationChannel | null) {
 		editing = c;
 		editOpen = true;
 	}
 
-	function askRemove(c: NotificationChannel) {
-		removing = c;
-		removeOpen = true;
-	}
+	/** The channels a person can see: one that was just deleted is gone while it can be undone. */
+	const visible = $derived(channels?.filter((c) => !isHidden(`channel:${c.id}`)) ?? null);
 
-	async function remove() {
-		const c = removing;
-		if (!c) {
-			return;
-		}
-		removeBusy = true;
-		try {
-			await deleteChannel(c.id);
-			channels = (channels ?? []).filter((x) => x.id !== c.id);
-			removeOpen = false;
-		} catch {
-			// The client showed the error.
-		} finally {
-			removeBusy = false;
-		}
+	function remove(c: NotificationChannel) {
+		deleteWithUndo({
+			key: `channel:${c.id}`,
+			message: `Deleted ${c.name}`,
+			commit: async () => {
+				await deleteChannel(c.id);
+				channels = (channels ?? []).filter((x) => x.id !== c.id);
+			}
+		});
 	}
 </script>
 
@@ -146,7 +140,7 @@
 
 <Card
 	title="Channels"
-	description="Where Roost sends a message when an alert opens. Each channel picks the alerts it hears about."
+	description="Where Roost sends alerts. Each channel picks which ones it hears about."
 >
 	{#snippet actions()}
 		<Button variant="primary" icon={plus} onclick={() => edit(null)}>Add channel</Button>
@@ -157,13 +151,8 @@
 			<Skeleton class="h-14" />
 		</div>
 	{:else if channels === null}
-		<EmptyState title="Roost couldn't load the channels">
-			{failure}
-			<div class="mt-3">
-				<Button onclick={load}>Try again</Button>
-			</div>
-		</EmptyState>
-	{:else if channels.length === 0}
+		<ErrorState title="Couldn't load the channels" message={failure} onretry={load} />
+	{:else if visible && visible.length === 0}
 		<EmptyState title="No channels yet" icon={Bell}>
 			Alerts only show up in Roost until you add a place to send them: your phone, a chat room or an
 			inbox.
@@ -173,7 +162,7 @@
 		</EmptyState>
 	{:else}
 		<ul class="divide-y divide-line">
-			{#each channels as c (c.id)}
+			{#each visible ?? [] as c (c.id)}
 				<li class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
 					<div class="flex min-w-0 flex-1 basis-64 items-start gap-3">
 						<span
@@ -240,7 +229,7 @@
 							<MenuItem icon={Pencil} onSelect={() => edit(c)}>Edit</MenuItem>
 							<MenuItem icon={Send} onSelect={() => act(c, () => test(c))}>Send test</MenuItem>
 							<MenuSeparator />
-							<MenuItem icon={Trash2} danger onSelect={() => askRemove(c)}>Delete</MenuItem>
+							<MenuItem icon={Trash2} danger onSelect={() => remove(c)}>Delete</MenuItem>
 						</Menu>
 					</div>
 				</li>
@@ -259,17 +248,3 @@
 </Card>
 
 <ChannelDialog channel={editing} bind:open={editOpen} onsaved={keep} />
-
-<Dialog
-	bind:open={removeOpen}
-	title="Delete {removing?.name ?? 'this channel'}?"
-	description="Roost stops sending to it."
->
-	{#snippet footer()}
-		<Button variant="ghost" onclick={() => (removeOpen = false)}>Cancel</Button>
-		<Button variant="danger" loading={removeBusy} onclick={remove}>Delete</Button>
-	{/snippet}
-	<p class="text-[13px] text-fg-muted">
-		Its secrets, such as a webhook's address, are deleted with it.
-	</p>
-</Dialog>

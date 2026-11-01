@@ -17,6 +17,7 @@
 	import Segmented from '#lib/ui/Segmented.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import StatusDot from '#lib/ui/StatusDot.svelte';
+	import ErrorState from '#lib/ui/ErrorState.svelte';
 
 	type Filter = EventKind | 'all';
 
@@ -54,6 +55,8 @@
 	let more = $state(false);
 	let loading = $state(false);
 	let failed = $state(false);
+	/** Counts the tries to load again, which start the effect over. */
+	let attempt = $state(0);
 
 	function query(k: Filter) {
 		return k === 'all' ? {} : { kind: k };
@@ -62,6 +65,7 @@
 	// The first page loads for each filter.
 	$effect(() => {
 		const k = kind;
+		void attempt;
 		let current = true;
 		events = null;
 		failed = false;
@@ -142,7 +146,7 @@
 
 <PageHeader
 	title="Activity"
-	description="What Roost saw happen, such as devices coming and going and alerts opening and resolving, and what anyone did in Roost."
+	description="Devices coming and going, alerts opening and resolving, and what people did in Roost."
 />
 
 <div class="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -152,9 +156,7 @@
 		</div>
 		<Card>
 			{#if failed}
-				<p class="px-4 py-10 text-center text-[13px] text-fg-subtle">
-					Couldn't load the activity log. Try again in a moment.
-				</p>
+				<ErrorState title="Couldn't load the activity log" onretry={() => attempt++} />
 			{:else if events === null}
 				<div class="space-y-2 p-4">
 					{#each [1, 2, 3, 4] as i (i)}

@@ -101,7 +101,7 @@
 					<span>·</span>
 					<a
 						href={resolve('/devices/[id]', { id: device.id })}
-						class="text-fg-subtle hover:text-fg hover:underline"
+						class="text-fg-subtle hover:text-fg hover:underline pointer-coarse:-my-2 pointer-coarse:py-2"
 					>
 						{device.name}
 					</a>

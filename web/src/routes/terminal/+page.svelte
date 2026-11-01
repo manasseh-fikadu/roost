@@ -272,7 +272,7 @@
 <AdminOnly>
 	<PageHeader
 		title="Terminal"
-		description="A shell on any machine Roost has SSH access to. With tmux, it keeps running after you close the tab."
+		description="A shell on your machines. With tmux, it keeps running after you close the tab."
 	>
 		{#snippet actions()}
 			{#if device}

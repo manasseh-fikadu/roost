@@ -17,7 +17,7 @@
 	{id}
 	{disabled}
 	aria-label={label}
-	class="inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-line-strong bg-hover transition-colors disabled:opacity-50 data-[state=checked]:border-blue data-[state=checked]:bg-blue"
+	class="relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border border-line-strong bg-hover transition-colors disabled:opacity-50 data-[state=checked]:border-blue data-[state=checked]:bg-blue pointer-coarse:after:absolute pointer-coarse:after:-inset-3 pointer-coarse:after:content-['']"
 >
 	<Switch.Thumb
 		class="pointer-events-none block size-3.5 translate-x-[2px] rounded-full bg-white shadow transition-transform data-[state=checked]:translate-x-[18px]"

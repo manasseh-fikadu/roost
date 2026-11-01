@@ -75,7 +75,7 @@
 
 <a
 	href={resolve('/devices')}
-	class="mb-4 inline-flex items-center gap-1.5 text-[13px] text-fg-subtle transition-colors hover:text-fg"
+	class="mb-4 inline-flex items-center gap-1.5 text-[13px] text-fg-subtle transition-colors hover:text-fg pointer-coarse:-mt-2 pointer-coarse:mb-2 pointer-coarse:py-2"
 >
 	<ArrowLeft class="size-3.5" /> Devices
 </a>
@@ -120,7 +120,7 @@
 						<span class="min-w-0 flex-1">
 							<a
 								href={resolve('/devices/[id]', { id: d.id })}
-								class="block truncate text-[14px] font-medium text-fg hover:underline"
+								class="block truncate text-[14px] font-medium text-fg hover:underline pointer-coarse:-my-1.5 pointer-coarse:py-1.5"
 							>
 								{d.name}
 							</a>
@@ -193,7 +193,7 @@
 <Dialog
 	bind:open={confirmOpen}
 	title="Revoke {revoking?.name ?? 'this'}'s agent?"
-	description="Roost will refuse its heartbeats and forget what it reported. To add it back, run a new install command on the machine."
+	description="Roost ignores its heartbeats and forgets what it reported. To add it again, run a new install command on the machine."
 >
 	<p class="text-[13px] text-fg-muted">
 		The agent keeps running until it's uninstalled, and tries again every few minutes.

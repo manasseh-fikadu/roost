@@ -136,7 +136,7 @@
 						onclick={() => ongo(c.path)}
 						title={c.path}
 						class={[
-							'flex h-6 items-center gap-1 rounded px-1.5 font-mono text-[12.5px] whitespace-nowrap transition-colors',
+							'flex h-6 items-center gap-1 rounded px-1.5 font-mono text-[12.5px] whitespace-nowrap transition-colors pointer-coarse:h-8',
 							last ? 'text-fg' : 'text-fg-subtle hover:bg-hover hover:text-fg'
 						]}
 					>
@@ -158,7 +158,7 @@
 		<button
 			type="button"
 			onclick={startEdit}
-			class="flex h-full shrink-0 items-center px-2 text-fg-faint transition-colors hover:text-fg"
+			class="flex h-full shrink-0 items-center px-2 text-fg-faint transition-colors hover:text-fg pointer-coarse:px-3"
 			aria-label="Edit path"
 			title="Type a path (Ctrl-L)"
 		>

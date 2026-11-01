@@ -12,6 +12,7 @@
 	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import IconButton from '#lib/ui/IconButton.svelte';
 	import Skeleton from '#lib/ui/Skeleton.svelte';
+	import ErrorState from '#lib/ui/ErrorState.svelte';
 	import type { Poll } from './poll.svelte.js';
 
 	interface Props {
@@ -55,9 +56,13 @@
 			{@render children(poll.data)}
 		{/if}
 	{:else if poll.error}
-		<EmptyState title="Couldn't load {title.toLowerCase()}" {icon}>
-			{poll.error}
-		</EmptyState>
+		<ErrorState
+			title="Couldn't load {title.toLowerCase()}"
+			{icon}
+			message={poll.error}
+			loading={refreshing}
+			onretry={refresh}
+		/>
 	{:else}
 		<div class="space-y-2 p-4">
 			<Skeleton class="h-10" />

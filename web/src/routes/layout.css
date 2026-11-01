@@ -143,6 +143,18 @@
 	}
 }
 
+/*
+ * A phone zooms into a field whose text is under 16px when it gets focus, and
+ * stays zoomed. Fields are 14px with a mouse and 16px on a touch screen.
+ */
+@media (pointer: coarse) {
+	input:not([type='checkbox'], [type='radio'], [type='range'], [type='file']),
+	select,
+	textarea {
+		font-size: 16px;
+	}
+}
+
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,

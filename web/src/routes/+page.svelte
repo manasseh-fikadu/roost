@@ -103,7 +103,7 @@
 	{#snippet actions()}
 		<a
 			href={resolve('/devices')}
-			class="flex items-center gap-1 text-[12px] text-fg-subtle transition-colors hover:text-fg"
+			class="flex items-center gap-1 text-[12px] text-fg-subtle transition-colors hover:text-fg pointer-coarse:-my-2.5 pointer-coarse:py-2.5"
 		>
 			All devices <ArrowRight class="size-3" />
 		</a>

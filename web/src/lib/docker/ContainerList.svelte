@@ -13,7 +13,6 @@
 	import type { DockerContainerList } from '#lib/api/types.js';
 	import { ago, bytes, percent, plural } from '#lib/format.js';
 	import { Persisted } from '#lib/files/persisted.svelte.js';
-	import Button from '#lib/ui/Button.svelte';
 	import Card from '#lib/ui/Card.svelte';
 	import CodeLine from '#lib/ui/CodeLine.svelte';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
@@ -22,6 +21,7 @@
 	import Skeleton from '#lib/ui/Skeleton.svelte';
 	import Switch from '#lib/ui/Switch.svelte';
 	import { buttonClass } from '#lib/ui/button.js';
+	import ErrorState from '#lib/ui/ErrorState.svelte';
 	import type { PendingAction } from './actions.js';
 	import ContainerRow, { columns } from './ContainerRow.svelte';
 	import { groupRows, totals } from './docker.js';
@@ -68,18 +68,19 @@
 
 {#if poll.error && !poll.data}
 	<Card>
-		<EmptyState title="Couldn't reach Docker on {deviceName}" icon={ContainerIcon}>
-			<p class="break-words text-fg-muted">{poll.error}</p>
-			<div class="mt-4 flex items-center justify-center gap-2">
-				<Button loading={refreshing} onclick={refresh}>
-					{#snippet icon()}<RefreshCw class="size-3.5" />{/snippet}
-					Retry
-				</Button>
+		<ErrorState
+			title="Couldn't reach Docker on {deviceName}"
+			icon={ContainerIcon}
+			message={poll.error}
+			loading={refreshing}
+			onretry={refresh}
+		>
+			{#snippet actions()}
 				<a href={resolve('/devices/[id]', { id: deviceId })} class={buttonClass('ghost')}>
 					Open the device
 				</a>
-			</div>
-		</EmptyState>
+			{/snippet}
+		</ErrorState>
 	</Card>
 {:else if !poll.data}
 	<Card>

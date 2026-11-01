@@ -13,13 +13,13 @@
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import { resolve } from '$app/paths';
 	import AdminOnly from '#lib/AdminOnly.svelte';
-	import { putCheck, runCheck } from '#lib/api/client.js';
+	import { putCheck } from '#lib/api/client.js';
 	import type { Check, CheckResult } from '#lib/api/types.js';
 	import UptimeBars from '#lib/charts/UptimeBars.svelte';
 	import { checkStatus, inputOf, kindLabels, stateLabels, targetOf } from '#lib/checks.js';
+	import { runCheckNow } from './run.js';
 	import { ago, latency, percent } from '#lib/format.js';
 	import { statusMeta } from '#lib/status.js';
-	import { toast } from '#lib/toast.svelte.js';
 	import Badge from '#lib/ui/Badge.svelte';
 	import IconButton from '#lib/ui/IconButton.svelte';
 	import Menu from '#lib/ui/Menu.svelte';
@@ -54,14 +54,6 @@
 		} finally {
 			busy = false;
 		}
-	}
-
-	async function run() {
-		const res = await runCheck(check.id);
-		toast(
-			`${check.name} ${res.ok ? 'passed' : 'failed'}: ${res.detail}`,
-			res.ok ? 'default' : 'error'
-		);
 	}
 
 	function togglePause() {
@@ -125,7 +117,7 @@
 							{/if}
 						</IconButton>
 					{/snippet}
-					<MenuItem icon={Play} onSelect={() => act(run)}>Run now</MenuItem>
+					<MenuItem icon={Play} onSelect={() => act(() => runCheckNow(check))}>Run now</MenuItem>
 					<MenuItem icon={Pencil} onSelect={onedit}>Edit</MenuItem>
 					<MenuItem icon={check.paused ? Play : Pause} onSelect={() => act(togglePause)}>
 						{check.paused ? 'Resume' : 'Pause'}

@@ -46,10 +46,7 @@
 </script>
 
 <AdminOnly>
-	<PageHeader
-		title="Files"
-		description="Browse, preview, edit, upload and download files on any machine Roost has SSH access to."
-	>
+	<PageHeader title="Files" description="Browse, edit, upload and download files on your machines.">
 		{#snippet actions()}
 			{#if device && devices.length > 1}
 				<Select

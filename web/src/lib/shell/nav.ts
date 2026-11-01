@@ -70,6 +70,11 @@ export function navFor(admin: boolean): NavSection[] {
 		.filter((s) => s.items.length > 0);
 }
 
+/** The pages a caller sees in the order of the sidebar, so the nth is the one numbered n in it. */
+export function pagesFor(admin: boolean): NavItem[] {
+	return navFor(admin).flatMap((s) => s.items);
+}
+
 /** The sidebar item a path belongs to, such as Devices for /devices/abc. */
 export function navItemFor(pathname: string): NavItem | undefined {
 	let best: NavItem | undefined;

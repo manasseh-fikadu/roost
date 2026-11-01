@@ -84,7 +84,7 @@
 		>
 			<span class="flex items-center gap-2 text-[12px] text-fg-muted">
 				<StatusDot status={collectorStatus} />
-				{collectors.length ? `${healthy}/${collectors.length} collectors healthy` : 'Connecting…'}
+				{collectors.length ? `${healthy}/${collectors.length} sources healthy` : 'Connecting…'}
 			</span>
 			<span class="mt-0.5 block truncate pl-4 font-mono text-[10.5px] text-fg-faint">
 				{live.snapshot?.hub.dnsName ?? ''}

@@ -1,6 +1,7 @@
 <!-- Who's signed in, as an avatar that opens a menu with their details. -->
 <script lang="ts">
 	import Bug from '@lucide/svelte/icons/bug';
+	import Keyboard from '@lucide/svelte/icons/keyboard';
 	import { page } from '$app/state';
 	import { isAdmin, roleLabel } from '#lib/access.js';
 	import { live } from '#lib/live.svelte.js';
@@ -9,6 +10,13 @@
 	import MenuItem from '#lib/ui/MenuItem.svelte';
 	import MenuLabel from '#lib/ui/MenuLabel.svelte';
 	import MenuSeparator from '#lib/ui/MenuSeparator.svelte';
+
+	interface Props {
+		/** Shows the list of keyboard shortcuts. */
+		onshortcuts: () => void;
+	}
+
+	let { onshortcuts }: Props = $props();
 
 	const me = $derived(page.data.me);
 	const name = $derived(me?.name || me?.login || 'Signed in');
@@ -50,8 +58,9 @@
 			>
 		{/if}
 	</MenuLabel>
+	<MenuSeparator />
+	<MenuItem icon={Keyboard} onSelect={onshortcuts}>Keyboard shortcuts</MenuItem>
 	{#if isAdmin(me)}
-		<MenuSeparator />
 		<!-- An API URL, not an app route, so the browser loads it, not SvelteKit's router. -->
 		<MenuItem href="/api/debug/tailnet" reload icon={Bug}>Tailnet debug info</MenuItem>
 	{/if}

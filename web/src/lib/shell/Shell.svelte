@@ -15,6 +15,7 @@
 	import { page } from '$app/state';
 	import { isAdmin, lookupFailed } from '#lib/access.js';
 	import { getMe } from '#lib/api/client.js';
+	import { clock } from '#lib/format.js';
 	import { connect, live } from '#lib/live.svelte.js';
 	import EmptyState from '#lib/ui/EmptyState.svelte';
 	import Kbd from '#lib/ui/Kbd.svelte';
@@ -22,6 +23,7 @@
 	import { iconButtonClass } from '#lib/ui/button.js';
 	import CommandPalette from './CommandPalette.svelte';
 	import LiveIndicator from './LiveIndicator.svelte';
+	import Shortcuts from './Shortcuts.svelte';
 	import Sidebar from './Sidebar.svelte';
 	import UserMenu from './UserMenu.svelte';
 	import { navItemFor } from './nav.js';
@@ -37,6 +39,7 @@
 
 	let drawerOpen = $state(false);
 	let paletteOpen = $state(false);
+	let shortcutsOpen = $state(false);
 
 	const item = $derived(navItemFor(page.url.pathname));
 	/** A device's page is named after the device, which only the live data knows. */
@@ -53,6 +56,20 @@
 	);
 	/** The page is for admins, and the caller isn't one. */
 	const forbidden = $derived(item?.adminOnly === true && !isAdmin(page.data.me));
+
+	/**
+	 * Whether the stream has been down long enough to say so. A restart of the
+	 * hub drops it for a moment, and that isn't worth a notice.
+	 */
+	let unreachable = $state(false);
+	$effect(() => {
+		if (live.connection !== 'reconnecting') {
+			unreachable = false;
+			return;
+		}
+		const timer = setTimeout(() => (unreachable = true), 4000);
+		return () => clearTimeout(timer);
+	});
 
 	afterNavigate(() => {
 		drawerOpen = false;
@@ -136,10 +153,22 @@
 						<Kbd>K</Kbd>
 					</span>
 				</button>
-				<UserMenu />
+				<UserMenu onshortcuts={() => (shortcutsOpen = true)} />
 			</div>
 		</header>
-		<main class="mx-auto max-w-[1400px] px-4 py-6 sm:px-6 lg:py-8">
+		{#if unreachable}
+			<p
+				role="status"
+				class="border-b border-amber/25 bg-amber/5 px-4 py-2 text-[13px] text-amber-fg sm:px-6"
+			>
+				Can't reach Roost{live.receivedAt > 0
+					? `, so this is what it sent at ${clock(live.receivedAt)}`
+					: ''}. Trying again.
+			</p>
+		{/if}
+		<main
+			class="mx-auto max-w-[1400px] px-4 py-6 max-lg:pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 lg:py-8"
+		>
 			{#if forbidden}
 				<EmptyState title="Only admins can open {title}" icon={LockKeyhole}>
 					An admin can make you one with <code class="font-mono text-fg-muted">roost admin add</code
@@ -151,6 +180,7 @@
 		</main>
 	</div>
 
-	<CommandPalette bind:open={paletteOpen} />
+	<CommandPalette bind:open={paletteOpen} onshortcuts={() => (shortcutsOpen = true)} />
+	<Shortcuts bind:open={shortcutsOpen} mod={modKey} />
 	<Toaster />
 </div>

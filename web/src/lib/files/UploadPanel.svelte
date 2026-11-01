@@ -36,7 +36,7 @@
 
 {#if tasks.length}
 	<div
-		class="fixed inset-x-2 bottom-2 z-40 overflow-hidden rounded-xl border border-line-strong bg-surface shadow-popover sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-[380px]"
+		class="fixed inset-x-2 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-40 overflow-hidden rounded-xl border border-line-strong bg-surface shadow-popover sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-[380px]"
 	>
 		<div class="flex items-center gap-2.5 px-3 py-2.5">
 			<span

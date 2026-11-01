@@ -113,7 +113,7 @@
 					}}
 					ondblclick={(e) => e.stopPropagation()}
 					class={[
-						'min-w-0 truncate text-left hover:underline hover:decoration-fg-faint hover:underline-offset-2',
+						"relative min-w-0 truncate text-left hover:underline hover:decoration-fg-faint hover:underline-offset-2 pointer-coarse:after:absolute pointer-coarse:after:inset-x-0 pointer-coarse:after:-inset-y-2 pointer-coarse:after:content-['']",
 						broken ? 'text-fg-subtle line-through decoration-red-fg/60' : 'text-fg'
 					]}
 					title={entry.name}

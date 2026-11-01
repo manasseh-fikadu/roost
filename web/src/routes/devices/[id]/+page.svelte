@@ -14,6 +14,7 @@
 	import type { Device } from '#lib/api/types.js';
 	import { deviceIcon } from '#lib/device.js';
 	import AddAgent from '#lib/devices/AddAgent.svelte';
+	import DeviceActions from '#lib/devices/DeviceActions.svelte';
 	import DeviceHistory from '#lib/devices/DeviceHistory.svelte';
 	import DeviceSettingsDialog from '#lib/devices/DeviceSettingsDialog.svelte';
 	import MetricTile from '#lib/devices/MetricTile.svelte';
@@ -105,7 +106,7 @@
 	{@const info = device.info}
 	<a
 		href={resolve('/devices')}
-		class="mb-4 inline-flex items-center gap-1.5 text-[13px] text-fg-subtle transition-colors hover:text-fg"
+		class="mb-4 inline-flex items-center gap-1.5 text-[13px] text-fg-subtle transition-colors hover:text-fg pointer-coarse:-mt-2 pointer-coarse:mb-2 pointer-coarse:py-2"
 	>
 		<ArrowLeft class="size-3.5" /> Devices
 	</a>
@@ -138,6 +139,8 @@
 			</Button>
 		</AdminOnly>
 	</div>
+
+	<DeviceActions {device} />
 
 	<p
 		class={[
