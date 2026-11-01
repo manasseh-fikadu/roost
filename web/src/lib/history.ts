@@ -10,14 +10,24 @@ export const historyRanges: { value: HistoryRange; label: string }[] = [
 	{ value: '1h', label: '1h' },
 	{ value: '6h', label: '6h' },
 	{ value: '24h', label: '24h' },
-	{ value: '7d', label: '7d' }
+	{ value: '7d', label: '7d' },
+	{ value: '30d', label: '30d' },
+	{ value: '90d', label: '90d' }
 ];
+
+/**
+ * The ranges of what the hub doesn't sum up into buckets, such as what a
+ * container used, which it keeps for 7 days at most.
+ */
+export const shortRanges = historyRanges.filter(({ value }) => value !== '30d' && value !== '90d');
 
 const rangeNames: Record<HistoryRange, string> = {
 	'1h': 'hour',
 	'6h': '6 hours',
 	'24h': 'day',
-	'7d': 'week'
+	'7d': 'week',
+	'30d': '30 days',
+	'90d': '90 days'
 };
 
 /** A range for "over the last …", such as "hour" or "6 hours". */

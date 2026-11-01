@@ -25,7 +25,8 @@
 
 	/** What the kind of history is, where it needs more words than its description. */
 	const hints: Partial<Record<keyof RetentionSettings, string>> = {
-		historyDays: 'The device pages chart the last 7 days; longer history arrives with rollups.'
+		historyDays:
+			"The last 2 days are kept in full. Older history is kept as averages of 5 minutes, for up to 14 days, and of an hour. What used a device's CPU, and what its containers used, goes back 7 days at most."
 	};
 
 	let { view, onsaved }: Props = $props();

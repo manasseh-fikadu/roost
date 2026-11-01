@@ -133,8 +133,9 @@ type Rules struct {
 type Retention struct {
 	// ActivityDays is how long the activity log and resolved alerts last.
 	ActivityDays int `json:"activityDays"`
-	// HistoryDays is how long what devices and containers used, and the
-	// round-trip times to devices, last.
+	// HistoryDays is how long what devices used, and the round-trip times to
+	// them, last, in buckets of an hour. What used their CPU, and what their
+	// containers used, last 7 days at most.
 	HistoryDays int `json:"historyDays"`
 	// ChecksDays is how long the results of checks, and the health score,
 	// last.
@@ -216,7 +217,7 @@ func clock(s string) (int, bool) {
 // Limits of a retention, in days.
 const (
 	MaxActivityDays = 365
-	MaxHistoryDays  = 30
+	MaxHistoryDays  = 90
 	MaxChecksDays   = 90
 )
 

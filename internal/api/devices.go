@@ -27,6 +27,10 @@ var historyRanges = map[string]struct{ span, step time.Duration }{
 	"6h":  {6 * time.Hour, 2 * time.Minute},
 	"24h": {24 * time.Hour, 5 * time.Minute},
 	"7d":  {7 * 24 * time.Hour, time.Hour},
+	// Past two days, a device's metrics and pings come from the buckets
+	// that package store folds them into, which keep them up to 90 days.
+	"30d": {30 * 24 * time.Hour, 2 * time.Hour},
+	"90d": {90 * 24 * time.Hour, 6 * time.Hour},
 }
 
 // device returns the device on the tailnet with the ID in r's path, and the
@@ -127,7 +131,7 @@ func cleanSettings(s SetDeviceSettings, d tailnet.Device, global settings.Thresh
 func (h *handler) historyRange(w http.ResponseWriter, r *http.Request) (from, to time.Time, step time.Duration, ok bool) {
 	rg, ok := historyRanges[cmp.Or(r.URL.Query().Get("range"), "24h")]
 	if !ok {
-		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: "the range must be 1h, 6h, 24h or 7d"})
+		h.writeJSON(w, r, http.StatusBadRequest, ErrorBody{Error: "the range must be 1h, 6h, 24h, 7d, 30d or 90d"})
 		return time.Time{}, time.Time{}, 0, false
 	}
 	to = time.Now()

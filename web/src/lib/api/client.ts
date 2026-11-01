@@ -123,7 +123,7 @@ export function getMe(fetcher?: Fetch): Promise<Me> {
 }
 
 /** How far back a device's history goes. */
-export type HistoryRange = '1h' | '6h' | '24h' | '7d';
+export type HistoryRange = '1h' | '6h' | '24h' | '7d' | '30d' | '90d';
 
 /** A device's metrics, and its round-trip times from the hub, over the last range. */
 export function getDeviceHistory(id: string, range: HistoryRange): Promise<DeviceHistory> {

@@ -206,11 +206,63 @@ func TestDeviceHistory(t *testing.T) {
 	for target, code := range map[string]int{
 		"/api/devices/laptop/history":            http.StatusOK,
 		"/api/devices/laptop/history?range=7d":   http.StatusOK,
+		"/api/devices/laptop/history?range=30d":  http.StatusOK,
+		"/api/devices/laptop/history?range=90d":  http.StatusOK,
 		"/api/devices/laptop/history?range=year": http.StatusBadRequest,
 		"/api/devices/toaster/history":           http.StatusNotFound,
 	} {
 		if rec := serve(h, newRequest(t, http.MethodGet, target, phoneIP)); rec.Code != code {
 			t.Errorf("GET %s = %d, want %d", target, rec.Code, code)
+		}
+	}
+}
+
+// A history of a month or three months is made of the buckets that older
+// metrics and pings are folded into.
+func TestDeviceHistory_longRanges(t *testing.T) {
+	t.Parallel()
+	st := testStore(t)
+	h := api.New(withStore(t, testTailnet(), st, api.Options{}))
+	// Older than the raw samples, and within the week that history lasts unless an admin says more.
+	at := time.Now().Add(-5 * 24 * time.Hour).Truncate(time.Hour)
+	err := st.AddMetricsRollups(t.Context(), []store.MetricsRollup{
+		{DeviceID: "laptop", Step: store.CoarseStep, At: at, N: 120, CPU: new(30.0), Mem: new(40.0)},
+		{DeviceID: "laptop", Step: store.CoarseStep, At: at.Add(time.Hour), N: 120, CPU: new(50.0), Mem: new(60.0)},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st.AddPingRollups(t.Context(), []store.PingRollup{
+		{DeviceID: "laptop", Step: store.CoarseStep, At: at, Pings: 60, Replies: 60, RTT: 12 * time.Millisecond},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	for rg, step := range map[string]time.Duration{"30d": 2 * time.Hour, "90d": 6 * time.Hour} {
+		rec := serve(h, newRequest(t, http.MethodGet, "/api/devices/laptop/history?range="+rg, phoneIP))
+		if rec.Code != http.StatusOK {
+			t.Fatalf("GET %s = %d %s, want 200", rg, rec.Code, rec.Body)
+		}
+		var got api.DeviceHistory
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.Step != step.Milliseconds() {
+			t.Errorf("%s: steps of %dms, want %v", rg, got.Step, step)
+		}
+		// Both hours are in one bucket of 2 hours or more, or in two, with the
+		// same average either way.
+		var sum float64
+		for _, p := range got.CPU {
+			if p.V != nil {
+				sum += *p.V
+			}
+		}
+		if len(got.CPU) == 0 || len(got.CPU) > 2 || sum < 40 {
+			t.Errorf("%s: CPU = %+v, want the average of 30 and 50 in one or two points", rg, got.CPU)
+		}
+		if len(got.RTT) != 1 || got.RTT[0].V == nil || *got.RTT[0].V != 12 {
+			t.Errorf("%s: RTT = %+v, want the one point of 12 ms", rg, got.RTT)
 		}
 	}
 }

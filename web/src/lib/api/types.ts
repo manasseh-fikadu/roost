@@ -290,8 +290,9 @@ export interface RetentionSettings {
    */
   activityDays: number /* int */;
   /**
-   * HistoryDays is how long what devices and containers used, and the
-   * round-trip times to devices, last.
+   * HistoryDays is how long what devices used, and the round-trip times to
+   * them, last, in buckets of an hour. What used their CPU, and what their
+   * containers used, last 7 days at most.
    */
   historyDays: number /* int */;
   /**
