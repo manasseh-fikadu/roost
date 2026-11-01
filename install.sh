@@ -13,8 +13,9 @@
 #   ROOST_VERSION     the release to install, such as v0.1.0 (default: the latest)
 #   ROOST_TAILSCALE   "embedded" (default) or "host"
 #   ROOST_HOSTNAME    the name of Roost's node on the tailnet in embedded mode
+#   ROOST_CONTROL_URL the address of a Headscale server to log in to, in embedded mode
 #   ROOST_ADMINS      logins to make admins, separated by commas
-#   TS_AUTHKEY        a Tailscale auth key, to skip logging Roost in by hand
+#   TS_AUTHKEY        a Tailscale or Headscale auth key, to skip logging Roost in by hand
 #
 # ROOST_RELEASES_URL replaces where releases are downloaded from, for a mirror.
 set -euo pipefail
@@ -45,7 +46,7 @@ case "$(uname -m)" in
 esac
 
 # The values go into a systemd environment file, so keep them to one plain word.
-for var in ROOST_TAILSCALE ROOST_HOSTNAME ROOST_ADMINS TS_AUTHKEY; do
+for var in ROOST_TAILSCALE ROOST_HOSTNAME ROOST_CONTROL_URL ROOST_ADMINS TS_AUTHKEY; do
   value=${!var-}
   case $value in
     *[[:space:]\"\'\\\$]*) die "$var can't have spaces, quotes, backslashes or \$ in it" ;;
@@ -130,13 +131,14 @@ if [ ! -e "$ENV_FILE" ]; then
       say "# Roost's settings, which systemd reads when it starts the service. After a change,"
       say "# run: sudo systemctl restart roost"
       say "# The list is in docs/tailscale.md, and roost serve -h."
-      for var in ROOST_TAILSCALE ROOST_HOSTNAME ROOST_ADMINS TS_AUTHKEY; do
+      for var in ROOST_TAILSCALE ROOST_HOSTNAME ROOST_CONTROL_URL ROOST_ADMINS TS_AUTHKEY; do
         if [ -n "${!var-}" ]; then
           say "$var=${!var}"
         fi
       done
       [ -n "${ROOST_TAILSCALE-}" ] || say "#ROOST_TAILSCALE=host"
       [ -n "${ROOST_HOSTNAME-}" ] || say "#ROOST_HOSTNAME=roost"
+      [ -n "${ROOST_CONTROL_URL-}" ] || say "#ROOST_CONTROL_URL=https://headscale.example.com"
       [ -n "${ROOST_ADMINS-}" ] || say "#ROOST_ADMINS=alice@example.com"
       [ -n "${TS_AUTHKEY-}" ] || say "#TS_AUTHKEY=tskey-auth-..."
     } >"$ENV_FILE.new"
