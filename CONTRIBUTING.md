@@ -55,6 +55,27 @@ The Go server doesn't reload on changes, so restart `make dev` after editing Go 
 - Keep each pull request to one issue, and link it with `Closes #123`. Give the pull request a Conventional Commits title too, because a squash merge turns it into the commit subject.
 - Run `make test` and `make lint` before you push. CI runs both on every pull request, along with govulncheck, a build of the binary and a check that every commit is signed off.
 
+## Releases
+
+A release is a tag. When `main` is green, push one:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The [Release workflow](.github/workflows/release.yml) then runs GoReleaser (`.goreleaser.yaml`), which builds the web app and the binary for Linux and macOS on amd64 and arm64, publishes the archives, `checksums.txt` and a changelog as a GitHub release, and pushes the Docker image to `ghcr.io/manasseh-fikadu/roost`. A tag with a suffix, such as `v0.1.0-rc.1`, is a pre-release, which doesn't move the image's `latest` tag.
+
+The changelog is made from the commit subjects since the last tag, grouped as features (`feat:`), fixes (`fix:`) and performance (`perf:`), then the rest. `docs:`, `test:`, `chore:`, `ci:` and `style:` commits are left out, so write a subject that makes sense to someone who only reads the changelog.
+
+The `Release build` job in CI runs the same GoReleaser build without publishing, and starts the image it makes, so a change that breaks the release fails the pull request. To do the same on your machine, install [GoReleaser](https://goreleaser.com/install/), Docker and Bun, and run:
+
+```sh
+goreleaser release --snapshot --clean --skip=publish
+```
+
+Everything lands in `dist/`, and the images stay in your local Docker. `GORELEASER_VERSION` is pinned by hand in `ci.yml` and `release.yml`, so change it in both. The first time a tag pushes the image, check on GitHub that the package is public (the repository's *Packages*, then *Package settings*), or no one can pull it. `install.sh` builds the archive names from `uname`, so change the `name_template` in `.goreleaser.yaml` and the script together.
+
 ## Sign your work
 
 Roost uses the [Developer Certificate of Origin](https://developercertificate.org/) (DCO). The `Signed-off-by` line on a commit certifies that you wrote the change, or otherwise have the right to submit it under the project's licenses. Add it with `-s`:

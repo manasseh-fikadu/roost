@@ -5,6 +5,16 @@ A simple, self-hosted control plane for every machine on your tailnet: devices, 
 > [!NOTE]
 > Roost is in early development and doesn't do anything useful yet. The [roadmap to v0.1](https://github.com/manasseh-fikadu/roost/issues/1) tracks progress.
 
+## Install
+
+On a Linux server with systemd, one command installs Roost and runs it as a service:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/manasseh-fikadu/roost/main/install.sh | sudo bash
+```
+
+With Docker, use [`compose.yaml`](compose.yaml) (or [`compose.host.yaml`](compose.host.yaml) to use the host's Tailscale), which runs `ghcr.io/manasseh-fikadu/roost`. Every [release](https://github.com/manasseh-fikadu/roost/releases) also has archives for Linux and macOS, on amd64 and arm64, with checksums. See [Installing Roost](docs/install.md), [Roost in Docker](docs/docker.md), and [Upgrading, backups and rolling back](docs/upgrading.md).
+
 ## Build from source
 
 You need Go 1.27.3 or newer, Node 22.17 or newer, and [Bun](https://bun.sh).
@@ -37,6 +47,9 @@ Open the URL that the Go server logs (`roost is running url=...`), which is on y
 | `internal/` | The hub's packages |
 | `web/` | The SvelteKit app, which `make build` embeds in the binary |
 | `agent/` | The bash agent that devices run to report their metrics |
+| `install.sh` | Installs Roost as a systemd service |
+| `Dockerfile`, `compose*.yaml` | The Docker image, which GoReleaser builds, and examples that run it |
+| `.goreleaser.yaml` | How a release is built |
 
 ## Contribute
 
