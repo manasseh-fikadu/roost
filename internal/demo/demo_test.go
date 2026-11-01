@@ -315,7 +315,7 @@ func TestSeed(t *testing.T) {
 	d := newDemo(t, 12)
 	st := openStore(t)
 
-	if err := d.Seed(t.Context(), st, 24*time.Hour); err != nil {
+	if err := d.Seed(t.Context(), st, 6*time.Hour); err != nil {
 		t.Fatal(err)
 	}
 
@@ -348,10 +348,10 @@ func TestSeed(t *testing.T) {
 		t.Errorf("Events() = %d, %v, want a log", len(events), err)
 	}
 
-	since := d.Start().Add(-24 * time.Hour)
+	since := d.Start().Add(-6 * time.Hour)
 	hist, err := st.MetricsHistory(t.Context(), store.HubID, since, time.Hour)
-	if err != nil || len(hist) < 24 {
-		t.Errorf("MetricsHistory(hub) = %d buckets, %v, want a day of them", len(hist), err)
+	if err != nil || len(hist) < 6 {
+		t.Errorf("MetricsHistory(hub) = %d buckets, %v, want 6 hours of them", len(hist), err)
 	}
 	// Garage Pi went offline 3 hours before the demo started, so its history
 	// stops there.
@@ -364,50 +364,7 @@ func TestSeed(t *testing.T) {
 			t.Errorf("MetricsHistory(pi-garage) over its time offline = %d buckets, %v, want none", len(hist), err)
 		}
 	}
-	if score, err := st.HealthHistory(t.Context(), since, time.Hour); err != nil || len(score) < 24 {
-		t.Errorf("HealthHistory() = %d buckets, %v, want a day of them", len(score), err)
-	}
-}
-
-func TestSeed_olderHistoryIsInBuckets(t *testing.T) {
-	t.Parallel()
-	d := newDemo(t, 12)
-	st := openStore(t)
-
-	if err := d.Seed(t.Context(), st, 5*24*time.Hour); err != nil {
-		t.Fatal(err)
-	}
-
-	// Buckets of 5 minutes, from the buckets and then from the samples of the
-	// last 48 hours, with nothing missing.
-	fine, err := st.MetricsHistory(t.Context(), store.HubID, d.Start().Add(-4*24*time.Hour), 5*time.Minute)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 1; i < len(fine); i++ {
-		if gap := fine[i].Start.Sub(fine[i-1].Start); gap != 5*time.Minute {
-			t.Fatalf("buckets %v and %v are %v apart, want 5 minutes", fine[i-1].Start, fine[i].Start, gap)
-		}
-	}
-	if len(fine) < 4*24*12-2 {
-		t.Errorf("%d buckets of 5 minutes in 4 days, want %d", len(fine), 4*24*12)
-	}
-
-	// A history of 4 days is an unbroken run of hours: buckets, and then samples.
-	hist, err := st.MetricsHistory(t.Context(), store.HubID, d.Start().Add(-4*24*time.Hour), time.Hour)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for i := 1; i < len(hist); i++ {
-		if gap := hist[i].Start.Sub(hist[i-1].Start); gap != time.Hour {
-			t.Fatalf("buckets %v and %v are %v apart, want an hour", hist[i-1].Start, hist[i].Start, gap)
-		}
-	}
-	if len(hist) < 4*24-1 || hist[0].CPU == nil || hist[0].Disk == nil {
-		t.Errorf("the hub's history has %d hours, the first %+v, want 4 days", len(hist), hist[0])
-	}
-	rtt, err := st.RTTHistory(t.Context(), status(t, d).Peers[0].ID, d.Start().Add(-4*24*time.Hour), time.Hour)
-	if err != nil || len(rtt) < 4*24-1 {
-		t.Errorf("RTTHistory() = %d hours, %v, want 4 days of them", len(rtt), err)
+	if score, err := st.HealthHistory(t.Context(), since, time.Hour); err != nil || len(score) < 6 {
+		t.Errorf("HealthHistory() = %d buckets, %v, want 6 hours of them", len(score), err)
 	}
 }

@@ -26,6 +26,9 @@ The Go server doesn't reload on changes, so restart `make dev` after editing Go 
 | `make test` | Runs the Go tests with the race detector, the web tests with `bun test`, then `svelte-check` |
 | `make lint` | Runs golangci-lint, ShellCheck and Prettier |
 | `make build` | Builds `./roost` with the web UI embedded |
+| `make demo` | Runs Roost against a made-up tailnet, with the web UI from Vite, so you need no Tailscale (see [docs/demo.md](docs/demo.md)) |
+| `make e2e` | Runs the Playwright smoke test against the demo, which needs `make build` first |
+| `make bench`, `make load` | Measure the store's queries, and Roost with 200 devices and 90 days of history (see [docs/benchmark.md](docs/benchmark.md)) |
 | `make types` | Regenerates the web app's API types from `internal/api/types.go` |
 | `make help` | Lists every target |
 
@@ -36,7 +39,7 @@ The Go server doesn't reload on changes, so restart `make dev` after editing Go 
 - **Web UI:** build pages from the components in `web/src/lib/ui` and the charts in `web/src/lib/charts`, which `make dev` shows together at `/design`. Pages read live data from `live` in `web/src/lib/live.svelte.ts`, and send changes with `mutate` from `web/src/lib/api/client.ts`, which shows any error as a toast. A page only admins can open gets `adminOnly` in `web/src/lib/shell/nav.ts`.
 - **API routes:** register each route in `routes` in `internal/api/api.go` with the role it needs. A route that reads says whether it's for `anyone`, `viewers` or `admins`, and a route that changes something is always for admins. `TestRoutes` checks every route against that. Viewers never get logs, files or secrets, so a route that returns those is for admins, and a response field that can carry a secret, such as an environment variable or a command line, gets the tag `roost:"secret"`. The API leaves it empty for everyone but admins, so handlers don't check who's asking. In the web app, wrap admin-only controls in `AdminOnly`.
 - **API types:** change `internal/api/types.go` and run `make types`. Never edit `web/src/lib/api/types.ts` by hand.
-- **Database:** to change the schema, add the next numbered file to `internal/store/migrations`, such as `0002_add_device_notes.sql`. On startup, Roost copies the database to `roost.db.bak` and runs the new files in one transaction, so a failed upgrade leaves the database as it was. Never edit or renumber a migration once it's merged; add another one. A new table that keeps history also needs a line in `retention` in `internal/store/prune.go`, so its old rows get deleted.
+- **Database:** to change the schema, add the next numbered file to `internal/store/migrations`, such as `0002_add_device_notes.sql`. On startup, Roost copies the database to `roost.db.bak` and runs the new files in one transaction, so a failed upgrade leaves the database as it was. Never edit or renumber a migration once it's merged; add another one. A new table that keeps history also needs a line in `retention` in `internal/store/prune.go`, so its old rows get deleted. A history that gets long (metrics and pings are kept for up to 90 days) is summed up into buckets, as `internal/store/rollup.go` does.
 - **Agent:** `agent/` has to run on macOS's bash 3.2 and with any POSIX awk, using only `curl` and standard system tools.
 
 ## Tests
